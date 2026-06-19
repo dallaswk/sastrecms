@@ -1,0 +1,38 @@
+---
+interface Props {
+  node: Record<string, unknown>;
+  contentType: Record<string, unknown>;
+  fields: Record<string, unknown>;
+}
+const { node, fields } = Astro.props;
+
+const publishedAt = node.publishedAt
+  ? new Date(node.publishedAt as string).toLocaleDateString("es-ES", {
+      year: "numeric", month: "long", day: "numeric",
+    })
+  : null;
+---
+
+<article class="max-w-3xl mx-auto px-4 py-12">
+  {fields.cover_image && (
+    <img
+      src={fields.cover_image as string}
+      alt={node.title as string}
+      class="w-full aspect-video object-cover rounded-xl mb-8"
+    />
+  )}
+
+  <header class="mb-8">
+    <h1 class="text-4xl font-bold mb-3">{node.title as string}</h1>
+    {publishedAt && (
+      <time class="text-sm text-base-content/50">{publishedAt}</time>
+    )}
+    {fields.excerpt && (
+      <p class="mt-4 text-lg text-base-content/70">{fields.excerpt as string}</p>
+    )}
+  </header>
+
+  {fields.body && (
+    <div class="prose prose-lg" set:html={fields.body as string} />
+  )}
+</article>

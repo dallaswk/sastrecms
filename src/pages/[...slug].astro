@@ -1,0 +1,60 @@
+---
+import { eq, and } from "drizzle-orm";
+import { nodes, contentTypes } from "@db/schema";
+import BaseLayout from "@layouts/BaseLayout.astro";
+import PageRenderer from "@components/renderers/PageRenderer.astro";
+import PostRenderer from "@components/renderers/PostRenderer.astro";
+import PortfolioItemRenderer from "@components/renderers/PortfolioItemRenderer.astro";
+import ArchiveRenderer from "@components/renderers/ArchiveRenderer.astro";
+export const prerender = false;
+
+const SITE_ID = "site_default";
+const db = Astro.locals.db;
+
+const slugParam = Astro.params.slug ?? "";
+const path = slugParam ? `/${slugParam}` : "/";
+
+const node = await db.query.nodes.findFirst({
+  where: and(
+    eq(nodes.siteId, SITE_ID),
+    eq(nodes.path, path),
+    eq(nodes.status, "published")
+  ),
+  with: { contentType: true },
+});
+
+if (!node) return new Response(null, { status: 404 });
+
+const ct = (node as typeof node & { contentType: typeof contentTypes.$inferSelect }).contentType;
+
+const seo = (node.seo as Record<string, unknown>) ?? {};
+const fields = (node.fields as Record<string, unknown>) ?? {};
+
+let children: typeof nodes.$inferSelect[] = [];
+if (ct?.hasArchive) {
+  children = await db.query.nodes.findMany({
+    where: and(
+      eq(nodes.parentId, node.id),
+      eq(nodes.status, "published")
+    ),
+    orderBy: (n, { desc }) => [desc(n.publishedAt)],
+  });
+}
+---
+
+<BaseLayout
+  title={(seo.metaTitle as string) || node.title}
+  description={seo.metaDescription as string}
+  ogImage={seo.ogImage as string}
+  noindex={seo.noindex as boolean}
+>
+  {ct?.hasArchive ? (
+    <ArchiveRenderer node={node} contentType={ct} children={children} fields={fields} />
+  ) : ct?.key === "post" ? (
+    <PostRenderer node={node} contentType={ct} fields={fields} />
+  ) : ct?.key === "portfolio_item" ? (
+    <PortfolioItemRenderer node={node} contentType={ct} fields={fields} />
+  ) : (
+    <PageRenderer node={node} contentType={ct} fields={fields} />
+  )}
+</BaseLayout>

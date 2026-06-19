@@ -1,0 +1,53 @@
+---
+interface Props {
+  node: Record<string, unknown>;
+  contentType: Record<string, unknown>;
+  children: Record<string, unknown>[];
+  fields: Record<string, unknown>;
+}
+const { node, contentType, children, fields } = Astro.props;
+---
+
+<section class="max-w-4xl mx-auto px-4 py-12">
+  <header class="mb-10">
+    <h1 class="text-4xl font-bold">{node.title as string}</h1>
+    {fields.body && (
+      <div class="prose mt-4" set:html={fields.body as string} />
+    )}
+  </header>
+
+  {children.length === 0 ? (
+    <p class="text-base-content/50">No hay entradas todavía.</p>
+  ) : (
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      {children.map((child) => (
+        <li>
+          <a href={child.path as string} class="card bg-base-100 border border-base-300 hover:border-primary transition-colors h-full">
+            {(child.fields as Record<string, unknown>)?.cover_image && (
+              <figure>
+                <img
+                  src={(child.fields as Record<string, unknown>).cover_image as string}
+                  alt={child.title as string}
+                  class="w-full aspect-video object-cover"
+                />
+              </figure>
+            )}
+            <div class="card-body">
+              <h2 class="card-title text-lg">{child.title as string}</h2>
+              {child.publishedAt && (
+                <time class="text-xs text-base-content/50">
+                  {new Date(child.publishedAt as string).toLocaleDateString("es-ES")}
+                </time>
+              )}
+              {(child.fields as Record<string, unknown>)?.excerpt && (
+                <p class="text-sm text-base-content/70 line-clamp-3">
+                  {(child.fields as Record<string, unknown>).excerpt as string}
+                </p>
+              )}
+            </div>
+          </a>
+        </li>
+      ))}
+    </ul>
+  )}
+</section>

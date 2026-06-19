@@ -1,0 +1,40 @@
+---
+interface Props {
+  node: Record<string, unknown>;
+  contentType: Record<string, unknown>;
+  fields: Record<string, unknown>;
+}
+const { node, fields } = Astro.props;
+const gallery = (fields.gallery as string[]) ?? [];
+---
+
+<article class="max-w-4xl mx-auto px-4 py-12">
+  <header class="mb-10">
+    <h1 class="text-4xl font-bold mb-2">{node.title as string}</h1>
+    <div class="flex gap-4 text-sm text-base-content/60">
+      {fields.client && <span>Cliente: <strong>{fields.client as string}</strong></span>}
+      {fields.year && <span>Año: <strong>{fields.year as string}</strong></span>}
+      {fields.url && (
+        <a href={fields.url as string} target="_blank" rel="noopener" class="link link-primary">
+          Ver proyecto ↗
+        </a>
+      )}
+    </div>
+  </header>
+
+  {gallery.length > 0 && (
+    <div class="grid grid-cols-2 gap-4 mb-10">
+      {gallery.map((imgUrl, i) => (
+        <img
+          src={imgUrl}
+          alt={`${node.title as string} — imagen ${i + 1}`}
+          class="w-full rounded-lg object-cover aspect-video"
+        />
+      ))}
+    </div>
+  )}
+
+  {fields.body && (
+    <div class="prose prose-lg" set:html={fields.body as string} />
+  )}
+</article>
