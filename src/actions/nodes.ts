@@ -3,6 +3,7 @@ import { z } from "astro:schema";
 import { eq, and, desc, isNotNull } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
 import { generateId, slugify, computePath } from "@lib/id";
+import { requirePermission } from "@lib/permissions";
 
 const SITE_ID = "site_default";
 
@@ -69,6 +70,7 @@ export const nodeActions = {
     handler: async (input, context) => {
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
+      await requirePermission(db, context.locals.user.id, SITE_ID, input.contentTypeId, "create");
 
       const ct = await db.query.contentTypes.findFirst({
         where: eq(contentTypes.id, input.contentTypeId),
@@ -136,6 +138,7 @@ export const nodeActions = {
         where: and(eq(nodes.id, input.id), eq(nodes.siteId, SITE_ID)),
       });
       if (!node) throw new Error("Node not found");
+      await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "edit");
 
       const updates: Partial<typeof node> = { updatedAt: new Date() };
 
@@ -175,6 +178,7 @@ export const nodeActions = {
         where: and(eq(nodes.id, input.id), eq(nodes.siteId, SITE_ID)),
       });
       if (!node) throw new Error("Node not found");
+      await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "publish");
 
       const now = new Date();
       await db
@@ -198,6 +202,12 @@ export const nodeActions = {
       if (children.length > 0) {
         throw new Error("Cannot delete a node that has children");
       }
+
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, input.id), eq(nodes.siteId, SITE_ID)),
+      });
+      if (!node) throw new Error("Node not found");
+      await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "delete");
 
       await db
         .delete(nodes)
