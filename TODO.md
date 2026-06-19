@@ -1,0 +1,100 @@
+# TODO — sASTRe
+
+Estado del proyecto a fecha 19 Jun 2026. Rama activa: `dev`.
+
+---
+
+## 🔴 Tu parte — requiere acción manual
+
+### Infraestructura
+
+- [ ] **Aplicar migración `0003` en Turso**
+  La columna `integrations` (para la Resend API key) no existe aún en la DB de producción.
+  Dos opciones:
+  ```bash
+  # Opción A — con .env local
+  TURSO_DATABASE_URL=libsql://...
+  TURSO_AUTH_TOKEN=...
+  npm run db:migrate
+  ```
+  ```sql
+  -- Opción B — directo en la consola de Turso
+  ALTER TABLE settings ADD COLUMN integrations text DEFAULT '{}';
+  ```
+
+- [ ] **Configurar variables de entorno en Cloudflare**
+  Asegúrate de que estas vars están en el dashboard de Cloudflare Workers / Pages:
+  - `TURSO_DATABASE_URL`
+  - `TURSO_AUTH_TOKEN`
+  - `R2_ACCOUNT_ID`
+  - `R2_ACCESS_KEY_ID`
+  - `R2_SECRET_ACCESS_KEY`
+  - `R2_BUCKET_NAME`
+  - `R2_PUBLIC_URL`
+
+- [ ] **Ejecutar seed en producción** (si la DB está vacía)
+  Los roles (`admin`, `editor`, `collaborator`) y el site_default se crean con el seed.
+  Sin ellos `/admin/permissions` muestra "No hay roles".
+  ```bash
+  npm run db:seed
+  ```
+
+- [ ] **Configurar Resend API key desde el backoffice**
+  Una vez aplicada la migración:
+  `/admin/settings` → sección "Integraciones" → pegar la key de [resend.com/api-keys](https://resend.com/api-keys)
+  Necesario para que el magic link funcione.
+
+- [ ] **Verificar dominio en Resend**
+  El from hardcodeado es `noreply@mail.sastrecms.com`. Cambiarlo en `src/lib/auth.ts` por el dominio real del cliente y verificarlo en Resend.
+
+---
+
+## 🟡 Mi parte — pendiente de código
+
+### Funcionalidad
+
+- [ ] **Drag & drop entre niveles en el árbol de nodos**
+  Actualmente el drag & drop reordena hermanos (actualiza `position`) pero arrastrar un nodo a otro padre no actualiza `parentId`.
+  Requiere lógica en `NodeTree.vue` `@end` para detectar cambio de contenedor y llamar a `reorder` con el nuevo `parentId`.
+
+- [ ] **Ocultar pestaña Magic link si no hay Resend key**
+  En `login.astro`, la pestaña "Magic link" aparece siempre aunque no haya key configurada.
+  Solución: leer `settings.integrations.resendApiKey` en el servidor y pasar un prop `hasMagicLink` a la página.
+
+- [ ] **Crear roles si no existen (seed automático en middleware)**
+  Si la DB está vacía, los roles no existen y `/admin/permissions` falla.
+  Alternativa: un endpoint o script de setup que cree el site_default + roles básicos.
+
+### Nice-to-have
+
+- [ ] **Google OAuth** — añadir `socialProviders.google` en `src/lib/auth.ts` + botón en `login.astro`
+- [ ] **Optimización de imágenes (paid plan)** — integrar Cloudflare Images, ImageKit o Cloudinary en la acción de upload de media
+- [ ] **SaaS multi-tenant (Phase 9)** — control plane, un Turso DB por cliente
+
+---
+
+## ✅ Completado
+
+- [x] Phase 0 — scaffold Astro 6 + Cloudflare + Drizzle + Better Auth + Tailwind + daisyUI + Vue
+- [x] Phase 1 & 2 — data model + backoffice CRUD (login, nodos, tipos de contenido)
+- [x] Phase 3 — content type builder (ACF-style) + roles
+- [x] Phase 4 — frontend público: resolución por `path`, renderers por tipo, archivos
+- [x] Phase 5 — subida de media a R2 + media manager UI con carpetas
+- [x] Phase 6 — theming dinámico + settings + redirects (con middleware)
+- [x] Phase 7 — MCP server + gestión de API tokens
+- [x] Phase 8 — sitemap.xml, robots.txt, JSON-LD (Organization, BreadcrumbList, Article), hreflang
+- [x] Tiptap richtext en NodeForm (bold, italic, link, listas, headings)
+- [x] Media picker integrado en NodeForm (campos image y gallery)
+- [x] i18n — selector de locale en NodeForm + hreflang en BaseLayout
+- [x] Página `/admin/users` — listar, invitar, cambiar rol, desactivar
+- [x] Página `/admin/permissions` — matriz rol × tipo de contenido, guardado automático
+- [x] Guards de permisos en todas las mutations de nodos (create, edit, publish, delete)
+- [x] UI reactiva a permisos: botones y status ocultos según rol
+- [x] Flag `translatable` en ContentTypeBuilder (selector de locale condicionado)
+- [x] Vinculación de traducciones (`translationGroupId`) desde NodeForm
+- [x] Analytics y tracking — GA4, GTM, Meta Pixel, TikTok Pixel, Hotjar, GSC (desde settings)
+- [x] Resend API key en settings DB (no en .env)
+- [x] Magic link en login (pestaña alternativa a contraseña)
+- [x] Árbol jerárquico de nodos con drag & drop para reordenar (`position`)
+- [x] Upload guidelines en MediaManager
+- [x] `@tiptap/extension-link` y `@tiptap/pm` instalados
