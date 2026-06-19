@@ -2,6 +2,7 @@
 import { eq, and } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
 import BaseLayout from "@layouts/BaseLayout.astro";
+import { buildWebPageSchema, buildArticleSchema } from "@/lib/jsonld";
 import PageRenderer from "@components/renderers/PageRenderer.astro";
 import PostRenderer from "@components/renderers/PostRenderer.astro";
 import PortfolioItemRenderer from "@components/renderers/PortfolioItemRenderer.astro";
@@ -29,6 +30,25 @@ const ct = (node as typeof node & { contentType: typeof contentTypes.$inferSelec
 
 const seo = (node.seo as Record<string, unknown>) ?? {};
 const fields = (node.fields as Record<string, unknown>) ?? {};
+const nodeUrl = new URL(node.path, Astro.url.origin).toString();
+
+const jsonLd = ct?.key === "post"
+  ? buildArticleSchema({
+      url: nodeUrl,
+      title: node.title,
+      description: seo.metaDescription as string | undefined,
+      image: (fields.cover_image ?? seo.ogImage) as string | undefined,
+      datePublished: node.publishedAt as Date | null,
+      dateModified: node.updatedAt as Date | null,
+    })
+  : buildWebPageSchema({
+      url: nodeUrl,
+      title: (seo.metaTitle as string) || node.title,
+      description: seo.metaDescription as string | undefined,
+      image: seo.ogImage as string | undefined,
+      datePublished: node.publishedAt as Date | null,
+      dateModified: node.updatedAt as Date | null,
+    });
 
 let children: typeof nodes.$inferSelect[] = [];
 if (ct?.hasArchive) {
@@ -47,6 +67,7 @@ if (ct?.hasArchive) {
   description={seo.metaDescription as string}
   ogImage={seo.ogImage as string}
   noindex={seo.noindex as boolean}
+  jsonLd={jsonLd}
 >
   {ct?.hasArchive ? (
     <ArchiveRenderer node={node} contentType={ct} children={children} fields={fields} />

@@ -2,15 +2,17 @@
 import "../styles/global.css";
 import { eq } from "drizzle-orm";
 import { settings } from "@db/schema";
+import { buildWebSiteSchema } from "@/lib/jsonld";
 
 interface Props {
   title: string;
   description?: string;
   ogImage?: string;
   noindex?: boolean;
+  jsonLd?: Record<string, unknown>;
 }
 
-const { title, description, ogImage, noindex = false } = Astro.props;
+const { title, description, ogImage, noindex = false, jsonLd } = Astro.props;
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
 
 const siteSettings = Astro.locals.db
@@ -57,6 +59,11 @@ const siteTitle = siteSettings?.siteName ?? "sASTRe";
 
     {themeVars && (
       <style set:html={`:root { ${themeVars} }`} />
+    )}
+
+    <script type="application/ld+json" set:html={JSON.stringify(buildWebSiteSchema(siteTitle, Astro.url.origin))} />
+    {jsonLd && (
+      <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
     )}
   </head>
   <body>
