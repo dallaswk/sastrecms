@@ -10,7 +10,8 @@
     "astro": "astro",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "npx tsx src/db/seed.ts"
   },
   "dependencies": {
     "astro": "^6.4.0",
@@ -32,6 +33,6 @@
     "@types/sortablejs": "^1.15.0",
     "drizzle-kit": "^0.31.0",
     "typescript": "^5.7.0",
-    "wrangler": "^3.95.0"
+    "wrangler": "^4.83.0"
   }
 }

@@ -1,0 +1,71 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import NodeForm from "@components/admin/NodeForm.vue";
+import { eq, and } from "drizzle-orm";
+import { nodes, contentTypes } from "@db/schema";
+export const prerender = false;
+
+const { id } = Astro.params;
+const db = Astro.locals.db;
+const SITE_ID = "site_default";
+
+const isNew = id === "new";
+const typeId = Astro.url.searchParams.get("type") ?? "";
+
+let node = null;
+let contentType = null;
+
+if (isNew) {
+  contentType = await db.query.contentTypes.findFirst({
+    where: eq(contentTypes.id, typeId),
+  });
+  if (!contentType) return Astro.redirect("/admin/content");
+} else {
+  node = await db.query.nodes.findFirst({
+    where: and(eq(nodes.id, id!), eq(nodes.siteId, SITE_ID)),
+    with: { contentType: true },
+  });
+  if (!node) return Astro.redirect("/admin/content");
+  contentType = (node as any).contentType;
+}
+
+const pageTitle = isNew
+  ? `Nuevo ${contentType?.label}`
+  : `Editar: ${node?.title}`;
+---
+
+<AdminLayout title={pageTitle}>
+  <div class="mb-4">
+    <a href="/admin/content" class="btn btn-ghost btn-sm">
+      ← Volver a contenido
+    </a>
+  </div>
+
+  {!isNew && node && (
+    <div class="flex gap-2 mb-6">
+      <span class={`badge ${node.status === "published" ? "badge-success" : node.status === "scheduled" ? "badge-warning" : "badge-ghost"}`}>
+        {node.status}
+      </span>
+      <span class="text-sm text-base-content/50 font-mono">{node.path}</span>
+      {node.status === "published" && (
+        <a href={node.path} target="_blank" class="btn btn-xs btn-outline ml-2">
+          Ver en sitio ↗
+        </a>
+      )}
+    </div>
+  )}
+
+  <NodeForm
+    client:load
+    nodeId={isNew ? undefined : id}
+    contentTypeId={contentType?.id ?? ""}
+    fieldSchema={contentType?.fieldSchema ?? []}
+    initialData={node ? {
+      title: node.title,
+      slug: node.slug,
+      fields: (node.fields as Record<string, unknown>) ?? {},
+      seo: (node.seo as Record<string, unknown>) ?? {},
+      status: node.status,
+    } : undefined}
+  />
+</AdminLayout>

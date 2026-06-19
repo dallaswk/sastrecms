@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
 import {
   text,
   integer,
@@ -330,3 +330,68 @@ export const verifications = sqliteTable("verification", {
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .default(sql`(unixepoch())`),
 });
+
+// ---------------------------------------------------------------------------
+// Relations (declared after all tables)
+// ---------------------------------------------------------------------------
+export const nodesRelations = relations(nodes, ({ one }) => ({
+  contentType: one(contentTypes, {
+    fields: [nodes.contentTypeId],
+    references: [contentTypes.id],
+  }),
+  parent: one(nodes, {
+    fields: [nodes.parentId],
+    references: [nodes.id],
+    relationName: "parent_child",
+  }),
+  createdByUser: one(users, {
+    fields: [nodes.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export const contentTypesRelations = relations(contentTypes, ({ many }) => ({
+  nodes: many(nodes),
+}));
+
+export const sitesRelations = relations(sites, ({ many }) => ({
+  nodes: many(nodes),
+  contentTypes: many(contentTypes),
+  roles: many(roles),
+}));
+
+export const rolesRelations = relations(roles, ({ many }) => ({
+  permissions: many(roleContentPermissions),
+}));
+
+export const roleContentPermissionsRelations = relations(
+  roleContentPermissions,
+  ({ one }) => ({
+    role: one(roles, {
+      fields: [roleContentPermissions.roleId],
+      references: [roles.id],
+    }),
+    contentType: one(contentTypes, {
+      fields: [roleContentPermissions.contentTypeId],
+      references: [contentTypes.id],
+    }),
+  })
+);
+
+export const mediaRelations = relations(media, ({ one }) => ({
+  folder: one(mediaFolders, {
+    fields: [media.folderId],
+    references: [mediaFolders.id],
+  }),
+  uploadedByUser: one(users, {
+    fields: [media.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
+export const apiTokensRelations = relations(apiTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [apiTokens.userId],
+    references: [users.id],
+  }),
+}));
