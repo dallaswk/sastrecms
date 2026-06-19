@@ -1,10 +1,18 @@
 ---
 import "@styles/global.css";
+import { eq } from "drizzle-orm";
+import { settings } from "@db/schema";
 export const prerender = false;
 
 if (Astro.locals.session) {
   return Astro.redirect("/admin");
 }
+
+const siteSettings = await Astro.locals.db.query.settings.findFirst({
+  where: eq(settings.siteId, "site_default"),
+});
+const integrations = (siteSettings?.integrations as Record<string, string> | null) ?? {};
+const hasMagicLink = !!(integrations.resendApiKey && integrations.resendFrom);
 ---
 
 <!doctype html>
@@ -24,7 +32,9 @@ if (Astro.locals.session) {
         <!-- Tabs -->
         <div role="tablist" class="tabs tabs-bordered mb-4">
           <button role="tab" id="tab-password" class="tab tab-active" onclick="switchTab('password')">Contraseña</button>
-          <button role="tab" id="tab-magic" class="tab" onclick="switchTab('magic')">Magic link</button>
+          {hasMagicLink && (
+            <button role="tab" id="tab-magic" class="tab" onclick="switchTab('magic')">Magic link</button>
+          )}
         </div>
 
         <!-- Password form -->
@@ -46,7 +56,7 @@ if (Astro.locals.session) {
         </form>
 
         <!-- Magic link form -->
-        <form id="magic-form" class="flex flex-col gap-4 hidden">
+        <form id="magic-form" class="flex flex-col gap-4" class:list={[!hasMagicLink && 'hidden']}>
           <p class="text-sm text-base-content/60">Introduce tu email y recibirás un enlace de acceso directo.</p>
           <div class="form-control">
             <label class="label" for="magic-email">

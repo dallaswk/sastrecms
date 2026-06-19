@@ -58,13 +58,11 @@ Estado del proyecto a fecha 19 Jun 2026. Rama activa: `dev`.
   Actualmente el drag & drop reordena hermanos (actualiza `position`) pero arrastrar un nodo a otro padre no actualiza `parentId`.
   Requiere lógica en `NodeTree.vue` `@end` para detectar cambio de contenedor y llamar a `reorder` con el nuevo `parentId`.
 
-- [ ] **Ocultar pestaña Magic link si no hay Resend key**
-  En `login.astro`, la pestaña "Magic link" aparece siempre aunque no haya key configurada.
-  Solución: leer `settings.integrations.resendApiKey` en el servidor y pasar un prop `hasMagicLink` a la página.
+- [x] **Ocultar pestaña Magic link si no hay Resend key** ✅
+  `login.astro` lee `settings.integrations` en el servidor; la pestaña solo aparece si hay `resendApiKey` + `resendFrom` configurados.
 
-- [ ] **Crear roles si no existen (seed automático en middleware)**
-  Si la DB está vacía, los roles no existen y `/admin/permissions` falla.
-  Alternativa: un endpoint o script de setup que cree el site_default + roles básicos.
+- [x] **Bootstrap automático en middleware** ✅
+  `middleware.ts` crea `site_default` + roles básicos (admin, editor, colaborador) si no existen en la DB. Ya no hace falta correr el seed manualmente para que el sistema arranque.
 
 ### Nice-to-have
 

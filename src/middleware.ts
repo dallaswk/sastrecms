@@ -1,10 +1,34 @@
 import { defineMiddleware } from "astro:middleware";
 import { eq } from "drizzle-orm";
-import { createDb } from "@db/client";
+import { createDb, type Database } from "@db/client";
 import { createAuth } from "@lib/auth";
-import { settings } from "@db/schema";
+import { sites, settings, roles } from "@db/schema";
 
 const SITE_ID = "site_default";
+
+async function ensureBootstrap(db: Database) {
+  const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
+  if (!site) {
+    await db.insert(sites).values({
+      id: SITE_ID,
+      name: "Mi sitio",
+      locales: ["es"],
+    }).onConflictDoNothing();
+    await db.insert(settings).values({
+      siteId: SITE_ID,
+      siteName: "Mi sitio",
+    }).onConflictDoNothing();
+  }
+
+  const existingRoles = await db.query.roles.findMany({ where: eq(roles.siteId, SITE_ID) });
+  if (existingRoles.length === 0) {
+    await db.insert(roles).values([
+      { id: "role_admin", siteId: SITE_ID, key: "admin", label: "Admin" },
+      { id: "role_editor", siteId: SITE_ID, key: "editor", label: "Editor" },
+      { id: "role_collaborator", siteId: SITE_ID, key: "collaborator", label: "Colaborador" },
+    ]).onConflictDoNothing();
+  }
+}
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { TURSO_DATABASE_URL, TURSO_AUTH_TOKEN } = context.locals.runtime.env;
@@ -16,6 +40,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   });
   const integrations = (siteSettings?.integrations as Record<string, string> | null) ?? {};
   const auth = createAuth(db, integrations.resendApiKey, integrations.resendFrom);
+
+  await ensureBootstrap(db);
 
   context.locals.db = db;
   context.locals.auth = auth;
