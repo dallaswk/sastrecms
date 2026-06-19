@@ -4,8 +4,9 @@ import { magicLink } from "better-auth/plugins";
 import type { Database } from "@db/client";
 import * as schema from "@db/schema";
 
-export function createAuth(db: Database, resendApiKey?: string) {
+export function createAuth(db: Database, resendApiKey?: string, emailFrom?: string) {
   const key = resendApiKey ?? "";
+  const from = emailFrom || "sASTRe <noreply@example.com>";  
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -32,7 +33,7 @@ export function createAuth(db: Database, resendApiKey?: string) {
                   "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                  from: "sASTRe <noreply@mail.sastrecms.com>",
+                  from,
                   to: email,
                   subject: "Accede a sASTRe",
                   html: `<p>Haz clic en el enlace para acceder al panel:<br/><a href="${url}">${url}</a></p><p>El enlace expira en 10 minutos.</p>`,

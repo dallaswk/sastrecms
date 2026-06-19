@@ -15,7 +15,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     where: eq(settings.siteId, SITE_ID),
   });
   const integrations = (siteSettings?.integrations as Record<string, string> | null) ?? {};
-  const auth = createAuth(db, integrations.resendApiKey);
+  const auth = createAuth(db, integrations.resendApiKey, integrations.resendFrom);
 
   context.locals.db = db;
   context.locals.auth = auth;

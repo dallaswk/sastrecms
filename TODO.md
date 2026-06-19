@@ -45,7 +45,8 @@ Estado del proyecto a fecha 19 Jun 2026. Rama activa: `dev`.
   Necesario para que el magic link funcione.
 
 - [ ] **Verificar dominio en Resend**
-  El from hardcodeado es `noreply@mail.sastrecms.com`. Cambiarlo en `src/lib/auth.ts` por el dominio real del cliente y verificarlo en Resend.
+  Configura el `from` en `/admin/settings` → Integraciones → "Dirección de envío".
+  Formato: `Nombre <correo@tudominio.com>`. Verifica el dominio en [resend.com/domains](https://resend.com/domains).
 
 ---
 

@@ -57,6 +57,7 @@ export const settingsActions = {
         .optional(),
       integrations: z.object({
         resendApiKey: z.string().optional(),
+        resendFrom: z.string().optional(),
       }).optional(),
     }),
     handler: async (input, context) => {
