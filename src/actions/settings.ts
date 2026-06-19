@@ -55,6 +55,9 @@ export const settingsActions = {
       redirects: z
         .array(z.object({ from: z.string(), to: z.string(), permanent: z.boolean() }))
         .optional(),
+      integrations: z.object({
+        resendApiKey: z.string().optional(),
+      }).optional(),
     }),
     handler: async (input, context) => {
       if (!context.locals.user) throw new Error("Unauthorized");
@@ -73,6 +76,7 @@ export const settingsActions = {
       if (input.socialLinks !== undefined) updates.socialLinks = input.socialLinks;
       if (input.analyticsIds !== undefined) updates.analyticsIds = input.analyticsIds;
       if (input.redirects !== undefined) updates.redirects = input.redirects;
+      if (input.integrations !== undefined) updates.integrations = input.integrations;
 
       if (existing) {
         await db.update(settings).set(updates).where(eq(settings.siteId, SITE_ID));

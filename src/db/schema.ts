@@ -258,6 +258,9 @@ export const settings = sqliteTable("settings", {
   redirects: text("redirects", { mode: "json" })
     .$type<{ from: string; to: string; permanent: boolean }[]>()
     .default(sql`'[]'`),
+  integrations: text("integrations", { mode: "json" })
+    .$type<Record<string, string>>()
+    .default(sql`'{}'`),
 });
 
 export type SiteTheme = {

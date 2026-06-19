@@ -13,6 +13,7 @@ const theme = (siteSettings?.theme as Record<string, string>) ?? {};
 const socialLinks = (siteSettings?.socialLinks as Record<string, string>) ?? {};
 const redirects = (siteSettings?.redirects as { from: string; to: string; permanent: boolean }[]) ?? [];
 const analyticsIds = (siteSettings?.analyticsIds as Record<string, string>) ?? {};
+const integrations = (siteSettings?.integrations as Record<string, string>) ?? {};
 
 const DAISY_THEMES = [
   "light","dark","cupcake","bumblebee","emerald","corporate","synthwave",
@@ -161,6 +162,35 @@ const DAISY_THEMES = [
       </div>
     </section>
 
+    <!-- Integraciones -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
+        <h2 class="card-title text-base">Integraciones</h2>
+        <p class="text-sm text-base-content/50">Credenciales de servicios externos. Se almacenan en la base de datos del sitio.</p>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Resend API Key</span>
+            <span class="label-text-alt text-base-content/40">Para magic link e emails transaccionales</span>
+          </label>
+          <input
+            name="resendApiKey"
+            type="password"
+            class="input input-bordered font-mono"
+            value={integrations.resendApiKey ?? ""}
+            placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxx"
+            autocomplete="off"
+          />
+          <label class="label">
+            <span class="label-text-alt text-base-content/40">
+              Obtén tu key en <a href="https://resend.com/api-keys" target="_blank" class="link">resend.com/api-keys</a>.
+              Necesaria para que el magic link funcione.
+            </span>
+          </label>
+        </div>
+      </div>
+    </section>
+
     <!-- Redirects -->
     <section class="card bg-base-100 border border-base-300">
       <div class="card-body gap-4">
@@ -266,6 +296,9 @@ const DAISY_THEMES = [
         tiktokPixel: (data.get("analytics_tiktokPixel") as string)?.trim() || undefined,
         hotjar: (data.get("analytics_hotjar") as string)?.trim() || undefined,
         gscVerification: (data.get("analytics_gscVerification") as string)?.trim() || undefined,
+      },
+      integrations: {
+        resendApiKey: (data.get("resendApiKey") as string)?.trim() || undefined,
       },
     });
 

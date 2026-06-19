@@ -4,10 +4,8 @@ import { magicLink } from "better-auth/plugins";
 import type { Database } from "@db/client";
 import * as schema from "@db/schema";
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY ?? (typeof globalThis !== "undefined" ? (globalThis as Record<string, unknown>).RESEND_API_KEY as string : "");
-
 export function createAuth(db: Database, resendApiKey?: string) {
-  const key = resendApiKey ?? RESEND_API_KEY;
+  const key = resendApiKey ?? "";
 
   return betterAuth({
     database: drizzleAdapter(db, {

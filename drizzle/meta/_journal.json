@@ -22,6 +22,13 @@
       "when": 1781870972669,
       "tag": "0002_dashing_gamma_corps",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1781873281140,
+      "tag": "0003_tricky_molten_man",
+      "breakpoints": true
     }
   ]
 }
