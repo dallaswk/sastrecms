@@ -1,8 +1,8 @@
 ---
-import { eq, and } from "drizzle-orm";
-import { nodes, contentTypes } from "@db/schema";
+import { eq, and, isNotNull } from "drizzle-orm";
+import { nodes, contentTypes, settings } from "@db/schema";
 import BaseLayout from "@layouts/BaseLayout.astro";
-import { buildWebPageSchema, buildArticleSchema } from "@lib/jsonld";
+import { buildWebPageSchema, buildArticleSchema, buildBreadcrumbSchema, buildOrganizationSchema } from "@lib/jsonld";
 import PageRenderer from "@components/renderers/PageRenderer.astro";
 import PostRenderer from "@components/renderers/PostRenderer.astro";
 import PortfolioItemRenderer from "@components/renderers/PortfolioItemRenderer.astro";
@@ -60,6 +60,44 @@ if (ct?.hasArchive) {
     orderBy: (n, { desc }) => [desc(n.publishedAt)],
   });
 }
+
+let hreflangLinks: { locale: string; path: string }[] = [];
+if (node.translationGroupId) {
+  const translations = await db.query.nodes.findMany({
+    where: and(
+      eq(nodes.translationGroupId, node.translationGroupId),
+      eq(nodes.status, "published"),
+      isNotNull(nodes.locale)
+    ),
+  });
+  hreflangLinks = translations.map((t) => ({ locale: t.locale, path: t.path }));
+}
+
+const siteSettings = await db.query.settings.findFirst({
+  where: eq(settings.siteId, SITE_ID) ,
+});
+
+const orgSchema = buildOrganizationSchema({
+  name: siteSettings?.siteName ?? "sASTRe",
+  url: Astro.url.origin,
+  logo: siteSettings?.logoUrl ?? undefined,
+  sameAs: Object.values(
+    (siteSettings?.socialLinks as Record<string, string> | null) ?? {}
+  ).filter(Boolean),
+});
+
+const breadcrumbParts = node.path.split("/").filter(Boolean);
+const breadcrumbItems = [
+  { name: siteSettings?.siteName ?? "Inicio", url: Astro.url.origin + "/" },
+  ...breadcrumbParts.map((_, i) => {
+    const partPath = "/" + breadcrumbParts.slice(0, i + 1).join("/");
+    return { name: breadcrumbParts[i], url: Astro.url.origin + partPath };
+  }),
+];
+breadcrumbItems[breadcrumbItems.length - 1].name = node.title;
+const breadcrumbSchema = buildBreadcrumbSchema(breadcrumbItems);
+
+const allJsonLd = [jsonLd, orgSchema, breadcrumbSchema];
 ---
 
 <BaseLayout
@@ -67,7 +105,8 @@ if (ct?.hasArchive) {
   description={seo.metaDescription as string}
   ogImage={seo.ogImage as string}
   noindex={seo.noindex as boolean}
-  jsonLd={jsonLd}
+  jsonLdList={allJsonLd}
+  hreflangLinks={hreflangLinks}
 >
   {ct?.hasArchive ? (
     <ArchiveRenderer node={node} contentType={ct} children={children} fields={fields} />

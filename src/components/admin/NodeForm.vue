@@ -1,32 +1,35 @@
 <template>
   <form @submit.prevent="handleSubmit" class="flex flex-col gap-6 max-w-3xl">
+
     <!-- Title -->
     <div class="form-control">
       <label class="label"><span class="label-text font-medium">Título *</span></label>
-      <input
-        v-model="form.title"
-        type="text"
-        class="input input-bordered"
-        required
-        @input="autoSlug"
-      />
+      <input v-model="form.title" type="text" class="input input-bordered" required @input="autoSlug" />
     </div>
 
     <!-- Slug -->
     <div class="form-control">
       <label class="label">
         <span class="label-text font-medium">Slug</span>
-        <span class="label-text-alt text-base-content/50">Se genera automáticamente del título</span>
+        <span class="label-text-alt text-base-content/50">Se genera del título</span>
       </label>
-      <div class="input-group">
-        <span class="bg-base-200 px-3 flex items-center text-sm text-base-content/50 border border-base-300 rounded-l-lg">
+      <div class="flex">
+        <span class="bg-base-200 px-3 flex items-center text-sm text-base-content/50 border border-base-300 border-r-0 rounded-l-lg">
           {{ parentPath ?? "" }}/
         </span>
-        <input v-model="form.slug" type="text" class="input input-bordered rounded-l-none flex-1" />
+        <input v-model="form.slug" type="text" class="input input-bordered rounded-l-none flex-1" @input="slugTouched = true" />
       </div>
     </div>
 
-    <!-- Dynamic fields from content type schema -->
+    <!-- Locale -->
+    <div v-if="availableLocales.length > 1" class="form-control">
+      <label class="label"><span class="label-text font-medium">Idioma</span></label>
+      <select v-model="form.locale" class="select select-bordered w-48">
+        <option v-for="loc in availableLocales" :key="loc" :value="loc">{{ loc }}</option>
+      </select>
+    </div>
+
+    <!-- Dynamic fields -->
     <template v-for="field in fieldSchema" :key="field.key">
       <div class="form-control">
         <label class="label">
@@ -36,6 +39,7 @@
           </span>
         </label>
 
+        <!-- text / number / date -->
         <input
           v-if="field.type === 'text' || field.type === 'number' || field.type === 'date'"
           v-model="form.fields[field.key]"
@@ -44,6 +48,7 @@
           :required="field.required"
         />
 
+        <!-- textarea -->
         <textarea
           v-else-if="field.type === 'textarea'"
           v-model="form.fields[field.key]"
@@ -52,6 +57,7 @@
           :required="field.required"
         />
 
+        <!-- select -->
         <select
           v-else-if="field.type === 'select'"
           v-model="form.fields[field.key]"
@@ -62,8 +68,52 @@
           <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
         </select>
 
-        <div v-else-if="field.type === 'richtext'" class="border border-base-300 rounded-lg overflow-hidden">
-          <div ref="editorRefs" :data-field="field.key" class="min-h-40 p-3 prose prose-sm max-w-none" contenteditable="true" />
+        <!-- richtext — Tiptap -->
+        <RichTextEditor
+          v-else-if="field.type === 'richtext'"
+          v-model="form.fields[field.key] as string"
+        />
+
+        <!-- image — single media picker -->
+        <div v-else-if="field.type === 'image'" class="flex flex-col gap-2">
+          <div v-if="form.fields[field.key]" class="relative w-40 h-28 rounded-lg overflow-hidden border border-base-300 group">
+            <img :src="form.fields[field.key] as string" class="w-full h-full object-cover" alt="" />
+            <button
+              type="button"
+              class="absolute top-1 right-1 btn btn-xs btn-circle btn-error opacity-0 group-hover:opacity-100"
+              @click="form.fields[field.key] = ''"
+            >✕</button>
+          </div>
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost border border-base-300 self-start"
+            @click="openPicker(field.key, false)"
+          >
+            {{ form.fields[field.key] ? "Cambiar imagen" : "Seleccionar imagen" }}
+          </button>
+        </div>
+
+        <!-- gallery — multiple media picker -->
+        <div v-else-if="field.type === 'gallery'" class="flex flex-col gap-2">
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="(url, idx) in (form.fields[field.key] as string[] ?? [])"
+              :key="idx"
+              class="relative w-24 h-20 rounded-lg overflow-hidden border border-base-300 group"
+            >
+              <img :src="url" class="w-full h-full object-cover" alt="" />
+              <button
+                type="button"
+                class="absolute top-1 right-1 btn btn-xs btn-circle btn-error opacity-0 group-hover:opacity-100"
+                @click="removeGalleryItem(field.key, idx)"
+              >✕</button>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost border border-base-300 self-start"
+            @click="openPicker(field.key, true)"
+          >+ Añadir imágenes</button>
         </div>
 
         <p v-else class="text-sm text-base-content/40 italic">
@@ -76,7 +126,7 @@
     <div class="collapse collapse-arrow border border-base-300 rounded-lg">
       <input type="checkbox" />
       <div class="collapse-title font-medium">SEO</div>
-      <div class="collapse-content flex flex-col gap-4">
+      <div class="collapse-content flex flex-col gap-4 pt-2">
         <div class="form-control">
           <label class="label"><span class="label-text">Meta título</span></label>
           <input v-model="form.seo.metaTitle" type="text" class="input input-bordered" />
@@ -111,11 +161,21 @@
       <span v-if="errorMsg" class="text-error text-sm">{{ errorMsg }}</span>
     </div>
   </form>
+
+  <!-- Media picker modal -->
+  <MediaPickerModal
+    :open="pickerOpen"
+    :multiple="pickerMultiple"
+    @close="pickerOpen = false"
+    @selected="onMediaSelected"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
 import { actions } from "astro:actions";
+import RichTextEditor from "./RichTextEditor.vue";
+import MediaPickerModal from "./MediaPickerModal.vue";
 
 interface FieldDefinition {
   key: string;
@@ -130,29 +190,42 @@ const props = defineProps<{
   contentTypeId: string;
   fieldSchema: FieldDefinition[];
   parentPath?: string;
+  availableLocales?: string[];
   initialData?: {
     title?: string;
     slug?: string;
+    locale?: string;
     fields?: Record<string, unknown>;
     seo?: Record<string, unknown>;
     status?: string;
   };
 }>();
 
-const emit = defineEmits<{
-  saved: [id: string];
-}>();
+const emit = defineEmits<{ saved: [id: string] }>();
 
 const saving = ref(false);
 const successMsg = ref("");
 const errorMsg = ref("");
 const slugTouched = ref(false);
 
+const pickerOpen = ref(false);
+const pickerMultiple = ref(false);
+const pickerTargetField = ref("");
+
+const availableLocales = props.availableLocales ?? ["es"];
+
 const form = reactive({
   title: props.initialData?.title ?? "",
   slug: props.initialData?.slug ?? "",
+  locale: props.initialData?.locale ?? availableLocales[0],
   fields: reactive<Record<string, unknown>>(
-    Object.fromEntries(props.fieldSchema.map((f) => [f.key, props.initialData?.fields?.[f.key] ?? ""]))
+    Object.fromEntries(
+      props.fieldSchema.map((f) => {
+        const initial = props.initialData?.fields?.[f.key];
+        if (f.type === "gallery") return [f.key, Array.isArray(initial) ? initial : []];
+        return [f.key, initial ?? ""];
+      })
+    )
   ),
   seo: reactive({
     metaTitle: (props.initialData?.seo?.metaTitle as string) ?? "",
@@ -172,9 +245,31 @@ function slugify(text: string): string {
 }
 
 function autoSlug() {
-  if (!slugTouched.value) {
-    form.slug = slugify(form.title);
+  if (!slugTouched.value) form.slug = slugify(form.title);
+}
+
+function openPicker(fieldKey: string, multiple: boolean) {
+  pickerTargetField.value = fieldKey;
+  pickerMultiple.value = multiple;
+  pickerOpen.value = true;
+}
+
+function onMediaSelected(urls: string[]) {
+  const key = pickerTargetField.value;
+  const field = props.fieldSchema.find((f) => f.key === key);
+  if (!field) return;
+  if (field.type === "gallery") {
+    const current = (form.fields[key] as string[]) ?? [];
+    form.fields[key] = [...current, ...urls];
+  } else {
+    form.fields[key] = urls[0] ?? "";
   }
+}
+
+function removeGalleryItem(fieldKey: string, idx: number) {
+  const arr = (form.fields[fieldKey] as string[]).slice();
+  arr.splice(idx, 1);
+  form.fields[fieldKey] = arr;
 }
 
 async function handleSubmit() {
@@ -200,6 +295,7 @@ async function handleSubmit() {
         contentTypeId: props.contentTypeId,
         title: form.title,
         slug: form.slug,
+        locale: form.locale,
         fields: form.fields,
         seo: form.seo,
         status: form.status as "draft" | "published" | "scheduled",
@@ -217,6 +313,6 @@ async function handleSubmit() {
 }
 
 onMounted(() => {
-  form.slug = props.initialData?.slug ?? slugify(form.title);
+  if (!props.initialData?.slug) form.slug = slugify(form.title);
 });
 </script>

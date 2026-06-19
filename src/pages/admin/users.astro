@@ -1,0 +1,152 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import { eq } from "drizzle-orm";
+import { users, userRoles, roles } from "@db/schema";
+export const prerender = false;
+
+const SITE_ID = "site_default";
+const db = Astro.locals.db;
+
+const allUsers = await db.query.users.findMany({
+  orderBy: (u, { asc }) => [asc(u.name)],
+});
+
+const assignments = await db.query.userRoles.findMany({
+  where: eq(userRoles.siteId, SITE_ID),
+  with: { role: true },
+});
+
+const roleByUser = Object.fromEntries(
+  assignments.map((a) => [a.userId, a.role as { key: string; label: string }])
+);
+
+const siteRoles = await db.query.roles.findMany({
+  where: eq(roles.siteId, SITE_ID),
+  orderBy: (r, { asc }) => [asc(r.key)],
+});
+
+const currentUserId = Astro.locals.user!.id;
+---
+
+<AdminLayout title="Usuarios">
+  <div class="flex flex-col gap-6 max-w-4xl">
+
+    <div class="overflow-x-auto">
+      <table class="table w-full">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Verificado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {allUsers.map((user) => {
+            const role = roleByUser[user.id] ?? null;
+            const isSelf = user.id === currentUserId;
+            return (
+              <tr class={!user.emailVerified ? "opacity-50" : ""}>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <div class="avatar placeholder">
+                      <div class="bg-neutral text-neutral-content rounded-full w-8">
+                        <span class="text-xs">{user.name.charAt(0).toUpperCase()}</span>
+                      </div>
+                    </div>
+                    <span class="font-medium">{user.name}</span>
+                    {isSelf && <span class="badge badge-ghost badge-sm">Tú</span>}
+                  </div>
+                </td>
+                <td class="text-sm text-base-content/70">{user.email}</td>
+                <td>
+                  <select
+                    class="select select-bordered select-sm w-36"
+                    data-user-id={user.id}
+                    data-action="role"
+                    disabled={isSelf}
+                  >
+                    <option value="">Sin rol</option>
+                    {siteRoles.map((r) => (
+                      <option value={r.key} selected={role?.key === r.key}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <span class={`badge badge-sm ${user.emailVerified ? "badge-success" : "badge-ghost"}`}>
+                    {user.emailVerified ? "Sí" : "No"}
+                  </span>
+                </td>
+                <td>
+                  {!isSelf && (
+                    <button
+                      class="btn btn-xs btn-ghost text-error"
+                      data-user-id={user.id}
+                      data-action="deactivate"
+                    >
+                      {user.emailVerified ? "Desactivar" : "Activar"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    <div id="users-msg" class="text-sm hidden"></div>
+  </div>
+</AdminLayout>
+
+<script>
+  import { actions } from "astro:actions";
+
+  const msg = document.getElementById("users-msg")!;
+
+  function showMsg(text: string, isError = false) {
+    msg.textContent = text;
+    msg.className = `text-sm ${isError ? "text-error" : "text-success"}`;
+    msg.classList.remove("hidden");
+    setTimeout(() => msg.classList.add("hidden"), 3000);
+  }
+
+  document.querySelectorAll<HTMLSelectElement>("select[data-action='role']").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const userId = sel.dataset.userId!;
+      const roleKey = sel.value;
+
+      if (!roleKey) {
+        const { error } = await actions.users.removeRole({ userId });
+        if (error) showMsg(error.message, true);
+        else showMsg("Rol eliminado");
+        return;
+      }
+
+      const { error } = await actions.users.assignRole({
+        userId,
+        roleKey: roleKey as "admin" | "editor" | "collaborator",
+      });
+      if (error) showMsg(error.message, true);
+      else showMsg("Rol actualizado");
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>("button[data-action='deactivate']").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.dataset.userId!;
+      const label = btn.textContent?.trim() ?? "";
+      if (!confirm(`¿${label} este usuario?`)) return;
+
+      const { error } = await actions.users.deactivate({ userId });
+      if (error) showMsg(error.message, true);
+      else {
+        showMsg("Hecho");
+        setTimeout(() => window.location.reload(), 800);
+      }
+    });
+  });
+</script>

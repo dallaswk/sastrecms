@@ -1,4 +1,4 @@
-type JsonLdType = "WebSite" | "WebPage" | "Article" | "BlogPosting" | "CreativeWork";
+type JsonLdType = "WebSite" | "WebPage" | "Article" | "BlogPosting" | "CreativeWork" | "BreadcrumbList" | "Organization";
 
 interface JsonLdBase {
   "@context": "https://schema.org";
@@ -34,6 +34,35 @@ export function buildWebPageSchema(opts: {
     ...(opts.image ? { image: opts.image } : {}),
     ...(opts.datePublished ? { datePublished: opts.datePublished.toISOString() } : {}),
     ...(opts.dateModified ? { dateModified: opts.dateModified.toISOString() } : {}),
+  };
+}
+
+export function buildBreadcrumbSchema(items: { name: string; url: string }[]): JsonLdBase {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, idx) => ({
+      "@type": "ListItem",
+      position: idx + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  };
+}
+
+export function buildOrganizationSchema(opts: {
+  name: string;
+  url: string;
+  logo?: string;
+  sameAs?: string[];
+}): JsonLdBase {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: opts.name,
+    url: opts.url,
+    ...(opts.logo ? { logo: opts.logo } : {}),
+    ...(opts.sameAs?.length ? { sameAs: opts.sameAs } : {}),
   };
 }
 

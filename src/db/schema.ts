@@ -5,6 +5,7 @@ import {
   sqliteTable,
   uniqueIndex,
   index,
+  primaryKey,
 } from "drizzle-orm/sqlite-core";
 
 // ---------------------------------------------------------------------------
@@ -211,6 +212,28 @@ export const roleContentPermissions = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// user_roles — assign a site role to a user
+// ---------------------------------------------------------------------------
+export const userRoles = sqliteTable(
+  "user_roles",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    roleId: text("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    assignedAt: integer("assigned_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.siteId] }) })
+);
+
+// ---------------------------------------------------------------------------
 // settings
 // ---------------------------------------------------------------------------
 export const settings = sqliteTable("settings", {
@@ -394,6 +417,12 @@ export const mediaRelations = relations(media, ({ one }) => ({
     fields: [media.uploadedBy],
     references: [users.id],
   }),
+}));
+
+export const userRolesRelations = relations(userRoles, ({ one }) => ({
+  user: one(users, { fields: [userRoles.userId], references: [users.id] }),
+  role: one(roles, { fields: [userRoles.roleId], references: [roles.id] }),
+  site: one(sites, { fields: [userRoles.siteId], references: [sites.id] }),
 }));
 
 export const apiTokensRelations = relations(apiTokens, ({ one }) => ({
