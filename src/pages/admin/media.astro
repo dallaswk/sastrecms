@@ -1,0 +1,9 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import MediaManager from "@components/admin/MediaManager.vue";
+export const prerender = false;
+---
+
+<AdminLayout title="Media">
+  <MediaManager client:load />
+</AdminLayout>
