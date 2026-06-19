@@ -1,0 +1,120 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import { eq, isNull } from "drizzle-orm";
+import { apiTokens } from "@db/schema";
+export const prerender = false;
+
+const db = Astro.locals.db;
+const user = Astro.locals.user!;
+
+const activeTokens = await db.query.apiTokens.findMany({
+  where: eq(apiTokens.userId, user.id),
+  orderBy: (t, { desc }) => [desc(t.createdAt)],
+});
+---
+
+<AdminLayout title="API Tokens">
+  <div class="max-w-2xl flex flex-col gap-6">
+
+    <!-- Generate new token -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
+        <h2 class="card-title text-base">Nuevo token</h2>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Etiqueta</span></label>
+          <input id="token-label" type="text" class="input input-bordered" placeholder="Mi agente MCP" />
+        </div>
+        <button id="generate-btn" class="btn btn-primary self-start">Generar token</button>
+
+        <div id="new-token-box" class="hidden">
+          <div class="alert alert-warning text-sm">
+            <span>Copia este token ahora — no se mostrará de nuevo.</span>
+          </div>
+          <div class="flex gap-2 mt-2">
+            <input id="new-token-value" type="text" class="input input-bordered flex-1 font-mono text-sm" readonly />
+            <button id="copy-token-btn" class="btn btn-ghost">Copiar</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Token list -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
+        <h2 class="card-title text-base">Tokens activos</h2>
+
+        {activeTokens.filter(t => !t.revokedAt).length === 0 ? (
+          <p class="text-sm text-base-content/50">No tienes tokens activos.</p>
+        ) : (
+          <table class="table w-full">
+            <thead>
+              <tr>
+                <th>Etiqueta</th>
+                <th>Creado</th>
+                <th>Último uso</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeTokens.filter(t => !t.revokedAt).map((token) => (
+                <tr>
+                  <td class="font-medium">{token.label}</td>
+                  <td class="text-sm text-base-content/50">
+                    {token.createdAt ? new Date(token.createdAt).toLocaleDateString("es-ES") : "—"}
+                  </td>
+                  <td class="text-sm text-base-content/50">
+                    {token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleDateString("es-ES") : "Nunca"}
+                  </td>
+                  <td>
+                    <button
+                      class="btn btn-xs btn-ghost text-error"
+                      data-revoke-id={token.id}
+                      data-revoke-label={token.label}
+                    >
+                      Revocar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  </div>
+</AdminLayout>
+
+<script>
+  import { actions } from "astro:actions";
+
+  document.getElementById("generate-btn")?.addEventListener("click", async () => {
+    const label = (document.getElementById("token-label") as HTMLInputElement).value.trim();
+    if (!label) return alert("Escribe una etiqueta para el token");
+
+    const { data, error } = await actions.tokens.create({ label });
+    if (error) return alert(error.message);
+
+    const box = document.getElementById("new-token-box")!;
+    const input = document.getElementById("new-token-value") as HTMLInputElement;
+    box.classList.remove("hidden");
+    input.value = data!.rawToken;
+    setTimeout(() => window.location.reload(), 5000);
+  });
+
+  document.getElementById("copy-token-btn")?.addEventListener("click", () => {
+    const val = (document.getElementById("new-token-value") as HTMLInputElement).value;
+    navigator.clipboard.writeText(val);
+    alert("Token copiado");
+  });
+
+  document.querySelectorAll("[data-revoke-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-revoke-id")!;
+      const label = btn.getAttribute("data-revoke-label")!;
+      if (!confirm(`¿Revocar el token "${label}"? Esta acción no se puede deshacer.`)) return;
+      const { error } = await actions.tokens.revoke({ id });
+      if (error) alert(error.message);
+      else window.location.reload();
+    });
+  });
+</script>
