@@ -3,11 +3,13 @@ import AdminLayout from "@layouts/AdminLayout.astro";
 import NodeForm from "@components/admin/NodeForm.vue";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { nodes, contentTypes, sites } from "@db/schema";
+import { checkPermission } from "@lib/permissions";
 export const prerender = false;
 
 const { id } = Astro.params;
 const db = Astro.locals.db;
 const SITE_ID = "site_default";
+const userId = Astro.locals.user!.id;
 
 const isNew = id === "new";
 const typeId = Astro.url.searchParams.get("type") ?? "";
@@ -30,7 +32,13 @@ if (isNew) {
 }
 
 const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
-const availableLocales = (site?.locales as string[] | null) ?? ["es"];
+const allLocales = (site?.locales as string[] | null) ?? ["es"];
+const isTranslatable = contentType?.translatable ?? true;
+const availableLocales = isTranslatable ? allLocales : [allLocales[0]];
+
+const canEdit = await checkPermission(db, userId, SITE_ID, contentType?.id ?? "", "edit");
+const canPublish = await checkPermission(db, userId, SITE_ID, contentType?.id ?? "", "publish");
+const canDelete = await checkPermission(db, userId, SITE_ID, contentType?.id ?? "", "delete");
 
 let translations: { id: string; locale: string; title: string; path: string }[] = [];
 if (!isNew && node?.translationGroupId) {
@@ -71,6 +79,12 @@ const pageTitle = isNew
     </div>
   )}
 
+  {!canEdit && !isNew && (
+    <div class="alert alert-warning mb-4">
+      <span>Solo lectura — no tienes permiso para editar este tipo de contenido.</span>
+    </div>
+  )}
+
   <NodeForm
     client:load
     nodeId={isNew ? undefined : id}
@@ -78,6 +92,9 @@ const pageTitle = isNew
     fieldSchema={contentType?.fieldSchema ?? []}
     availableLocales={availableLocales}
     translations={translations}
+    canEdit={isNew ? true : canEdit}
+    canPublish={canPublish}
+    canDelete={canDelete}
     initialData={node ? {
       title: node.title,
       slug: node.slug,

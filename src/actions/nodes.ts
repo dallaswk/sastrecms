@@ -280,6 +280,28 @@ export const nodeActions = {
     },
   }),
 
+  reorder: defineAction({
+    input: z.object({
+      items: z.array(z.object({
+        id: z.string(),
+        position: z.number(),
+        parentId: z.string().nullable().optional(),
+      })),
+    }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const db = context.locals.db;
+      await Promise.all(
+        input.items.map(({ id, position, parentId }) =>
+          db.update(nodes)
+            .set({ position, ...(parentId !== undefined ? { parentId } : {}) })
+            .where(and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)))
+        )
+      );
+      return { ok: true };
+    },
+  }),
+
   listForPicker: defineAction({
     input: z.object({
       excludeId: z.string().optional(),

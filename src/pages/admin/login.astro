@@ -21,44 +21,65 @@ if (Astro.locals.session) {
         <h1 class="text-2xl font-black text-primary mb-2">sASTRe</h1>
         <p class="text-base-content/60 text-sm mb-6">Accede al panel de administración</p>
 
+        <!-- Tabs -->
+        <div role="tablist" class="tabs tabs-bordered mb-4">
+          <button role="tab" id="tab-password" class="tab tab-active" onclick="switchTab('password')">Contraseña</button>
+          <button role="tab" id="tab-magic" class="tab" onclick="switchTab('magic')">Magic link</button>
+        </div>
+
+        <!-- Password form -->
         <form id="login-form" class="flex flex-col gap-4">
           <div class="form-control">
             <label class="label" for="email">
               <span class="label-text">Email</span>
             </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="admin@ejemplo.com"
-              class="input input-bordered"
-              required
-            />
+            <input id="email" name="email" type="email" placeholder="admin@ejemplo.com" class="input input-bordered" required />
           </div>
-
           <div class="form-control">
             <label class="label" for="password">
               <span class="label-text">Contraseña</span>
             </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              class="input input-bordered"
-              required
-            />
+            <input id="password" name="password" type="password" class="input input-bordered" required />
           </div>
-
           <div id="error-msg" class="text-error text-sm hidden"></div>
+          <button type="submit" class="btn btn-primary w-full">Acceder</button>
+        </form>
 
-          <button type="submit" class="btn btn-primary w-full">
-            Acceder
-          </button>
+        <!-- Magic link form -->
+        <form id="magic-form" class="flex flex-col gap-4 hidden">
+          <p class="text-sm text-base-content/60">Introduce tu email y recibirás un enlace de acceso directo.</p>
+          <div class="form-control">
+            <label class="label" for="magic-email">
+              <span class="label-text">Email</span>
+            </label>
+            <input id="magic-email" name="email" type="email" placeholder="admin@ejemplo.com" class="input input-bordered" required />
+          </div>
+          <div id="magic-msg" class="text-sm hidden"></div>
+          <button type="submit" class="btn btn-primary w-full">Enviar enlace</button>
         </form>
       </div>
     </div>
 
     <script>
+      function switchTab(tab: "password" | "magic") {
+        const tabPassword = document.getElementById("tab-password")!;
+        const tabMagic = document.getElementById("tab-magic")!;
+        const formPassword = document.getElementById("login-form")!;
+        const formMagic = document.getElementById("magic-form")!;
+        if (tab === "password") {
+          tabPassword.classList.add("tab-active");
+          tabMagic.classList.remove("tab-active");
+          formPassword.classList.remove("hidden");
+          formMagic.classList.add("hidden");
+        } else {
+          tabMagic.classList.add("tab-active");
+          tabPassword.classList.remove("tab-active");
+          formMagic.classList.remove("hidden");
+          formPassword.classList.add("hidden");
+        }
+      }
+      (window as any).switchTab = switchTab;
+
       const form = document.getElementById("login-form") as HTMLFormElement;
       const errorMsg = document.getElementById("error-msg") as HTMLDivElement;
 
@@ -82,6 +103,38 @@ if (Astro.locals.session) {
           const body = await res.json().catch(() => ({}));
           errorMsg.textContent = body.message ?? "Credenciales incorrectas";
           errorMsg.classList.remove("hidden");
+        }
+      });
+
+      const magicForm = document.getElementById("magic-form") as HTMLFormElement;
+      const magicMsg = document.getElementById("magic-msg") as HTMLDivElement;
+
+      magicForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        magicMsg.classList.add("hidden");
+        const data = new FormData(magicForm);
+        const btn = magicForm.querySelector("button[type=submit]") as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = "Enviando...";
+
+        const res = await fetch("/api/auth/sign-in/magic-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: data.get("email") }),
+        });
+
+        btn.disabled = false;
+        btn.textContent = "Enviar enlace";
+
+        if (res.ok) {
+          magicMsg.className = "text-sm text-success";
+          magicMsg.textContent = "Revisa tu email — enlace enviado.";
+          magicMsg.classList.remove("hidden");
+        } else {
+          const body = await res.json().catch(() => ({}));
+          magicMsg.className = "text-sm text-error";
+          magicMsg.textContent = body.message ?? "Error al enviar el enlace";
+          magicMsg.classList.remove("hidden");
         }
       });
     </script>

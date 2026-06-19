@@ -8,7 +8,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { TURSO_DATABASE_URL, TURSO_AUTH_TOKEN } = context.locals.runtime.env;
 
   const db = createDb(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN);
-  const auth = createAuth(db);
+  const auth = createAuth(db, context.locals.runtime.env.RESEND_API_KEY);
 
   context.locals.db = db;
   context.locals.auth = auth;

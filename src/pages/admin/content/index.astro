@@ -1,15 +1,18 @@
 ---
 import AdminLayout from "@layouts/AdminLayout.astro";
-import { eq } from "drizzle-orm";
-import { nodes, contentTypes } from "@db/schema";
+import NodeTree from "@components/admin/NodeTree.vue";
+import { eq, and } from "drizzle-orm";
+import { nodes, contentTypes, userRoles } from "@db/schema";
+import { checkPermission } from "@lib/permissions";
 export const prerender = false;
 
 const db = Astro.locals.db;
 const SITE_ID = "site_default";
+const userId = Astro.locals.user!.id;
 
 const allNodes = await db.query.nodes.findMany({
   where: eq(nodes.siteId, SITE_ID),
-  orderBy: (n, { desc }) => [desc(n.updatedAt)],
+  orderBy: (n, { asc }) => [asc(n.position), asc(n.path)],
   with: { contentType: true },
 });
 
@@ -17,106 +20,84 @@ const allContentTypes = await db.query.contentTypes.findMany({
   where: eq(contentTypes.siteId, SITE_ID),
 });
 
-const statusBadge: Record<string, string> = {
-  published: "badge-success",
-  draft: "badge-ghost",
-  scheduled: "badge-warning",
-};
+const assignment = await db.query.userRoles.findFirst({
+  where: and(eq(userRoles.userId, userId), eq(userRoles.siteId, SITE_ID)),
+  with: { role: true },
+});
+const isAdmin = assignment?.role.key === "admin";
+
+const canCreatePerType: Record<string, boolean> = {};
+for (const ct of allContentTypes) {
+  canCreatePerType[ct.id] = await checkPermission(db, userId, SITE_ID, ct.id, "create");
+}
+
+type RawNode = typeof allNodes[number] & { contentType: typeof allContentTypes[number] | null };
+
+function buildTree(flat: RawNode[], parentId: string | null = null): import("../../../components/admin/NodeTree.vue").TreeNode[] {
+  return flat
+    .filter((n) => (n.parentId ?? null) === parentId)
+    .map((n) => ({
+      id: n.id,
+      title: n.title,
+      path: n.path,
+      status: n.status,
+      position: n.position,
+      parentId: n.parentId ?? null,
+      contentType: n.contentType
+        ? { key: n.contentType.key, label: n.contentType.label, icon: n.contentType.icon ?? undefined }
+        : undefined,
+      children: buildTree(flat, n.id),
+    }));
+}
+
+const treeData = buildTree(allNodes as RawNode[]);
+const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
 ---
 
 <AdminLayout title="Contenido">
-  <div class="flex justify-between items-center mb-6">
-    <div class="flex gap-2 flex-wrap">
-      <a href="/admin/content" class="btn btn-sm btn-ghost">Todos</a>
-      {allContentTypes.map((ct) => (
-        <a href={`/admin/content?type=${ct.id}`} class="btn btn-sm btn-ghost capitalize">
-          {ct.label}
-        </a>
-      ))}
+  <div class="flex justify-between items-center mb-6 gap-4 flex-wrap">
+    <div class="flex items-center gap-2">
+      <h1 class="font-semibold text-lg">Árbol de contenido</h1>
+      <span class="badge badge-ghost badge-sm">{allNodes.length} nodos</span>
     </div>
-    <div class="dropdown dropdown-end">
-      <label tabindex="0" class="btn btn-primary btn-sm">
-        + Nuevo
-      </label>
-      <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-52 shadow z-50 mt-1">
-        {allContentTypes.map((ct) => (
-          <li>
-            <a href={`/admin/content/new?type=${ct.id}`}>{ct.label}</a>
-          </li>
-        ))}
-      </ul>
-    </div>
+    {creatableTypes.length > 0 && (
+      <div class="dropdown dropdown-end">
+        <label tabindex="0" class="btn btn-primary btn-sm">+ Nuevo</label>
+        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box w-52 shadow z-50 mt-1">
+          {creatableTypes.map((ct) => (
+            <li><a href={`/admin/content/new?type=${ct.id}`}>{ct.icon ?? ""} {ct.label}</a></li>
+          ))}
+        </ul>
+      </div>
+    )}
   </div>
 
   {allNodes.length === 0 ? (
     <div class="text-center py-20 text-base-content/40">
       <p class="text-lg">No hay contenido todavía.</p>
-      <p class="text-sm mt-1">Crea tu primer nodo usando el botón "+ Nuevo".</p>
+      {creatableTypes.length > 0 && (
+        <p class="text-sm mt-1">Crea tu primer nodo usando el botón "+ Nuevo".</p>
+      )}
     </div>
   ) : (
-    <div class="overflow-x-auto">
-      <table class="table table-zebra w-full">
-        <thead>
-          <tr>
-            <th>Título</th>
-            <th>Tipo</th>
-            <th>Estado</th>
-            <th>Ruta</th>
-            <th>Actualizado</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {allNodes.map((node) => (
-            <tr>
-              <td class="font-medium">{node.title}</td>
-              <td>
-                <span class="badge badge-outline capitalize">
-                  {(node as any).contentType?.label ?? node.contentTypeId}
-                </span>
-              </td>
-              <td>
-                <span class={`badge ${statusBadge[node.status]}`}>
-                  {node.status}
-                </span>
-              </td>
-              <td class="text-sm text-base-content/60 font-mono">{node.path}</td>
-              <td class="text-sm text-base-content/60">
-                {node.updatedAt
-                  ? new Date(node.updatedAt).toLocaleDateString("es-ES")
-                  : "—"}
-              </td>
-              <td>
-                <div class="flex gap-2">
-                  <a href={`/admin/content/${node.id}`} class="btn btn-xs btn-ghost">
-                    Editar
-                  </a>
-                  <button
-                    class="btn btn-xs btn-ghost text-error"
-                    data-delete-id={node.id}
-                    data-delete-title={node.title}
-                  >
-                    Borrar
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div class="card bg-base-100 border border-base-300">
+      <div class="card-body p-3">
+        <NodeTree
+          client:load
+          :nodes="treeData"
+          @reorder="handleReorder"
+          @delete="handleDelete"
+        />
+      </div>
     </div>
   )}
 
   <dialog id="delete-modal" class="modal">
     <div class="modal-box">
       <h3 class="font-bold text-lg">¿Borrar nodo?</h3>
-      <p class="py-4">
-        Se eliminará <strong id="delete-node-title"></strong> de forma permanente.
-      </p>
+      <p class="py-4">Se eliminará <strong id="delete-node-title"></strong> de forma permanente.</p>
       <div class="modal-action">
-        <form method="dialog">
-          <button class="btn btn-ghost">Cancelar</button>
-        </form>
+        <form method="dialog"><button class="btn btn-ghost">Cancelar</button></form>
         <button id="confirm-delete" class="btn btn-error">Borrar</button>
       </div>
     </div>
@@ -124,25 +105,30 @@ const statusBadge: Record<string, string> = {
 </AdminLayout>
 
 <script>
+  import { actions } from "astro:actions";
+
   let targetId = "";
 
-  document.querySelectorAll("[data-delete-id]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      targetId = btn.getAttribute("data-delete-id") ?? "";
-      const title = btn.getAttribute("data-delete-title") ?? "";
-      document.getElementById("delete-node-title")!.textContent = `"${title}"`;
-      (document.getElementById("delete-modal") as HTMLDialogElement).showModal();
+  function handleReorder(e: CustomEvent) {
+    actions.nodes.reorder({ items: e.detail[0] });
+  }
+
+  function handleDelete(e: CustomEvent) {
+    const node = e.detail[0];
+    targetId = node.id;
+    document.getElementById("delete-node-title")!.textContent = `"${node.title}"`;
+    (document.getElementById("delete-modal") as HTMLDialogElement).showModal();
+  }
+
+  document.addEventListener("astro:page-load", () => {
+    document.getElementById("confirm-delete")?.addEventListener("click", async () => {
+      if (!targetId) return;
+      const { error } = await actions.nodes.delete({ id: targetId });
+      if (error) alert(error.message);
+      else window.location.reload();
     });
   });
 
-  document.getElementById("confirm-delete")?.addEventListener("click", async () => {
-    if (!targetId) return;
-    const { actions } = await import("astro:actions");
-    const { error } = await actions.nodes.delete({ id: targetId });
-    if (error) {
-      alert(error.message);
-    } else {
-      window.location.reload();
-    }
-  });
+  window.addEventListener("reorder", handleReorder as EventListener);
+  window.addEventListener("delete", handleDelete as EventListener);
 </script>

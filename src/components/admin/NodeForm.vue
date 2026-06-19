@@ -194,14 +194,14 @@
     </div>
 
     <!-- Status + submit -->
-    <div class="flex items-center gap-4 pt-2">
-      <select v-model="form.status" class="select select-bordered w-40">
+    <div class="flex items-center gap-4 pt-2 flex-wrap">
+      <select v-model="form.status" class="select select-bordered w-40" :disabled="editDisabled || (!canPublish && form.status !== 'draft')">
         <option value="draft">Borrador</option>
-        <option value="published">Publicado</option>
-        <option value="scheduled">Programado</option>
+        <option v-if="canPublish !== false" value="published">Publicado</option>
+        <option v-if="canPublish !== false" value="scheduled">Programado</option>
       </select>
 
-      <button type="submit" class="btn btn-primary" :disabled="saving">
+      <button type="submit" class="btn btn-primary" :disabled="saving || editDisabled">
         <span v-if="saving" class="loading loading-spinner loading-sm"></span>
         {{ nodeId ? "Guardar cambios" : "Crear nodo" }}
       </button>
@@ -248,6 +248,9 @@ const props = defineProps<{
   parentPath?: string;
   availableLocales?: string[];
   translations?: TranslationLink[];
+  canEdit?: boolean;
+  canPublish?: boolean;
+  canDelete?: boolean;
   initialData?: {
     title?: string;
     slug?: string;
@@ -278,6 +281,8 @@ const pickerNodeId = ref("");
 const linking = ref(false);
 const translationMsg = ref("");
 const translationError = ref(false);
+
+const editDisabled = computed(() => props.canEdit === false);
 
 const otherLocales = computed(() =>
   availableLocales.filter((l) => l !== form.locale && !linkedTranslations.value.some((t) => t.locale === l))

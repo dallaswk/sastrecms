@@ -34,6 +34,14 @@
       <button class="btn btn-sm btn-ghost" @click="showNewFolder = false; newFolderName = ''">Cancelar</button>
     </div>
 
+    <!-- Upload guidelines -->
+    <div v-if="!pickerMode" class="alert alert-info py-2 text-xs flex-col items-start gap-0.5">
+      <p class="font-medium">Guía de subida</p>
+      <p>Imágenes: JPG, PNG, WebP, SVG · Máx. <strong>5 MB</strong> · Recomendado ≤ 2500 px en el lado mayor</p>
+      <p>Vídeo: MP4, WebM · Máx. <strong>100 MB</strong> · PDF/DOC: cualquier tamaño razonable</p>
+      <p class="text-warning">⚠ No se aplica optimización automática. Sube imágenes ya comprimidas para no afectar Core Web Vitals.</p>
+    </div>
+
     <!-- Upload progress -->
     <div v-if="uploading" class="flex items-center gap-2 text-sm">
       <span class="loading loading-spinner loading-sm"></span>
