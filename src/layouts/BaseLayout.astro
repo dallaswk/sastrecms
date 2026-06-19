@@ -1,0 +1,49 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+  noindex?: boolean;
+  theme?: Record<string, string>;
+}
+
+const { title, description, ogImage, noindex = false, theme } = Astro.props;
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang={Astro.currentLocale ?? "es"}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <link rel="canonical" href={canonicalUrl} />
+
+    {ogImage && <meta property="og:image" content={ogImage} />}
+    <meta property="og:title" content={title} />
+    {description && <meta property="og:description" content={description} />}
+
+    {
+      theme && (
+        <style>
+          :root {
+            {
+              Object.entries(theme)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join("; ")
+            }
+          }
+        </style>
+      )
+    }
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

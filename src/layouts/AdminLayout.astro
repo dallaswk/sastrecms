@@ -1,0 +1,69 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+const user = Astro.locals.user;
+---
+
+<!doctype html>
+<html lang="es" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title} — sASTRe Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+  </head>
+  <body class="bg-base-200 min-h-screen">
+    <div class="drawer lg:drawer-open">
+      <input id="admin-drawer" type="checkbox" class="drawer-toggle" />
+
+      <div class="drawer-content flex flex-col">
+        <header class="navbar bg-base-100 shadow-sm lg:hidden">
+          <label for="admin-drawer" class="btn btn-ghost btn-square">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </label>
+          <span class="text-xl font-bold ml-2">sASTRe</span>
+        </header>
+
+        <main class="flex-1 p-6">
+          <h1 class="text-2xl font-bold mb-6">{title}</h1>
+          <slot />
+        </main>
+      </div>
+
+      <aside class="drawer-side z-50">
+        <label for="admin-drawer" class="drawer-overlay"></label>
+        <nav class="menu bg-base-100 text-base-content min-h-full w-64 p-4 gap-1">
+          <div class="flex items-center gap-2 mb-6 px-2">
+            <span class="text-2xl font-black text-primary">sASTRe</span>
+          </div>
+
+          <li><a href="/admin" class="font-medium">Dashboard</a></li>
+          <li><a href="/admin/content">Contenido</a></li>
+          <li><a href="/admin/media">Medios</a></li>
+          <li class="menu-title mt-4">Configuración</li>
+          <li><a href="/admin/content-types">Tipos de contenido</a></li>
+          <li><a href="/admin/users">Usuarios</a></li>
+          <li><a href="/admin/settings">Ajustes</a></li>
+          <li><a href="/admin/tokens">Tokens MCP</a></li>
+
+          <div class="mt-auto pt-4 border-t border-base-200">
+            <div class="text-sm text-base-content/60 px-2 mb-2">{user?.email}</div>
+            <li>
+              <form method="POST" action="/api/auth/sign-out">
+                <button type="submit" class="text-error w-full text-left">Cerrar sesión</button>
+              </form>
+            </li>
+          </div>
+        </nav>
+      </aside>
+    </div>
+  </body>
+</html>

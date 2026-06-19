@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+.output/
+
+# astro
+.astro/
+
+# env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# cloudflare
+.wrangler/
+
+# drizzle migrations (commit the SQL, not the journal metadata if not needed)
+# drizzle/meta/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/settings.json
+.idea/

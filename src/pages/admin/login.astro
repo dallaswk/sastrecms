@@ -1,0 +1,89 @@
+---
+import "../../styles/global.css";
+export const prerender = false;
+
+if (Astro.locals.session) {
+  return Astro.redirect("/admin");
+}
+---
+
+<!doctype html>
+<html lang="es" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acceder — sASTRe</title>
+    <meta name="robots" content="noindex, nofollow" />
+  </head>
+  <body class="bg-base-200 min-h-screen flex items-center justify-center">
+    <div class="card bg-base-100 shadow-xl w-full max-w-sm">
+      <div class="card-body">
+        <h1 class="text-2xl font-black text-primary mb-2">sASTRe</h1>
+        <p class="text-base-content/60 text-sm mb-6">Accede al panel de administración</p>
+
+        <form id="login-form" class="flex flex-col gap-4">
+          <div class="form-control">
+            <label class="label" for="email">
+              <span class="label-text">Email</span>
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="admin@ejemplo.com"
+              class="input input-bordered"
+              required
+            />
+          </div>
+
+          <div class="form-control">
+            <label class="label" for="password">
+              <span class="label-text">Contraseña</span>
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              class="input input-bordered"
+              required
+            />
+          </div>
+
+          <div id="error-msg" class="text-error text-sm hidden"></div>
+
+          <button type="submit" class="btn btn-primary w-full">
+            Acceder
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById("login-form") as HTMLFormElement;
+      const errorMsg = document.getElementById("error-msg") as HTMLDivElement;
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorMsg.classList.add("hidden");
+
+        const data = new FormData(form);
+        const res = await fetch("/api/auth/sign-in/email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: data.get("email"),
+            password: data.get("password"),
+          }),
+        });
+
+        if (res.ok) {
+          window.location.href = "/admin";
+        } else {
+          const body = await res.json().catch(() => ({}));
+          errorMsg.textContent = body.message ?? "Credenciales incorrectas";
+          errorMsg.classList.remove("hidden");
+        }
+      });
+    </script>
+  </body>
+</html>
