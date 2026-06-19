@@ -1,0 +1,48 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import ContentTypeBuilder from "@components/admin/ContentTypeBuilder.vue";
+import { eq, and } from "drizzle-orm";
+import { contentTypes } from "@db/schema";
+export const prerender = false;
+
+const { id } = Astro.params;
+const db = Astro.locals.db;
+const SITE_ID = "site_default";
+
+const isNew = id === "new";
+let ct = null;
+
+if (!isNew) {
+  ct = await db.query.contentTypes.findFirst({
+    where: and(eq(contentTypes.id, id!), eq(contentTypes.siteId, SITE_ID)),
+  });
+  if (!ct) return Astro.redirect("/admin/content-types");
+}
+
+const title = isNew ? "Nuevo tipo de contenido" : `Editar: ${ct?.label}`;
+---
+
+<AdminLayout title={title}>
+  <div class="mb-4">
+    <a href="/admin/content-types" class="btn btn-ghost btn-sm">← Volver</a>
+  </div>
+
+  {!isNew && ct?.isSystem && (
+    <div class="alert alert-info mb-6">
+      <span>Este es un tipo de sistema. La clave y las opciones base no se pueden modificar, pero puedes añadir o editar campos.</span>
+    </div>
+  )}
+
+  <ContentTypeBuilder
+    client:load
+    contentTypeId={isNew ? undefined : id}
+    initialData={ct ? {
+      key: ct.key,
+      label: ct.label,
+      hasArchive: ct.hasArchive,
+      supportsChildren: ct.supportsChildren,
+      translatable: ct.translatable,
+      fieldSchema: ct.fieldSchema as never,
+    } : undefined}
+  />
+</AdminLayout>

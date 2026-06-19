@@ -1,0 +1,54 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import { eq } from "drizzle-orm";
+import { contentTypes } from "@db/schema";
+export const prerender = false;
+
+const db = Astro.locals.db;
+const SITE_ID = "site_default";
+
+const allTypes = await db.query.contentTypes.findMany({
+  where: eq(contentTypes.siteId, SITE_ID),
+  orderBy: (ct, { asc }) => [asc(ct.label)],
+});
+---
+
+<AdminLayout title="Tipos de contenido">
+  <div class="flex justify-end mb-6">
+    <a href="/admin/content-types/new" class="btn btn-primary btn-sm">+ Nuevo tipo</a>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {allTypes.map((ct) => (
+      <div class="card bg-base-100 border border-base-300 hover:border-primary transition-colors">
+        <div class="card-body p-4">
+          <div class="flex justify-between items-start">
+            <div>
+              <h3 class="font-semibold">{ct.label}</h3>
+              <code class="text-xs text-base-content/50">{ct.key}</code>
+            </div>
+            {ct.isSystem && (
+              <span class="badge badge-ghost badge-sm">sistema</span>
+            )}
+          </div>
+
+          <div class="flex flex-wrap gap-1 mt-2">
+            {ct.hasArchive && <span class="badge badge-outline badge-xs">archivo</span>}
+            {ct.supportsChildren && <span class="badge badge-outline badge-xs">hijos</span>}
+            {ct.translatable && <span class="badge badge-outline badge-xs">traducible</span>}
+          </div>
+
+          <p class="text-sm text-base-content/50 mt-1">
+            {(ct.fieldSchema as unknown[]).length} campo{(ct.fieldSchema as unknown[]).length !== 1 ? "s" : ""}
+          </p>
+
+          <div class="card-actions justify-end mt-2">
+            <a href={`/admin/content-types/${ct.id}`} class="btn btn-xs btn-ghost">
+              Editar
+            </a>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+</AdminLayout>
