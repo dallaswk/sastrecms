@@ -122,6 +122,55 @@
       </div>
     </template>
 
+    <!-- Translations accordion -->
+    <div v-if="nodeId" class="collapse collapse-arrow border border-base-300 rounded-lg">
+      <input type="checkbox" />
+      <div class="collapse-title font-medium flex items-center gap-2">
+        Traducciones
+        <span v-if="linkedTranslations.length > 0" class="badge badge-primary badge-sm">{{ linkedTranslations.length }}</span>
+      </div>
+      <div class="collapse-content flex flex-col gap-4 pt-2">
+
+        <!-- Existing links -->
+        <div v-if="linkedTranslations.length > 0" class="flex flex-col gap-2">
+          <p class="text-sm text-base-content/60">Versiones vinculadas:</p>
+          <div v-for="t in linkedTranslations" :key="t.id" class="flex items-center justify-between p-2 rounded-lg bg-base-200">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-ghost badge-sm">{{ t.locale }}</span>
+              <a :href="`/admin/content/${t.id}`" class="text-sm font-medium hover:underline">{{ t.title }}</a>
+              <span class="text-xs text-base-content/40 font-mono">{{ t.path }}</span>
+            </div>
+            <button type="button" class="btn btn-xs btn-ghost text-error" @click="unlinkTranslation(t.id)">Desvincular</button>
+          </div>
+        </div>
+        <p v-else class="text-sm text-base-content/50">Este nodo no tiene traducciones vinculadas.</p>
+
+        <!-- Link new translation -->
+        <div class="flex flex-col gap-2">
+          <p class="text-sm font-medium">Vincular traducción existente:</p>
+          <div class="flex gap-2">
+            <select v-model="pickerNodeId" class="select select-bordered select-sm flex-1">
+              <option value="">Seleccionar nodo...</option>
+              <optgroup v-for="loc in otherLocales" :key="loc" :label="loc">
+                <option
+                  v-for="n in pickerNodes.filter(n => n.locale === loc)"
+                  :key="n.id"
+                  :value="n.id"
+                >
+                  {{ n.title }} ({{ n.path }})
+                </option>
+              </optgroup>
+            </select>
+            <button type="button" class="btn btn-sm btn-primary" :disabled="!pickerNodeId || linking" @click="linkTranslation">
+              <span v-if="linking" class="loading loading-spinner loading-xs"></span>
+              Vincular
+            </button>
+          </div>
+          <p v-if="translationMsg" class="text-sm" :class="translationError ? 'text-error' : 'text-success'">{{ translationMsg }}</p>
+        </div>
+      </div>
+    </div>
+
     <!-- SEO accordion -->
     <div class="collapse collapse-arrow border border-base-300 rounded-lg">
       <input type="checkbox" />
@@ -172,7 +221,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, computed, onMounted } from "vue";
 import { actions } from "astro:actions";
 import RichTextEditor from "./RichTextEditor.vue";
 import MediaPickerModal from "./MediaPickerModal.vue";
@@ -185,16 +234,25 @@ interface FieldDefinition {
   options?: string[];
 }
 
+interface TranslationLink {
+  id: string;
+  locale: string;
+  title: string;
+  path: string;
+}
+
 const props = defineProps<{
   nodeId?: string;
   contentTypeId: string;
   fieldSchema: FieldDefinition[];
   parentPath?: string;
   availableLocales?: string[];
+  translations?: TranslationLink[];
   initialData?: {
     title?: string;
     slug?: string;
     locale?: string;
+    translationGroupId?: string;
     fields?: Record<string, unknown>;
     seo?: Record<string, unknown>;
     status?: string;
@@ -213,6 +271,59 @@ const pickerMultiple = ref(false);
 const pickerTargetField = ref("");
 
 const availableLocales = props.availableLocales ?? ["es"];
+
+const linkedTranslations = ref<TranslationLink[]>(props.translations ?? []);
+const pickerNodes = ref<{ id: string; title: string; path: string; locale: string }[]>([]);
+const pickerNodeId = ref("");
+const linking = ref(false);
+const translationMsg = ref("");
+const translationError = ref(false);
+
+const otherLocales = computed(() =>
+  availableLocales.filter((l) => l !== form.locale && !linkedTranslations.value.some((t) => t.locale === l))
+);
+
+async function loadPickerNodes() {
+  if (!props.nodeId) return;
+  const { data } = await actions.nodes.listForPicker({
+    excludeId: props.nodeId,
+  });
+  if (data) pickerNodes.value = data;
+}
+
+async function linkTranslation() {
+  if (!props.nodeId || !pickerNodeId.value) return;
+  linking.value = true;
+  translationMsg.value = "";
+  const { data, error } = await actions.nodes.linkTranslation({
+    nodeId: props.nodeId,
+    targetId: pickerNodeId.value,
+  });
+  linking.value = false;
+  if (error) {
+    translationMsg.value = error.message;
+    translationError.value = true;
+    return;
+  }
+  translationMsg.value = "Traducción vinculada";
+  translationError.value = false;
+  const linked = pickerNodes.value.find((n) => n.id === pickerNodeId.value);
+  if (linked) linkedTranslations.value.push(linked);
+  pickerNodeId.value = "";
+}
+
+async function unlinkTranslation(targetId: string) {
+  if (!confirm("¿Desvincular esta traducción?")) return;
+  const { error } = await actions.nodes.unlinkTranslation({ nodeId: targetId });
+  if (error) {
+    translationMsg.value = error.message;
+    translationError.value = true;
+    return;
+  }
+  linkedTranslations.value = linkedTranslations.value.filter((t) => t.id !== targetId);
+  translationMsg.value = "Desvinculado";
+  translationError.value = false;
+}
 
 const form = reactive({
   title: props.initialData?.title ?? "",
@@ -314,5 +425,6 @@ async function handleSubmit() {
 
 onMounted(() => {
   if (!props.initialData?.slug) form.slug = slugify(form.title);
+  if (props.nodeId) loadPickerNodes();
 });
 </script>

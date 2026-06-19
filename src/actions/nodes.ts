@@ -1,6 +1,6 @@
 import { defineAction } from "astro:actions";
 import { z } from "astro:schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNotNull } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
 import { generateId, slugify, computePath } from "@lib/id";
 
@@ -204,6 +204,90 @@ export const nodeActions = {
         .where(and(eq(nodes.id, input.id), eq(nodes.siteId, SITE_ID)));
 
       return { id: input.id };
+    },
+  }),
+
+  linkTranslation: defineAction({
+    input: z.object({
+      nodeId: z.string(),
+      targetId: z.string(),
+    }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const db = context.locals.db;
+
+      if (input.nodeId === input.targetId) throw new Error("Un nodo no puede vincularse consigo mismo");
+
+      const [nodeA, nodeB] = await Promise.all([
+        db.query.nodes.findFirst({ where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, SITE_ID)) }),
+        db.query.nodes.findFirst({ where: and(eq(nodes.id, input.targetId), eq(nodes.siteId, SITE_ID)) }),
+      ]);
+      if (!nodeA || !nodeB) throw new Error("Nodo no encontrado");
+
+      if (nodeA.locale === nodeB.locale) throw new Error("Ambos nodos tienen el mismo idioma");
+
+      const groupId = nodeA.translationGroupId ?? nodeB.translationGroupId ?? generateId("tg");
+
+      await Promise.all([
+        db.update(nodes).set({ translationGroupId: groupId }).where(eq(nodes.id, nodeA.id)),
+        db.update(nodes).set({ translationGroupId: groupId }).where(eq(nodes.id, nodeB.id)),
+      ]);
+
+      return { groupId };
+    },
+  }),
+
+  unlinkTranslation: defineAction({
+    input: z.object({ nodeId: z.string() }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const db = context.locals.db;
+
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, SITE_ID)),
+      });
+      if (!node) throw new Error("Nodo no encontrado");
+
+      if (!node.translationGroupId) return { ok: true };
+
+      const siblings = await db.query.nodes.findMany({
+        where: and(
+          eq(nodes.translationGroupId, node.translationGroupId),
+          isNotNull(nodes.locale)
+        ),
+      });
+
+      await db.update(nodes).set({ translationGroupId: null }).where(eq(nodes.id, node.id));
+
+      if (siblings.filter((s) => s.id !== node.id).length === 1) {
+        await db
+          .update(nodes)
+          .set({ translationGroupId: null })
+          .where(eq(nodes.translationGroupId, node.translationGroupId));
+      }
+
+      return { ok: true };
+    },
+  }),
+
+  listForPicker: defineAction({
+    input: z.object({
+      excludeId: z.string().optional(),
+      locale: z.string().optional(),
+    }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const db = context.locals.db;
+
+      const all = await db.query.nodes.findMany({
+        where: eq(nodes.siteId, SITE_ID),
+        orderBy: (n, { asc }) => [asc(n.path)],
+      });
+
+      return all
+        .filter((n) => n.id !== input.excludeId)
+        .filter((n) => !input.locale || n.locale === input.locale)
+        .map((n) => ({ id: n.id, title: n.title, path: n.path, locale: n.locale }));
     },
   }),
 };

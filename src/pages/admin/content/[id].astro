@@ -1,8 +1,8 @@
 ---
 import AdminLayout from "@layouts/AdminLayout.astro";
 import NodeForm from "@components/admin/NodeForm.vue";
-import { eq, and } from "drizzle-orm";
-import { nodes, contentTypes } from "@db/schema";
+import { eq, and, isNotNull } from "drizzle-orm";
+import { nodes, contentTypes, sites } from "@db/schema";
 export const prerender = false;
 
 const { id } = Astro.params;
@@ -12,8 +12,8 @@ const SITE_ID = "site_default";
 const isNew = id === "new";
 const typeId = Astro.url.searchParams.get("type") ?? "";
 
-let node = null;
-let contentType = null;
+let node: Awaited<ReturnType<typeof db.query.nodes.findFirst>> | null = null;
+let contentType: Awaited<ReturnType<typeof db.query.contentTypes.findFirst>> | null = null;
 
 if (isNew) {
   contentType = await db.query.contentTypes.findFirst({
@@ -24,9 +24,25 @@ if (isNew) {
   node = await db.query.nodes.findFirst({
     where: and(eq(nodes.id, id!), eq(nodes.siteId, SITE_ID)),
     with: { contentType: true },
-  });
+  }) ?? null;
   if (!node) return Astro.redirect("/admin/content");
   contentType = (node as any).contentType;
+}
+
+const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
+const availableLocales = (site?.locales as string[] | null) ?? ["es"];
+
+let translations: { id: string; locale: string; title: string; path: string }[] = [];
+if (!isNew && node?.translationGroupId) {
+  const siblings = await db.query.nodes.findMany({
+    where: and(
+      eq(nodes.translationGroupId, node.translationGroupId),
+      isNotNull(nodes.locale)
+    ),
+  });
+  translations = siblings
+    .filter((s) => s.id !== node!.id)
+    .map((s) => ({ id: s.id, locale: s.locale, title: s.title, path: s.path }));
 }
 
 const pageTitle = isNew
@@ -60,9 +76,13 @@ const pageTitle = isNew
     nodeId={isNew ? undefined : id}
     contentTypeId={contentType?.id ?? ""}
     fieldSchema={contentType?.fieldSchema ?? []}
+    availableLocales={availableLocales}
+    translations={translations}
     initialData={node ? {
       title: node.title,
       slug: node.slug,
+      locale: node.locale,
+      translationGroupId: node.translationGroupId ?? undefined,
       fields: (node.fields as Record<string, unknown>) ?? {},
       seo: (node.seo as Record<string, unknown>) ?? {},
       status: node.status,
