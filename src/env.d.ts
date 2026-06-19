@@ -15,7 +15,7 @@ declare namespace App {
   interface Locals extends Runtime {
     db: import("@db/client").Database;
     auth: import("@/lib/auth").Auth;
-    session: import("better-auth").Session | null;
+    session: { session: import("better-auth").Session; user: import("better-auth").User } | null;
     user: import("better-auth").User | null;
   }
 }
