@@ -2,7 +2,7 @@
 import { eq, and } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
 import BaseLayout from "@layouts/BaseLayout.astro";
-import { buildWebPageSchema, buildArticleSchema } from "@/lib/jsonld";
+import { buildWebPageSchema, buildArticleSchema } from "@lib/jsonld";
 import PageRenderer from "@components/renderers/PageRenderer.astro";
 import PostRenderer from "@components/renderers/PostRenderer.astro";
 import PortfolioItemRenderer from "@components/renderers/PortfolioItemRenderer.astro";

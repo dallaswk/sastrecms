@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
 import { eq, and } from "drizzle-orm";
 import { nodes, contentTypes, media, settings } from "@db/schema";
-import { validateApiToken } from "@/lib/api-token";
-import { generateId, slugify, computePath } from "@/lib/id";
+import { validateApiToken } from "@lib/api-token";
+import { generateId, slugify, computePath } from "@lib/id";
 
 export const prerender = false;
 

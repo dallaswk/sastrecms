@@ -1,7 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { eq } from "drizzle-orm";
 import { createDb } from "@db/client";
-import { createAuth } from "@/lib/auth";
+import { createAuth } from "@lib/auth";
 import { settings } from "@db/schema";
 
 export const onRequest = defineMiddleware(async (context, next) => {

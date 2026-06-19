@@ -2,7 +2,7 @@ import { defineAction } from "astro:actions";
 import { z } from "astro:schema";
 import { eq, and } from "drizzle-orm";
 import { contentTypes } from "@db/schema";
-import { generateId } from "@/lib/id";
+import { generateId } from "@lib/id";
 import type { FieldDefinition } from "@db/schema";
 
 const SITE_ID = "site_default";

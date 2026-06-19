@@ -2,8 +2,8 @@ import { defineAction } from "astro:actions";
 import { z } from "astro:schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { apiTokens } from "@db/schema";
-import { generateId } from "@/lib/id";
-import { generateRawToken, hashToken } from "@/lib/api-token";
+import { generateId } from "@lib/id";
+import { generateRawToken, hashToken } from "@lib/api-token";
 
 export const tokenActions = {
   list: defineAction({
