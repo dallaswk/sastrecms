@@ -56,7 +56,8 @@
               <button
                 type="button"
                 class="btn btn-xs btn-ghost text-error"
-                @click="$emit('delete', element)"
+                :disabled="deleting === element.id"
+                @click="deleteNode(element)"
               >✕</button>
             </div>
           </div>
@@ -66,18 +67,19 @@
             v-if="element.children?.length && expanded.has(element.id)"
             :nodes="element.children"
             :depth="depth + 1"
-            @reorder="$emit('reorder', $event)"
-            @delete="$emit('delete', $event)"
           />
         </div>
       </template>
     </VueDraggable>
+
+    <p v-if="errorMsg" class="text-error text-xs px-2 pt-1">{{ errorMsg }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { VueDraggable } from "vue-draggable-plus";
+import { actions } from "astro:actions";
 
 export interface TreeNode {
   id: string;
@@ -95,14 +97,11 @@ const props = defineProps<{
   depth?: number;
 }>();
 
-const emit = defineEmits<{
-  reorder: [items: { id: string; position: number; parentId: string | null }[]];
-  delete: [node: TreeNode];
-}>();
-
 const depth = props.depth ?? 0;
 const items = ref<TreeNode[]>([...props.nodes]);
 const expanded = ref<Set<string>>(new Set(props.nodes.map((n) => n.id)));
+const deleting = ref<string | null>(null);
+const errorMsg = ref("");
 
 watch(() => props.nodes, (v) => { items.value = [...v]; }, { deep: true });
 
@@ -111,12 +110,27 @@ function toggleExpand(id: string) {
   else expanded.value.add(id);
 }
 
-function onReorder() {
+async function onReorder() {
   const updates = items.value.map((node, idx) => ({
     id: node.id,
     position: idx,
     parentId: node.parentId,
   }));
-  emit("reorder", updates);
+  const { error } = await actions.nodes.reorder({ items: updates });
+  if (error) errorMsg.value = error.message;
+}
+
+async function deleteNode(node: TreeNode) {
+  if (!confirm(`¿Borrar "${node.title}"? Esta acción no se puede deshacer.`)) return;
+  deleting.value = node.id;
+  errorMsg.value = "";
+  const { error } = await actions.nodes.delete({ id: node.id });
+  if (error) {
+    errorMsg.value = error.message;
+    deleting.value = null;
+  } else {
+    items.value = items.value.filter((n) => n.id !== node.id);
+    deleting.value = null;
+  }
 }
 </script>

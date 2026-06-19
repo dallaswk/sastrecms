@@ -85,50 +85,9 @@ const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
         <NodeTree
           client:load
           :nodes="treeData"
-          @reorder="handleReorder"
-          @delete="handleDelete"
         />
       </div>
     </div>
   )}
 
-  <dialog id="delete-modal" class="modal">
-    <div class="modal-box">
-      <h3 class="font-bold text-lg">¿Borrar nodo?</h3>
-      <p class="py-4">Se eliminará <strong id="delete-node-title"></strong> de forma permanente.</p>
-      <div class="modal-action">
-        <form method="dialog"><button class="btn btn-ghost">Cancelar</button></form>
-        <button id="confirm-delete" class="btn btn-error">Borrar</button>
-      </div>
-    </div>
-  </dialog>
 </AdminLayout>
-
-<script>
-  import { actions } from "astro:actions";
-
-  let targetId = "";
-
-  function handleReorder(e: CustomEvent) {
-    actions.nodes.reorder({ items: e.detail[0] });
-  }
-
-  function handleDelete(e: CustomEvent) {
-    const node = e.detail[0];
-    targetId = node.id;
-    document.getElementById("delete-node-title")!.textContent = `"${node.title}"`;
-    (document.getElementById("delete-modal") as HTMLDialogElement).showModal();
-  }
-
-  document.addEventListener("astro:page-load", () => {
-    document.getElementById("confirm-delete")?.addEventListener("click", async () => {
-      if (!targetId) return;
-      const { error } = await actions.nodes.delete({ id: targetId });
-      if (error) alert(error.message);
-      else window.location.reload();
-    });
-  });
-
-  window.addEventListener("reorder", handleReorder as EventListener);
-  window.addEventListener("delete", handleDelete as EventListener);
-</script>

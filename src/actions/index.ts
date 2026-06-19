@@ -4,6 +4,7 @@ import { mediaActions } from "./media";
 import { settingsActions } from "./settings";
 import { tokenActions } from "./tokens";
 import { userActions } from "./users";
+import { permissionActions } from "./permissions";
 
 export const server = {
   nodes: nodeActions,
@@ -12,4 +13,5 @@ export const server = {
   settings: settingsActions,
   tokens: tokenActions,
   users: userActions,
+  permissions: permissionActions,
 };

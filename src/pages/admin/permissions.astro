@@ -1,0 +1,40 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import PermissionsMatrix from "@components/admin/PermissionsMatrix.vue";
+import { eq } from "drizzle-orm";
+import { roles, contentTypes } from "@db/schema";
+export const prerender = false;
+
+const db = Astro.locals.db;
+const SITE_ID = "site_default";
+
+const allRoles = await db.query.roles.findMany({
+  where: eq(roles.siteId, SITE_ID),
+  with: { permissions: { with: { contentType: true } } },
+});
+
+const allContentTypes = await db.query.contentTypes.findMany({
+  where: eq(contentTypes.siteId, SITE_ID),
+});
+---
+
+<AdminLayout title="Permisos">
+  <div class="mb-6">
+    <h1 class="text-xl font-bold">Permisos por rol</h1>
+    <p class="text-sm text-base-content/50 mt-1">
+      Define qué puede hacer cada rol con cada tipo de contenido. Los cambios se guardan automáticamente al marcar o desmarcar.
+    </p>
+  </div>
+
+  {allRoles.length === 0 ? (
+    <div class="alert alert-warning">
+      <span>No hay roles creados todavía. Los roles se crean automáticamente al ejecutar el seed inicial.</span>
+    </div>
+  ) : (
+    <PermissionsMatrix
+      client:load
+      :roles="allRoles"
+      :contentTypes="allContentTypes"
+    />
+  )}
+</AdminLayout>
