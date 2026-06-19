@@ -230,15 +230,22 @@ export const settings = sqliteTable("settings", {
   analyticsIds: text("analytics_ids", { mode: "json" })
     .$type<Record<string, string>>()
     .default(sql`'{}'`),
+  logoUrl: text("logo_url"),
+  faviconUrl: text("favicon_url"),
+  redirects: text("redirects", { mode: "json" })
+    .$type<{ from: string; to: string; permanent: boolean }[]>()
+    .default(sql`'[]'`),
 });
 
 export type SiteTheme = {
   primaryColor?: string;
   secondaryColor?: string;
   accentColor?: string;
+  baseColor?: string;
   borderRadius?: string;
   fontHeading?: string;
   fontBody?: string;
+  daisyuiTheme?: string;
 };
 
 // ---------------------------------------------------------------------------

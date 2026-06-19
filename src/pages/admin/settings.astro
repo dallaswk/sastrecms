@@ -1,0 +1,216 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import { eq } from "drizzle-orm";
+import { settings } from "@db/schema";
+export const prerender = false;
+
+const db = Astro.locals.db;
+const siteSettings = await db.query.settings.findFirst({
+  where: eq(settings.siteId, "site_default"),
+});
+
+const theme = (siteSettings?.theme as Record<string, string>) ?? {};
+const socialLinks = (siteSettings?.socialLinks as Record<string, string>) ?? {};
+const redirects = (siteSettings?.redirects as { from: string; to: string; permanent: boolean }[]) ?? [];
+
+const DAISY_THEMES = [
+  "light","dark","cupcake","bumblebee","emerald","corporate","synthwave",
+  "retro","cyberpunk","valentine","halloween","garden","forest","aqua",
+  "lofi","pastel","fantasy","wireframe","black","luxury","dracula","cmyk",
+  "autumn","business","acid","lemonade","night","coffee","winter","dim","nord","sunset",
+];
+---
+
+<AdminLayout title="Ajustes">
+  <form id="settings-form" class="flex flex-col gap-8 max-w-2xl">
+
+    <!-- General -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
+        <h2 class="card-title text-base">General</h2>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Nombre del sitio</span></label>
+          <input name="siteName" type="text" class="input input-bordered" value={siteSettings?.siteName ?? ""} />
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Tagline</span></label>
+          <input name="tagline" type="text" class="input input-bordered" value={siteSettings?.tagline ?? ""} />
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Logo URL</span></label>
+          <input name="logoUrl" type="text" class="input input-bordered" value={siteSettings?.logoUrl ?? ""} />
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Favicon URL</span></label>
+          <input name="faviconUrl" type="text" class="input input-bordered" value={siteSettings?.faviconUrl ?? ""} />
+        </div>
+      </div>
+    </section>
+
+    <!-- Theme -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
+        <h2 class="card-title text-base">Tema</h2>
+
+        <div class="form-control">
+          <label class="label"><span class="label-text">Tema daisyUI base</span></label>
+          <select name="daisyuiTheme" class="select select-bordered">
+            {DAISY_THEMES.map((t) => (
+              <option value={t} selected={theme.daisyuiTheme === t}>{t}</option>
+            ))}
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="form-control">
+            <label class="label"><span class="label-text">Color primario</span></label>
+            <div class="flex gap-2 items-center">
+              <input type="color" name="primaryColor" class="w-10 h-10 rounded cursor-pointer border border-base-300" value={theme.primaryColor ?? "#570df8"} />
+              <input type="text" name="primaryColorText" class="input input-bordered input-sm flex-1 font-mono" value={theme.primaryColor ?? ""} />
+            </div>
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text">Color secundario</span></label>
+            <div class="flex gap-2 items-center">
+              <input type="color" name="secondaryColor" class="w-10 h-10 rounded cursor-pointer border border-base-300" value={theme.secondaryColor ?? "#f000b8"} />
+              <input type="text" name="secondaryColorText" class="input input-bordered input-sm flex-1 font-mono" value={theme.secondaryColor ?? ""} />
+            </div>
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text">Color acento</span></label>
+            <div class="flex gap-2 items-center">
+              <input type="color" name="accentColor" class="w-10 h-10 rounded cursor-pointer border border-base-300" value={theme.accentColor ?? "#37cdbe"} />
+              <input type="text" name="accentColorText" class="input input-bordered input-sm flex-1 font-mono" value={theme.accentColor ?? ""} />
+            </div>
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text">Border radius</span></label>
+            <input type="text" name="borderRadius" class="input input-bordered" placeholder="e.g. 0.5rem" value={theme.borderRadius ?? ""} />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Social links -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
+        <h2 class="card-title text-base">Redes sociales</h2>
+        {(["twitter","instagram","linkedin","facebook","youtube","github"] as const).map((net) => (
+          <div class="form-control">
+            <label class="label"><span class="label-text capitalize">{net}</span></label>
+            <input name={`social_${net}`} type="url" class="input input-bordered" value={socialLinks[net] ?? ""} placeholder={`https://${net}.com/...`} />
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Redirects -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
+        <h2 class="card-title text-base">Redirecciones</h2>
+        <div id="redirects-list" class="flex flex-col gap-2">
+          {redirects.map((r, i) => (
+            <div class="flex gap-2 items-center redirect-row">
+              <input type="text" name={`redirect_from_${i}`} class="input input-bordered input-sm flex-1" value={r.from} placeholder="/antigua-ruta" />
+              <span class="text-base-content/50">→</span>
+              <input type="text" name={`redirect_to_${i}`} class="input input-bordered input-sm flex-1" value={r.to} placeholder="/nueva-ruta" />
+              <label class="flex gap-1 items-center text-sm">
+                <input type="checkbox" name={`redirect_permanent_${i}`} class="checkbox checkbox-sm" checked={r.permanent} />
+                301
+              </label>
+              <button type="button" class="btn btn-xs btn-ghost text-error remove-redirect">✕</button>
+            </div>
+          ))}
+        </div>
+        <button type="button" id="add-redirect" class="btn btn-sm btn-ghost self-start">+ Añadir redirección</button>
+      </div>
+    </section>
+
+    <div class="flex gap-3 items-center">
+      <button type="submit" class="btn btn-primary">Guardar ajustes</button>
+      <span id="settings-msg" class="text-sm"></span>
+    </div>
+  </form>
+</AdminLayout>
+
+<script>
+  import { actions } from "astro:actions";
+
+  let redirectIndex = document.querySelectorAll(".redirect-row").length;
+
+  document.getElementById("add-redirect")?.addEventListener("click", () => {
+    const container = document.getElementById("redirects-list")!;
+    const row = document.createElement("div");
+    row.className = "flex gap-2 items-center redirect-row";
+    row.innerHTML = `
+      <input type="text" name="redirect_from_${redirectIndex}" class="input input-bordered input-sm flex-1" placeholder="/antigua-ruta" />
+      <span class="text-base-content/50">→</span>
+      <input type="text" name="redirect_to_${redirectIndex}" class="input input-bordered input-sm flex-1" placeholder="/nueva-ruta" />
+      <label class="flex gap-1 items-center text-sm">
+        <input type="checkbox" name="redirect_permanent_${redirectIndex}" class="checkbox checkbox-sm" />
+        301
+      </label>
+      <button type="button" class="btn btn-xs btn-ghost text-error remove-redirect">✕</button>
+    `;
+    container.appendChild(row);
+    redirectIndex++;
+    attachRemoveListeners();
+  });
+
+  function attachRemoveListeners() {
+    document.querySelectorAll(".remove-redirect").forEach((btn) => {
+      (btn as HTMLElement).onclick = () => {
+        (btn as HTMLElement).closest(".redirect-row")?.remove();
+      };
+    });
+  }
+  attachRemoveListeners();
+
+  document.getElementById("settings-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const data = new FormData(form);
+    const msg = document.getElementById("settings-msg")!;
+
+    const redirectRows = document.querySelectorAll(".redirect-row");
+    const redirects: { from: string; to: string; permanent: boolean }[] = [];
+    redirectRows.forEach((_row, i) => {
+      const from = (data.get(`redirect_from_${i}`) as string)?.trim();
+      const to = (data.get(`redirect_to_${i}`) as string)?.trim();
+      const permanent = data.get(`redirect_permanent_${i}`) === "on";
+      if (from && to) redirects.push({ from, to, permanent });
+    });
+
+    const { error } = await actions.settings.update({
+      siteName: data.get("siteName") as string,
+      tagline: data.get("tagline") as string,
+      logoUrl: data.get("logoUrl") as string,
+      faviconUrl: data.get("faviconUrl") as string,
+      theme: {
+        daisyuiTheme: data.get("daisyuiTheme") as string,
+        primaryColor: data.get("primaryColor") as string,
+        secondaryColor: data.get("secondaryColor") as string,
+        accentColor: data.get("accentColor") as string,
+        borderRadius: data.get("borderRadius") as string,
+      },
+      socialLinks: {
+        twitter: data.get("social_twitter") as string,
+        instagram: data.get("social_instagram") as string,
+        linkedin: data.get("social_linkedin") as string,
+        facebook: data.get("social_facebook") as string,
+        youtube: data.get("social_youtube") as string,
+        github: data.get("social_github") as string,
+      },
+      redirects,
+    });
+
+    if (error) {
+      msg.className = "text-sm text-error";
+      msg.textContent = error.message;
+    } else {
+      msg.className = "text-sm text-success";
+      msg.textContent = "Guardado correctamente";
+      setTimeout(() => window.location.reload(), 800);
+    }
+  });
+</script>

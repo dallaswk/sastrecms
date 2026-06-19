@@ -1,26 +1,52 @@
 ---
 import "../styles/global.css";
+import { eq } from "drizzle-orm";
+import { settings } from "@db/schema";
 
 interface Props {
   title: string;
   description?: string;
   ogImage?: string;
   noindex?: boolean;
-  theme?: Record<string, string>;
 }
 
-const { title, description, ogImage, noindex = false, theme } = Astro.props;
+const { title, description, ogImage, noindex = false } = Astro.props;
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+
+const siteSettings = Astro.locals.db
+  ? await Astro.locals.db.query.settings.findFirst({
+      where: eq(settings.siteId, "site_default"),
+    })
+  : null;
+
+const theme = (siteSettings?.theme as Record<string, string> | null) ?? {};
+
+const CSS_VAR_MAP: Record<string, string> = {
+  primaryColor: "--p",
+  secondaryColor: "--s",
+  accentColor: "--a",
+  baseColor: "--b1",
+  borderRadius: "--rounded-box",
+};
+
+const themeVars = Object.entries(theme)
+  .filter(([k]) => CSS_VAR_MAP[k])
+  .map(([k, v]) => `${CSS_VAR_MAP[k]}: ${v};`)
+  .join(" ");
+
+const daisyuiTheme = (theme as Record<string, string>).daisyuiTheme ?? "light";
+const faviconUrl = siteSettings?.faviconUrl ?? "/favicon.svg";
+const siteTitle = siteSettings?.siteName ?? "sASTRe";
 ---
 
 <!doctype html>
-<html lang={Astro.currentLocale ?? "es"}>
+<html lang={Astro.currentLocale ?? "es"} data-theme={daisyuiTheme}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href={faviconUrl} />
 
-    <title>{title}</title>
+    <title>{title} — {siteTitle}</title>
     {description && <meta name="description" content={description} />}
     {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonicalUrl} />
@@ -29,19 +55,9 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
     <meta property="og:title" content={title} />
     {description && <meta property="og:description" content={description} />}
 
-    {
-      theme && (
-        <style>
-          :root {
-            {
-              Object.entries(theme)
-                .map(([k, v]) => `${k}: ${v}`)
-                .join("; ")
-            }
-          }
-        </style>
-      )
-    }
+    {themeVars && (
+      <style set:html={`:root { ${themeVars} }`} />
+    )}
   </head>
   <body>
     <slot />
