@@ -44,7 +44,14 @@ export const settingsActions = {
       faviconUrl: z.string().optional(),
       theme: ThemeSchema.optional(),
       socialLinks: SocialLinksSchema.optional(),
-      analyticsIds: z.record(z.string()).optional(),
+      analyticsIds: z.object({
+        ga4: z.string().optional(),
+        gtm: z.string().optional(),
+        metaPixel: z.string().optional(),
+        tiktokPixel: z.string().optional(),
+        hotjar: z.string().optional(),
+        gscVerification: z.string().optional(),
+      }).optional(),
       redirects: z
         .array(z.object({ from: z.string(), to: z.string(), permanent: z.boolean() }))
         .optional(),

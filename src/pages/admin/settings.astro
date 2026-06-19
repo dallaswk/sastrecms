@@ -12,6 +12,7 @@ const siteSettings = await db.query.settings.findFirst({
 const theme = (siteSettings?.theme as Record<string, string>) ?? {};
 const socialLinks = (siteSettings?.socialLinks as Record<string, string>) ?? {};
 const redirects = (siteSettings?.redirects as { from: string; to: string; permanent: boolean }[]) ?? [];
+const analyticsIds = (siteSettings?.analyticsIds as Record<string, string>) ?? {};
 
 const DAISY_THEMES = [
   "light","dark","cupcake","bumblebee","emerald","corporate","synthwave",
@@ -101,6 +102,62 @@ const DAISY_THEMES = [
             <input name={`social_${net}`} type="url" class="input input-bordered" value={socialLinks[net] ?? ""} placeholder={`https://${net}.com/...`} />
           </div>
         ))}
+      </div>
+    </section>
+
+    <!-- Analytics -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
+        <h2 class="card-title text-base">Analytics y seguimiento</h2>
+        <p class="text-sm text-base-content/50">Deja en blanco los que no uses. Los scripts se inyectan automáticamente en todas las páginas públicas.</p>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Google Analytics 4</span>
+            <span class="label-text-alt text-base-content/40">Measurement ID (G-XXXXXXXXXX)</span>
+          </label>
+          <input name="analytics_ga4" type="text" class="input input-bordered font-mono" value={analyticsIds.ga4 ?? ""} placeholder="G-XXXXXXXXXX" />
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Google Tag Manager</span>
+            <span class="label-text-alt text-base-content/40">Container ID (GTM-XXXXXXX)</span>
+          </label>
+          <input name="analytics_gtm" type="text" class="input input-bordered font-mono" value={analyticsIds.gtm ?? ""} placeholder="GTM-XXXXXXX" />
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Meta Pixel (Facebook)</span>
+            <span class="label-text-alt text-base-content/40">Pixel ID</span>
+          </label>
+          <input name="analytics_metaPixel" type="text" class="input input-bordered font-mono" value={analyticsIds.metaPixel ?? ""} placeholder="123456789012345" />
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">TikTok Pixel</span>
+            <span class="label-text-alt text-base-content/40">Pixel ID</span>
+          </label>
+          <input name="analytics_tiktokPixel" type="text" class="input input-bordered font-mono" value={analyticsIds.tiktokPixel ?? ""} placeholder="CXXXXXXXXXXXXXXXXX" />
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Hotjar</span>
+            <span class="label-text-alt text-base-content/40">Site ID</span>
+          </label>
+          <input name="analytics_hotjar" type="text" class="input input-bordered font-mono" value={analyticsIds.hotjar ?? ""} placeholder="1234567" />
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Google Search Console</span>
+            <span class="label-text-alt text-base-content/40">Meta tag verification content</span>
+          </label>
+          <input name="analytics_gscVerification" type="text" class="input input-bordered font-mono" value={analyticsIds.gscVerification ?? ""} placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+        </div>
       </div>
     </section>
 
@@ -202,6 +259,14 @@ const DAISY_THEMES = [
         github: data.get("social_github") as string,
       },
       redirects,
+      analyticsIds: {
+        ga4: (data.get("analytics_ga4") as string)?.trim() || undefined,
+        gtm: (data.get("analytics_gtm") as string)?.trim() || undefined,
+        metaPixel: (data.get("analytics_metaPixel") as string)?.trim() || undefined,
+        tiktokPixel: (data.get("analytics_tiktokPixel") as string)?.trim() || undefined,
+        hotjar: (data.get("analytics_hotjar") as string)?.trim() || undefined,
+        gscVerification: (data.get("analytics_gscVerification") as string)?.trim() || undefined,
+      },
     });
 
     if (error) {
