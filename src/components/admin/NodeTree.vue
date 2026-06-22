@@ -1,12 +1,13 @@
 <template>
-  <div class="flex flex-col gap-1">
+  <div class="flex flex-col gap-1" :data-parent-id="parentId ?? 'root'">
     <VueDraggable
       v-model="items"
       :animation="150"
       handle=".drag-handle"
-      group="nodes"
+      :group="{ name: 'nodes', pull: true, put: true }"
       item-key="id"
-      @end="onReorder"
+      :data-parent-id="parentId ?? 'root'"
+      @end="onEnd"
     >
       <template #item="{ element }">
         <div class="flex flex-col">
@@ -62,12 +63,15 @@
             </div>
           </div>
 
-          <!-- Recursion for children -->
-          <NodeTree
-            v-if="element.children?.length && expanded.has(element.id)"
-            :nodes="element.children"
-            :depth="depth + 1"
-          />
+          <!-- Children container -->
+          <div v-if="expanded.has(element.id)" class="flex flex-col">
+            <NodeTree
+              :nodes="element.children ?? []"
+              :depth="depth + 1"
+              :parent-id="element.id"
+              @reorder="onChildReorder"
+            />
+          </div>
         </div>
       </template>
     </VueDraggable>
@@ -92,12 +96,24 @@ export interface TreeNode {
   children?: TreeNode[];
 }
 
+interface ReorderItem {
+  id: string;
+  position: number;
+  parentId: string | null;
+}
+
 const props = defineProps<{
   nodes: TreeNode[];
   depth?: number;
+  parentId?: string | null;
+}>();
+
+const emit = defineEmits<{
+  reorder: [items: ReorderItem[]];
 }>();
 
 const depth = props.depth ?? 0;
+const parentId = props.parentId ?? null;
 const items = ref<TreeNode[]>([...props.nodes]);
 const expanded = ref<Set<string>>(new Set(props.nodes.map((n) => n.id)));
 const deleting = ref<string | null>(null);
@@ -110,14 +126,35 @@ function toggleExpand(id: string) {
   else expanded.value.add(id);
 }
 
-async function onReorder() {
-  const updates = items.value.map((node, idx) => ({
+function buildUpdates(list: TreeNode[], newParentId: string | null): ReorderItem[] {
+  return list.map((node, idx) => ({
     id: node.id,
     position: idx,
-    parentId: node.parentId,
+    parentId: newParentId,
   }));
+}
+
+async function persistUpdates(updates: ReorderItem[]) {
+  if (updates.length === 0) return;
   const { error } = await actions.nodes.reorder({ items: updates });
   if (error) errorMsg.value = error.message;
+}
+
+async function onEnd(evt: any) {
+  errorMsg.value = "";
+  const target = evt.to as HTMLElement | null;
+  const newParentId = target?.dataset.parentId === "root" ? null : target?.dataset.parentId ?? parentId;
+
+  // Collect updates for the destination container with the correct parentId
+  const updates = buildUpdates(items.value, newParentId);
+  await persistUpdates(updates);
+  if (!errorMsg.value) {
+    window.location.reload();
+  }
+}
+
+async function onChildReorder(childUpdates: ReorderItem[]) {
+  await persistUpdates(childUpdates);
 }
 
 async function deleteNode(node: TreeNode) {

@@ -1,6 +1,6 @@
 import { defineAction } from "astro:actions";
 import { z } from "astro:schema";
-import { eq, and, desc, isNotNull } from "drizzle-orm";
+import { eq, and, desc, isNotNull, inArray } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
 import { generateId, slugify, computePath } from "@lib/id";
 import { requirePermission } from "@lib/permissions";
@@ -291,13 +291,96 @@ export const nodeActions = {
     handler: async (input, context) => {
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
+
+      const affectedIds = input.items.map((i) => i.id);
+      const allAffected = await db.query.nodes.findMany({
+        where: and(eq(nodes.siteId, SITE_ID), inArray(nodes.id, affectedIds)),
+      });
+
+      const allNodes = await db.query.nodes.findMany({
+        where: eq(nodes.siteId, SITE_ID),
+      });
+      const nodeById = Object.fromEntries(allNodes.map((n) => [n.id, n]));
+      const pathById = Object.fromEntries(allNodes.map((n) => [n.id, n.path]));
+
+      // Track parentId changes per node
+      const newParentById: Record<string, string | null | undefined> = {};
+      for (const item of input.items) {
+        newParentById[item.id] = item.parentId;
+      }
+
+      // Collect all path changes (node + descendants) for nodes that moved under a new parent
+      const pathUpdates: Record<string, { newPath: string; newParentId: string | null }> = {};
+
+      for (const item of input.items) {
+        const node = nodeById[item.id];
+        if (!node) continue;
+
+        const newParentId = item.parentId;
+        const oldParentId = node.parentId ?? null;
+        if (newParentId === undefined || newParentId === oldParentId) continue;
+
+        const parentPath = newParentId ? pathById[newParentId] : "";
+        const newPath = computePath(parentPath, node.slug);
+        if (newPath === node.path) continue;
+
+        const oldPath = node.path;
+        pathUpdates[node.id] = { newPath, newParentId };
+
+        // Update descendants paths that start with oldPath
+        for (const child of allNodes) {
+          if (child.id === node.id) continue;
+          if (child.path === oldPath || child.path.startsWith(oldPath + "/")) {
+            const suffix = child.path.slice(oldPath.length);
+            pathUpdates[child.id] = { newPath: newPath + suffix, newParentId: child.parentId ?? null };
+          }
+        }
+      }
+
+      // Verify permissions for all moved nodes (edit is required for changing structure)
+      for (const id of Object.keys(pathUpdates)) {
+        const node = nodeById[id];
+        if (!node) continue;
+        await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "edit");
+      }
+
+      // Verify permissions for all reordered nodes
+      for (const item of input.items) {
+        const node = nodeById[item.id];
+        if (!node) continue;
+        await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "edit");
+      }
+
+      // Check path uniqueness for the moved nodes (excluding unchanged descendants)
+      for (const [id, { newPath }] of Object.entries(pathUpdates)) {
+        const existing = allNodes.find(
+          (n) => n.siteId === SITE_ID && n.path === newPath && n.id !== id
+        );
+        if (existing) throw new Error(`Path "${newPath}" already exists`);
+      }
+
+      // Execute updates
       await Promise.all(
-        input.items.map(({ id, position, parentId }) =>
-          db.update(nodes)
-            .set({ position, ...(parentId !== undefined ? { parentId } : {}) })
-            .where(and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)))
-        )
+        input.items.map(({ id, position, parentId }) => {
+          const pathUpdate = pathUpdates[id];
+          const set: Record<string, unknown> = {
+            position,
+            ...(parentId !== undefined ? { parentId } : {}),
+            ...(pathUpdate ? { path: pathUpdate.newPath } : {}),
+          };
+          return db.update(nodes).set(set).where(and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)));
+        })
       );
+
+      // Update descendants paths that changed due to parent move
+      await Promise.all(
+        Object.entries(pathUpdates)
+          .filter(([id]) => !affectedIds.includes(id))
+          .map(([id, { newPath }]) =>
+            db.update(nodes).set({ path: newPath }).where(and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)))
+          )
+      );
+
       return { ok: true };
     },
   }),

@@ -1,6 +1,6 @@
 # TODO — sASTRe
 
-Estado del proyecto a fecha 19 Jun 2026. Rama activa: `dev`.
+Estado del proyecto a fecha 22 Jun 2026. Rama activa: `dev`.
 
 ---
 
@@ -9,7 +9,7 @@ Estado del proyecto a fecha 19 Jun 2026. Rama activa: `dev`.
 ### Infraestructura
 
 - [ ] **Aplicar migración `0003` en Turso**
-  La columna `integrations` (para la Resend API key) no existe aún en la DB de producción.
+  La columna `integrations` (para la Resend API key y el from) no existe aún en la DB de producción.
   Dos opciones:
   ```bash
   # Opción A — con .env local
@@ -32,20 +32,13 @@ Estado del proyecto a fecha 19 Jun 2026. Rama activa: `dev`.
   - `R2_BUCKET_NAME`
   - `R2_PUBLIC_URL`
 
-- [ ] **Ejecutar seed en producción** (si la DB está vacía)
-  Los roles (`admin`, `editor`, `collaborator`) y el site_default se crean con el seed.
-  Sin ellos `/admin/permissions` muestra "No hay roles".
-  ```bash
-  npm run db:seed
-  ```
-
-- [ ] **Configurar Resend API key desde el backoffice**
+- [ ] **Configurar Resend API key y dirección de envío desde el backoffice**
   Una vez aplicada la migración:
   `/admin/settings` → sección "Integraciones" → pegar la key de [resend.com/api-keys](https://resend.com/api-keys)
-  Necesario para que el magic link funcione.
+  y el `from` verificado en [resend.com/domains](https://resend.com/domains).
+  Necesario para que el magic link funcione. El `from` y la key se leen desde la DB, no del `.env`.
 
 - [ ] **Verificar dominio en Resend**
-  Configura el `from` en `/admin/settings` → Integraciones → "Dirección de envío".
   Formato: `Nombre <correo@tudominio.com>`. Verifica el dominio en [resend.com/domains](https://resend.com/domains).
 
 ---
@@ -54,9 +47,10 @@ Estado del proyecto a fecha 19 Jun 2026. Rama activa: `dev`.
 
 ### Funcionalidad
 
-- [ ] **Drag & drop entre niveles en el árbol de nodos**
-  Actualmente el drag & drop reordena hermanos (actualiza `position`) pero arrastrar un nodo a otro padre no actualiza `parentId`.
-  Requiere lógica en `NodeTree.vue` `@end` para detectar cambio de contenedor y llamar a `reorder` con el nuevo `parentId`.
+- [x] **Drag & drop entre niveles en el árbol de nodos** ✅
+  `NodeTree.vue` usa un `<VueDraggable>` por nivel con `data-parent-id` para detectar el contenedor destino.
+  Al soltar, envía `reorder` con el `parentId` correcto y la `position` en el nuevo nivel.
+  La acción `nodes.reorder` recalcula `path` del nodo movido y de todos sus descendientes, y verifica permisos de `edit`.
 
 - [x] **Ocultar pestaña Magic link si no hay Resend key** ✅
   `login.astro` lee `settings.integrations` en el servidor; la pestaña solo aparece si hay `resendApiKey` + `resendFrom` configurados.
