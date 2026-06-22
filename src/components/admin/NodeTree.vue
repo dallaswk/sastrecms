@@ -81,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
 import { VueDraggable } from "vue-draggable-plus";
 import { actions } from "astro:actions";
 
@@ -114,12 +114,13 @@ const emit = defineEmits<{
 
 const depth = props.depth ?? 0;
 const parentId = props.parentId ?? null;
-const items = ref<TreeNode[]>([...props.nodes]);
-const expanded = ref<Set<string>>(new Set(props.nodes.map((n) => n.id)));
+const safeNodes = computed(() => Array.isArray(props.nodes) ? props.nodes : []);
+const items = ref<TreeNode[]>([...safeNodes.value]);
+const expanded = ref<Set<string>>(new Set(safeNodes.value.map((n) => n.id)));
 const deleting = ref<string | null>(null);
 const errorMsg = ref("");
 
-watch(() => props.nodes, (v) => { items.value = [...v]; }, { deep: true });
+watch(() => props.nodes, (v) => { items.value = Array.isArray(v) ? [...v] : []; }, { deep: true });
 
 function toggleExpand(id: string) {
   if (expanded.value.has(id)) expanded.value.delete(id);
