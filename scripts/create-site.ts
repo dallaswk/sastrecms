@@ -227,12 +227,12 @@ async function main() {
     resendFrom = await ask(`${C.cyan}?${C.reset} Resend from (e.g., Mi Sitio <noreply@example.com>): `);
   }
 
-  const dbEnv = {
+  const dbEnv: Record<string, string> = {
     TURSO_DATABASE_URL: absoluteDbUrl || tursoUrl,
-    TURSO_AUTH_TOKEN: tursoToken,
     BETTER_AUTH_SECRET: betterAuthSecret,
     ...r2Config,
   };
+  if (tursoToken) dbEnv.TURSO_AUTH_TOKEN = tursoToken;
 
   // 8. Write .env in new project
   step(7, "Environment file");
