@@ -9,6 +9,8 @@ async function loadEnv(): Promise<Record<string, string | undefined>> {
     const { env } = await import("cloudflare:workers");
     return (env ?? {}) as unknown as Record<string, string | undefined>;
   } catch {
+    const { default: dotenv } = await import("dotenv");
+    dotenv.config();
     return process.env;
   }
 }
