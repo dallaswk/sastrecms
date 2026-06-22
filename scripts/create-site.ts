@@ -164,6 +164,7 @@ async function main() {
 
   let tursoUrl = "";
   let tursoToken = "";
+  let absoluteDbUrl = "";
 
   if (useTursoCloud) {
     const hasTurso = await checkCommand("turso");
@@ -191,7 +192,8 @@ async function main() {
     }
   } else {
     const dbFileName = `sastre-${safeName}.db`;
-    tursoUrl = `file:${dbFileName}`;
+    tursoUrl = `file:./${dbFileName}`;
+    absoluteDbUrl = `file:${resolve(targetDir, dbFileName)}`;
     ok(`Using local SQLite file: ${C.magenta}${dbFileName}${C.reset}`);
   }
 
@@ -225,6 +227,13 @@ async function main() {
     resendFrom = await ask(`${C.cyan}?${C.reset} Resend from (e.g., Mi Sitio <noreply@example.com>): `);
   }
 
+  const dbEnv = {
+    TURSO_DATABASE_URL: absoluteDbUrl || tursoUrl,
+    TURSO_AUTH_TOKEN: tursoToken,
+    BETTER_AUTH_SECRET: betterAuthSecret,
+    ...r2Config,
+  };
+
   // 8. Write .env in new project
   step(7, "Environment file");
   const envLines = [
@@ -251,7 +260,7 @@ async function main() {
   // 10. Apply migrations
   step(9, "Database migrations");
   try {
-    await runCommand("npm run db:migrate", targetDir);
+    await runCommand("npm run db:migrate", targetDir, dbEnv);
     ok("Migrations applied");
   } catch (err) {
     fail(`Migrations failed: ${err}`);
@@ -261,7 +270,7 @@ async function main() {
   // 11. Seed
   step(10, "Seed default data");
   try {
-    await runCommand("npm run db:seed", targetDir);
+    await runCommand("npm run db:seed", targetDir, dbEnv);
     ok("Seed complete");
   } catch (err) {
     fail(`Seed failed: ${err}`);
@@ -270,7 +279,7 @@ async function main() {
 
   // 12. Update site name and Resend settings in DB
   step(11, "Site settings");
-  const client = createClient({ url: tursoUrl, authToken: tursoToken || undefined });
+  const client = createClient({ url: absoluteDbUrl || tursoUrl, authToken: tursoToken || undefined });
   const db = drizzle(client, { schema });
 
   await db
@@ -301,7 +310,7 @@ async function main() {
     const adminPassword = await ask(`${C.cyan}?${C.reset} Admin password: `);
     if (adminEmail && adminPassword) {
       try {
-        await runCommand(`npx tsx scripts/create-admin.ts ${adminEmail} ${adminPassword}`, targetDir);
+        await runCommand(`npx tsx scripts/create-admin.ts ${adminEmail} ${adminPassword}`, targetDir, dbEnv);
         ok(`Admin user ${C.magenta}${adminEmail}${C.reset} created`);
       } catch (err) {
         fail(`Admin creation failed: ${err}`);
