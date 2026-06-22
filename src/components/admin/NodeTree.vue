@@ -66,7 +66,7 @@
           <!-- Children container -->
           <div v-if="expanded.has(element.id)" class="flex flex-col">
             <NodeTree
-              :nodes="element.children ?? []"
+              :nodes="JSON.stringify(element.children ?? [])"
               :depth="depth + 1"
               :parent-id="element.id"
               @reorder="onChildReorder"
@@ -103,7 +103,7 @@ interface ReorderItem {
 }
 
 const props = defineProps<{
-  nodes: TreeNode[];
+  nodes: string;
   depth?: number;
   parentId?: string | null;
 }>();
@@ -112,15 +112,24 @@ const emit = defineEmits<{
   reorder: [items: ReorderItem[]];
 }>();
 
+function parseNodes(raw: string): TreeNode[] {
+  try {
+    const parsed = JSON.parse(raw) as TreeNode[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 const depth = props.depth ?? 0;
 const parentId = props.parentId ?? null;
-const safeNodes = computed(() => Array.isArray(props.nodes) ? props.nodes : []);
+const safeNodes = computed(() => parseNodes(props.nodes));
 const items = ref<TreeNode[]>([...safeNodes.value]);
 const expanded = ref<Set<string>>(new Set(safeNodes.value.map((n) => n.id)));
 const deleting = ref<string | null>(null);
 const errorMsg = ref("");
 
-watch(() => props.nodes, (v) => { items.value = Array.isArray(v) ? [...v] : []; }, { deep: true });
+watch(() => props.nodes, (v) => { items.value = [...parseNodes(v)]; }, { deep: true });
 
 function toggleExpand(id: string) {
   if (expanded.value.has(id)) expanded.value.delete(id);

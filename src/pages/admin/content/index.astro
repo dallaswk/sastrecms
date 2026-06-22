@@ -84,7 +84,7 @@ const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
       <div class="card-body p-3">
         <NodeTree
           client:load
-          nodes={treeData}
+          nodes={JSON.stringify(treeData)}
         />
       </div>
     </div>
