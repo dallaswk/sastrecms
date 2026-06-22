@@ -114,7 +114,7 @@ async function main() {
     process.exit(1);
   }
   const safeName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  const targetDir = resolve(process.cwd(), `sastre-${safeName}`);
+  const targetDir = resolve(process.cwd(), "..", `sastre-${safeName}`);
 
   if (existsSync(targetDir)) {
     const overwrite = await askYesNo(`Directory ${targetDir} already exists. Overwrite?`, false);
