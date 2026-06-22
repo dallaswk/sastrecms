@@ -128,7 +128,7 @@ async function main() {
   // 2. Copy template
   step(2, "Copying project template");
   const sourceDir = resolve(__dirname, "..");
-  const excluded = new Set(["node_modules", ".git", ".env", ".env.local", "dist", "package-lock.json"]);
+  const excluded = new Set(["node_modules", ".git", ".env", ".env.local", "dist"]);
   const excludedExt = new Set([".db", ".sqlite", ".sqlite3"]);
 
   cpSync(sourceDir, targetDir, {
