@@ -8,21 +8,27 @@ Estado del proyecto a fecha 22 Jun 2026. Rama activa: `dev`.
 
 ### Infraestructura
 
-- [ ] **Aplicar migración `0003` en Turso**
-  La columna `integrations` (para la Resend API key y el from) no existe aún en la DB de producción.
-  Dos opciones:
+- [ ] **Crear un nuevo sitio con el wizard interactivo** ⭐ recomendado
   ```bash
-  # Opción A — con .env local
-  TURSO_DATABASE_URL=libsql://...
-  TURSO_AUTH_TOKEN=...
-  npm run db:migrate
+  npm run create-site
   ```
+  Este script guía paso a paso: crea la base de datos (Turso Cloud o local), aplica migraciones, ejecuta seed, genera el `.env`, configura R2, Resend y el primer admin, y opcionalmente despliega en Cloudflare Pages.
+  También existe el comando utilitario:
+  ```bash
+  npm run create-admin <email> <password>
+  ```
+
+- [ ] **Aplicar migración `0003` en Turso** (solo si no usas el wizard)
+  La columna `integrations` (para la Resend API key y el from) no existe aún en la DB de producción.
+  ```bash
+  TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... npm run db:migrate
+  ```
+  o directo en la consola de Turso:
   ```sql
-  -- Opción B — directo en la consola de Turso
   ALTER TABLE settings ADD COLUMN integrations text DEFAULT '{}';
   ```
 
-- [ ] **Configurar variables de entorno en Cloudflare**
+- [ ] **Configurar variables de entorno en Cloudflare** (si no usas el wizard)
   Asegúrate de que estas vars están en el dashboard de Cloudflare Workers / Pages:
   - `TURSO_DATABASE_URL`
   - `TURSO_AUTH_TOKEN`
@@ -32,14 +38,12 @@ Estado del proyecto a fecha 22 Jun 2026. Rama activa: `dev`.
   - `R2_BUCKET_NAME`
   - `R2_PUBLIC_URL`
 
-- [ ] **Configurar Resend API key y dirección de envío desde el backoffice**
-  Una vez aplicada la migración:
-  `/admin/settings` → sección "Integraciones" → pegar la key de [resend.com/api-keys](https://resend.com/api-keys)
-  y el `from` verificado en [resend.com/domains](https://resend.com/domains).
+- [ ] **Configurar Resend API key y dirección de envío**
+  Desde el wizard o manualmente en `/admin/settings` → sección "Integraciones".
+  - Key: [resend.com/api-keys](https://resend.com/api-keys)
+  - From: verificado en [resend.com/domains](https://resend.com/domains)
+  - Formato: `Nombre <correo@tudominio.com>`
   Necesario para que el magic link funcione. El `from` y la key se leen desde la DB, no del `.env`.
-
-- [ ] **Verificar dominio en Resend**
-  Formato: `Nombre <correo@tudominio.com>`. Verifica el dominio en [resend.com/domains](https://resend.com/domains).
 
 ---
 
