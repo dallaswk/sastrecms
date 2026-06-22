@@ -21,14 +21,14 @@ const { node, contentType, children, fields } = Astro.props;
   ) : (
     <ul class="grid grid-cols-1 sm:grid-cols-2 gap-6">
       {children.map((child) => {
-        const childFields = (child.fields as Record<string, unknown>) || {};
+        const childFields = (child as any).fields || {};
         return (
         <li>
           <a href={child.path as string} class="card bg-base-100 border border-base-300 hover:border-primary transition-colors h-full">
             {childFields.cover_image && (
               <figure>
                 <img
-                  src={childFields.cover_image as string}
+                  src={childFields.cover_image}
                   alt={child.title as string}
                   class="w-full aspect-video object-cover"
                 />
@@ -43,7 +43,7 @@ const { node, contentType, children, fields } = Astro.props;
               )}
               {childFields.excerpt && (
                 <p class="text-sm text-base-content/70 line-clamp-3">
-                  {childFields.excerpt as string}
+                  {childFields.excerpt}
                 </p>
               )}
             </div>
