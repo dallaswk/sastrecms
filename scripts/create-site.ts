@@ -239,8 +239,9 @@ async function main() {
 
   // 9. Install dependencies
   step(8, "Installing dependencies");
+  writeFileSync(join(targetDir, ".npmrc"), "legacy-peer-deps=true\n");
   try {
-    await runCommand("npm install", targetDir);
+    await runCommand("npm install --legacy-peer-deps", targetDir);
     ok("Dependencies installed");
   } catch (err) {
     fail(`npm install failed: ${err}`);
