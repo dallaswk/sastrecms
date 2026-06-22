@@ -9,11 +9,12 @@ Estado del proyecto a fecha 22 Jun 2026. Rama activa: `dev`.
 ### Infraestructura
 
 - [ ] **Crear un nuevo sitio con el wizard interactivo** ⭐ recomendado
+  Ejecuta el wizard desde el repositorio template y te creará un directorio nuevo listo para usar:
   ```bash
   npm run create-site
   ```
-  Este script guía paso a paso: crea la base de datos (Turso Cloud o local), aplica migraciones, ejecuta seed, genera el `.env`, configura R2, Resend y el primer admin, y opcionalmente despliega en Cloudflare Pages.
-  También existe el comando utilitario:
+  El wizard guía paso a paso: crea un directorio `sastre-<nombre>`, copia el template, instala dependencias, crea la base de datos (Turso Cloud o local), aplica migraciones, ejecuta seed, genera el `.env`, configura R2, Resend y el primer admin, inicializa Git y opcionalmente despliega en Cloudflare Pages.
+  También existe el comando utilitario dentro del proyecto creado:
   ```bash
   npm run create-admin <email> <password>
   ```
