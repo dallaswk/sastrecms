@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { eq } from "drizzle-orm";
@@ -302,8 +302,37 @@ async function main() {
     ok("Stored Resend configuration in database");
   }
 
+  // 12. Create default pages
+  step(12, "Default pages");
+  const now = new Date();
+  const defaultPages = [
+    { id: randomUUID(), slug: "index", path: "/", title: "Inicio" },
+    { id: randomUUID(), slug: "sobre-nosotros", path: "/sobre-nosotros", title: "Sobre nosotros" },
+    { id: randomUUID(), slug: "contacto", path: "/contacto", title: "Contacto" },
+    { id: randomUUID(), slug: "aviso-legal", path: "/aviso-legal", title: "Aviso legal" },
+    { id: randomUUID(), slug: "politica-de-privacidad", path: "/politica-de-privacidad", title: "Política de privacidad" },
+  ];
+  for (const page of defaultPages) {
+    await db
+      .insert(schema.nodes)
+      .values({
+        id: page.id,
+        siteId: SITE_ID,
+        contentTypeId: "ct_page",
+        locale: "es",
+        slug: page.slug,
+        path: page.path,
+        title: page.title,
+        status: "published",
+        publishedAt: now,
+        fields: {},
+      })
+      .onConflictDoNothing();
+  }
+  ok(`Created ${defaultPages.length} default pages`);
+
   // 13. First admin user
-  step(12, "First admin user — optional");
+  step(13, "First admin user — optional");
   const createAdmin = await askYesNo("Create the first admin user now?", true);
   if (createAdmin) {
     const adminEmail = await ask(`${C.cyan}?${C.reset} Admin email: `);
@@ -319,7 +348,7 @@ async function main() {
   }
 
   // 14. Initial Git repo
-  step(13, "Git repository");
+  step(14, "Git repository");
   const initGit = await askYesNo("Initialize a new Git repository?", true);
   if (initGit) {
     try {
@@ -333,7 +362,7 @@ async function main() {
   }
 
   // 15. Deploy?
-  step(14, "Deploy");
+  step(15, "Deploy");
   const deployNow = await askYesNo("Deploy to Cloudflare Pages now with wrangler?", false);
   if (deployNow) {
     try {
