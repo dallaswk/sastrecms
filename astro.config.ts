@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import cloudflare from "@astrojs/cloudflare";
+import node from "@astrojs/node";
 import vue from "@astrojs/vue";
 import tailwind from "@astrojs/tailwind";
 import { fileURLToPath } from "node:url";
@@ -8,13 +9,17 @@ import { resolve } from "node:path";
 const root = fileURLToPath(new URL(".", import.meta.url));
 const src = resolve(root, "src");
 
+const isCloudflare = process.env.CF_PAGES || process.argv.includes("build");
+
 export default defineConfig({
   output: "server",
-  adapter: cloudflare({
-    platformProxy: {
-      enabled: true,
-    },
-  }),
+  adapter: isCloudflare
+    ? cloudflare({
+        platformProxy: {
+          enabled: true,
+        },
+      })
+    : node({ mode: "standalone" }),
   integrations: [
     vue(),
     tailwind({

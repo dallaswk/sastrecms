@@ -1,9 +1,17 @@
 import { defineMiddleware } from "astro:middleware";
-import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { createDb, type Database } from "@db/client";
 import { createAuth } from "@lib/auth";
 import { sites, settings, roles } from "@db/schema";
+
+async function loadEnv(): Promise<Record<string, string | undefined>> {
+  try {
+    const { env } = await import("cloudflare:workers");
+    return (env ?? {}) as unknown as Record<string, string | undefined>;
+  } catch {
+    return process.env;
+  }
+}
 
 const SITE_ID = "site_default";
 
@@ -32,6 +40,7 @@ async function ensureBootstrap(db: Database) {
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
+  const env = await loadEnv();
   const { TURSO_DATABASE_URL, TURSO_AUTH_TOKEN } = env;
   if (!TURSO_DATABASE_URL) throw new Error("TURSO_DATABASE_URL is not set");
 
