@@ -11,6 +11,10 @@ interface Env {
   BETTER_AUTH_SECRET: string;
 }
 
+declare module "cloudflare:workers" {
+  export const env: Env;
+}
+
 declare namespace App {
   interface Locals extends Runtime {
     db: import("@db/client").Database;

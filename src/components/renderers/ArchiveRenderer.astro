@@ -20,13 +20,15 @@ const { node, contentType, children, fields } = Astro.props;
     <p class="text-base-content/50">No hay entradas todavía.</p>
   ) : (
     <ul class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-      {children.map((child) => (
+      {children.map((child) => {
+        const childFields = (child.fields as Record<string, unknown>) || {};
+        return (
         <li>
           <a href={child.path as string} class="card bg-base-100 border border-base-300 hover:border-primary transition-colors h-full">
-            {(child.fields as Record<string, unknown>)?.cover_image && (
+            {childFields.cover_image && (
               <figure>
                 <img
-                  src={(child.fields as Record<string, unknown>).cover_image as string}
+                  src={childFields.cover_image as string}
                   alt={child.title as string}
                   class="w-full aspect-video object-cover"
                 />
@@ -39,15 +41,16 @@ const { node, contentType, children, fields } = Astro.props;
                   {new Date(child.publishedAt as string).toLocaleDateString("es-ES")}
                 </time>
               )}
-              {(child.fields as Record<string, unknown>)?.excerpt && (
+              {childFields.excerpt && (
                 <p class="text-sm text-base-content/70 line-clamp-3">
-                  {(child.fields as Record<string, unknown>).excerpt as string}
+                  {childFields.excerpt as string}
                 </p>
               )}
             </div>
           </a>
         </li>
-      ))}
+        );
+      })}
     </ul>
   )}
 </section>
