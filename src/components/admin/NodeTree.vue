@@ -1,80 +1,65 @@
 <template>
-  <div class="flex flex-col gap-1" :data-parent-id="parentId ?? 'root'">
-    <VueDraggable
-      v-model="items"
-      :animation="150"
-      handle=".drag-handle"
-      :group="{ name: 'nodes', pull: true, put: true }"
-      item-key="id"
-      :data-parent-id="parentId ?? 'root'"
-      @end="onEnd"
-    >
-      <template #item="{ element }">
-        <div class="flex flex-col">
-          <!-- Row -->
-          <div
-            class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 group"
-            :style="{ paddingLeft: `${depth * 1.25 + 0.5}rem` }"
-          >
-            <span class="drag-handle cursor-grab text-base-content/30 hover:text-base-content/60 select-none text-lg leading-none">⠿</span>
+  <div class="flex flex-col gap-1">
+    <div v-for="element in items" :key="element.id" class="flex flex-col">
+      <!-- Row -->
+      <div
+        class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 group"
+        :style="{ paddingLeft: `${depth * 1.25 + 0.5}rem` }"
+      >
+        <button
+          v-if="element.children?.length"
+          type="button"
+          class="btn btn-xs btn-ghost btn-square"
+          @click="toggleExpand(element.id)"
+        >
+          {{ expanded.has(element.id) ? "▾" : "▸" }}
+        </button>
+        <span v-else class="w-6" />
 
-            <button
-              v-if="element.children?.length"
-              type="button"
-              class="btn btn-xs btn-ghost btn-square"
-              @click="toggleExpand(element.id)"
-            >
-              {{ expanded.has(element.id) ? "▾" : "▸" }}
-            </button>
-            <span v-else class="w-6" />
+        <span class="text-xs">{{ element.contentType?.icon ?? "📄" }}</span>
 
-            <span class="text-xs">{{ element.contentType?.icon ?? "📄" }}</span>
+        <a
+          :href="`/admin/content/${element.id}`"
+          class="flex-1 text-sm font-medium truncate hover:text-primary"
+        >
+          {{ element.title }}
+        </a>
 
-            <a
-              :href="`/admin/content/${element.id}`"
-              class="flex-1 text-sm font-medium truncate hover:text-primary"
-            >
-              {{ element.title }}
-            </a>
+        <span class="font-mono text-xs text-base-content/40 hidden sm:block truncate max-w-32">
+          {{ element.path }}
+        </span>
 
-            <span class="font-mono text-xs text-base-content/40 hidden sm:block truncate max-w-32">
-              {{ element.path }}
-            </span>
+        <span
+          class="badge badge-sm shrink-0"
+          :class="{
+            'badge-success': element.status === 'published',
+            'badge-warning': element.status === 'scheduled',
+            'badge-ghost': element.status === 'draft',
+          }"
+        >
+          {{ element.status }}
+        </span>
 
-            <span
-              class="badge badge-sm shrink-0"
-              :class="{
-                'badge-success': element.status === 'published',
-                'badge-warning': element.status === 'scheduled',
-                'badge-ghost': element.status === 'draft',
-              }"
-            >
-              {{ element.status }}
-            </span>
-
-            <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <a :href="`/admin/content/${element.id}`" class="btn btn-xs btn-ghost">Editar</a>
-              <button
-                type="button"
-                class="btn btn-xs btn-ghost text-error"
-                :disabled="deleting === element.id"
-                @click="deleteNode(element)"
-              >✕</button>
-            </div>
-          </div>
-
-          <!-- Children container -->
-          <div v-if="expanded.has(element.id)" class="flex flex-col">
-            <NodeTree
-              :nodes="JSON.stringify(element.children ?? [])"
-              :depth="depth + 1"
-              :parent-id="element.id"
-              @reorder="onChildReorder"
-            />
-          </div>
+        <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <a :href="`/admin/content/${element.id}`" class="btn btn-xs btn-ghost">Editar</a>
+          <button
+            type="button"
+            class="btn btn-xs btn-ghost text-error"
+            :disabled="deleting === element.id"
+            @click="deleteNode(element)"
+          >✕</button>
         </div>
-      </template>
-    </VueDraggable>
+      </div>
+
+      <!-- Children container -->
+      <div v-if="element.children?.length && expanded.has(element.id)" class="flex flex-col">
+        <NodeTree
+          :nodes="JSON.stringify(element.children)"
+          :depth="depth + 1"
+          :parent-id="element.id"
+        />
+      </div>
+    </div>
 
     <p v-if="errorMsg" class="text-error text-xs px-2 pt-1">{{ errorMsg }}</p>
   </div>
@@ -82,7 +67,6 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from "vue";
-import { VueDraggable } from "vue-draggable-plus";
 import { actions } from "astro:actions";
 
 export interface TreeNode {
@@ -110,7 +94,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   reorder: [items: ReorderItem[]];
-}>();
+}>(); // eslint-disable-line @typescript-eslint/no-unused-vars
 
 function parseNodes(raw: string): TreeNode[] {
   try {
@@ -148,23 +132,6 @@ async function persistUpdates(updates: ReorderItem[]) {
   if (updates.length === 0) return;
   const { error } = await actions.nodes.reorder({ items: updates });
   if (error) errorMsg.value = error.message;
-}
-
-async function onEnd(evt: any) {
-  errorMsg.value = "";
-  const target = evt.to as HTMLElement | null;
-  const newParentId = target?.dataset.parentId === "root" ? null : target?.dataset.parentId ?? parentId;
-
-  // Collect updates for the destination container with the correct parentId
-  const updates = buildUpdates(items.value, newParentId);
-  await persistUpdates(updates);
-  if (!errorMsg.value) {
-    window.location.reload();
-  }
-}
-
-async function onChildReorder(childUpdates: ReorderItem[]) {
-  await persistUpdates(childUpdates);
 }
 
 async function deleteNode(node: TreeNode) {

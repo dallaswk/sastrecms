@@ -83,7 +83,7 @@ const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
     <div class="card bg-base-100 border border-base-300">
       <div class="card-body p-3">
         <NodeTree
-          client:load
+          client:only="vue"
           nodes={JSON.stringify(treeData)}
         />
       </div>
