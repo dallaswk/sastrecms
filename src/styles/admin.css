@@ -392,3 +392,31 @@ html[data-mode="light"] .admin-root :is(.input, .select, .textarea, .file-input)
   color: oklch(var(--bc) / 0.42);
   opacity: 1;
 }
+
+/*
+ * The skeleton for a `client:only` island.
+ *
+ * Hidden as soon as the island next to it has rendered anything. `:has()` rather than a script
+ * because a script would need a hydration event to listen for, and the one Astro exposes is tied
+ * to view transitions — so it would work on some navigations and not others.
+ *
+ * If `:has()` were unsupported the skeleton would stay visible above the form, which is why the
+ * animation is subtle and it carries `aria-hidden`: worst case it reads as decoration.
+ */
+.editor-skeleton {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+/*
+ * `~`, not `+`: Astro emits its own <style> and <script> between the skeleton and the island, so
+ * the adjacent-sibling selector never matched and the skeleton stayed up for ever behind the
+ * form. Found by reading the served HTML rather than the source.
+ */
+.editor-skeleton:has(~ astro-island > *) {
+  display: none;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}

@@ -85,8 +85,36 @@ const pageTitle = isNew
     </div>
   )}
 
+  {/*
+    client:only, not client:load.
+
+    NodeForm has two template roots — the form and the media picker modal — and its fields go
+    through FieldRenderer, which loads the repeater, relation and sections editors with
+    defineAsyncComponent to break an import cycle. On the server those async components render
+    nothing; on the client they resolve. The node counts differ, hydration mis-anchors, and Vue
+    re-renders everything after the sections field as *new* nodes — so «Traducciones», «SEO» and
+    «Guardar cambios» appeared twice, the second copy outside the form's own container.
+
+    Skipping SSR for this island removes the mismatch entirely. Same fix the node tree already
+    needed, for the same reason.
+  */}
+  {/*
+    A skeleton while the island loads.
+
+    `client:only` renders nothing on the server, so without this the editor is a blank area for
+    as long as the bundle takes. Hidden by CSS the moment the island has any child, which needs
+    no script and cannot get out of sync with hydration.
+  */}
+  <div class="editor-skeleton flex flex-col gap-4" aria-hidden="true">
+    <div class="h-4 w-20 rounded bg-base-300/60"></div>
+    <div class="h-10 w-full max-w-3xl rounded-lg bg-base-300/40"></div>
+    <div class="h-4 w-16 rounded bg-base-300/60"></div>
+    <div class="h-10 w-full max-w-3xl rounded-lg bg-base-300/40"></div>
+    <div class="h-28 w-full max-w-3xl rounded-lg bg-base-300/40"></div>
+  </div>
+
   <NodeForm
-    client:load
+    client:only="vue"
     nodeId={isNew ? undefined : id}
     contentTypeId={contentType?.id ?? ""}
     fieldSchema={contentType?.fieldSchema ?? []}
