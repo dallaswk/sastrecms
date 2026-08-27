@@ -1,5 +1,6 @@
 ---
 import AdminLayout from "@layouts/AdminLayout.astro";
+import MediaField from "@components/admin/MediaField.vue";
 import { eq, and } from "drizzle-orm";
 import { settings, nodes } from "@db/schema";
 export const prerender = false;
@@ -58,12 +59,23 @@ const DAISY_THEMES = [
           <input name="tagline" type="text" class="input input-bordered" value={siteSettings?.tagline ?? ""} />
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Logo URL</span></label>
-          <input name="logoUrl" type="text" class="input input-bordered" value={siteSettings?.logoUrl ?? ""} />
+          <label class="label"><span class="label-text">Logo</span></label>
+          <MediaField
+            client:load
+            name="logoUrl"
+            initial={siteSettings?.logoUrl ?? ""}
+            hint="Se muestra en la cabecera. Un PNG o SVG con fondo transparente."
+          />
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Favicon URL</span></label>
-          <input name="faviconUrl" type="text" class="input input-bordered" value={siteSettings?.faviconUrl ?? ""} />
+          <label class="label"><span class="label-text">Favicon</span></label>
+          <MediaField
+            client:load
+            name="faviconUrl"
+            initial={siteSettings?.faviconUrl ?? ""}
+            square
+            hint="Cuadrado y pequeño: 32×32 o un SVG. Se ve en la pestaña del navegador."
+          />
         </div>
       </div>
     </section>
