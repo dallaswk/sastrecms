@@ -84,7 +84,10 @@ export const mediaActions = {
         throw new Error(`File type "${file.type}" is not accepted`);
       }
 
-      const r2 = context.locals.runtime?.env?.R2_BUCKET as R2Bucket | undefined;
+      // Resolved by the middleware. Reading locals.runtime.env here used to throw on
+      // Workers — the adapter replaced it with a getter that raises — and the optional
+      // chaining hid it, so uploads failed only in production.
+      const r2 = context.locals.r2;
       if (!r2) throw new Error("R2 bucket not configured");
 
       // The public host is per-deployment (a custom domain or the r2.dev URL), so it
@@ -141,7 +144,7 @@ export const mediaActions = {
       });
       if (!file) throw new Error("Media not found");
 
-      const r2 = context.locals.runtime?.env?.R2_BUCKET as R2Bucket | undefined;
+      const r2 = context.locals.r2;
       if (r2) {
         await r2.delete(file.storageKey);
       }

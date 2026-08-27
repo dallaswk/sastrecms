@@ -52,6 +52,28 @@ Estado del proyecto a fecha 27 Ago 2026. Rama activa: `dev`. Astro 7.2.8.
 
 ### Funcionalidad
 
+- [x] **Fase A del plan: dos fallos vivos y un desbloqueo** ✅ *(27 Ago 2026)*
+
+  🔴 **Subir y borrar medios estaba roto en producción.** `media.ts` leía
+  `context.locals.runtime?.env?.R2_BUCKET`, pero en el adaptador v14 ese getter **lanza**
+  (`cf-helpers.js:30`, *"has been removed in Astro v6"*), y el `?.` no protege contra un
+  throw. En local nunca se vio porque con el adaptador Node `locals.runtime` es
+  `undefined` y cortocircuita. El binding ahora se resuelve en el middleware, que ya
+  cargaba bien el entorno, y viaja en `locals.r2`. **Verificado en `workerd`**: subida y
+  borrado reales contra el bucket R2 local, cero errores en el worker.
+
+  - **Favicon**: no existía `public/`, pero los dos layouts pedían `/favicon.svg`. Todas
+    las páginas de todos los sitios daban 404 en el favicon.
+  - **Una consulta menos por petición**: `sites` + `settings` en un `leftJoin`. Es
+    `leftJoin` y no `innerJoin` porque un sitio puede existir antes de que
+    `ensureBootstrap` escriba sus settings, y perder la fila del sitio en esa ventana se
+    llevaría por delante `defaultLocale`. De paso **`locals.site` ya llega a las rutas
+    públicas**, que es prerrequisito del `hreflang x-default`.
+  - **`tsc` en cero por primera vez.** Los cuatro errores de `media.ts` se fueron con el
+    arreglo; los tres de zod eran reales: `z.record()` pide clave y valor en zod 4, y el
+    `z` de `astro:schema` es sólo un valor, así que `z.ZodType` necesita importar el tipo
+    aparte. Ambas formas se comportan igual en runtime, comprobado.
+
 - [x] **El worker, ejecutado de verdad en `workerd`** ✅ *(27 Ago 2026)*
   Era lo último sin probar, y **había un fallo de despliegue esperando**.
 

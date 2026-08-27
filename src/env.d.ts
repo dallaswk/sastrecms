@@ -3,6 +3,22 @@
 
 type Runtime = import("@astrojs/cloudflare").Runtime<Env>;
 
+/**
+ * Minimal shape of the R2 binding: only what src/actions/media.ts uses.
+ * @cloudflare/workers-types is a devDependency of the adapter, not installed here, so
+ * declaring the slice we need beats pulling in a package that redefines fetch, Request
+ * and Response globally.
+ */
+interface R2Bucket {
+  put(
+    key: string,
+    value: ArrayBuffer | ArrayBufferView | ReadableStream | string | null,
+    options?: { httpMetadata?: { contentType?: string } }
+  ): Promise<unknown>;
+  get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+  delete(key: string): Promise<void>;
+}
+
 interface Env {
   TURSO_DATABASE_URL: string;
   TURSO_AUTH_TOKEN: string;
@@ -11,6 +27,21 @@ interface Env {
   RESEND_API_KEY: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
+}
+
+/**
+ * What loadEnv() in src/middleware.ts returns. The index signature is `unknown` on
+ * purpose: the environment carries bindings as well as strings, and pretending
+ * otherwise is how R2_BUCKET ended up being read through the wrong door.
+ */
+interface RuntimeEnv {
+  [key: string]: unknown;
+  TURSO_DATABASE_URL?: string;
+  TURSO_AUTH_TOKEN?: string;
+  R2_PUBLIC_URL?: string;
+  BETTER_AUTH_SECRET?: string;
+  BETTER_AUTH_URL?: string;
+  R2_BUCKET?: R2Bucket;
 }
 
 declare module "cloudflare:workers" {
@@ -22,7 +53,9 @@ declare namespace App {
     db: import("@db/client").Database;
     auth: import("@/lib/auth").Auth;
     /** Runtime environment, resolved once per request by the middleware. */
-    env: Record<string, string | undefined>;
+    env: RuntimeEnv;
+    /** The R2 bucket binding, or null when it isn't configured (local dev). */
+    r2: R2Bucket | null;
     /** Site settings row, loaded once per request and shared with the layout. */
     settings: typeof import("@db/schema").settings.$inferSelect | null;
     /** Which site this request is for. Never hardcode the id — read it from here. */

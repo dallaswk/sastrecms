@@ -72,7 +72,7 @@ export const nodeActions = {
       title: z.string().min(1),
       slug: z.string().optional(),
       locale: z.string().default("es"),
-      fields: z.record(z.unknown()).default({}),
+      fields: z.record(z.string(), z.unknown()).default({}),
       seo: NodeSeoSchema.optional(),
     }),
     handler: async (input, context) => {
@@ -151,7 +151,7 @@ export const nodeActions = {
       id: z.string(),
       title: z.string().min(1).optional(),
       slug: z.string().optional(),
-      fields: z.record(z.unknown()).optional(),
+      fields: z.record(z.string(), z.unknown()).optional(),
       seo: NodeSeoSchema.optional(),
       status: z.enum(["draft", "published", "scheduled"]).optional(),
     }),

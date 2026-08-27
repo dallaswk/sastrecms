@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="sASTRe">
+  <!-- Placeholder por defecto. Cada sitio lo sustituye con settings.faviconUrl;
+       existe para que las páginas no pidan un /favicon.svg que devuelve 404. -->
+  <rect width="32" height="32" rx="7" fill="#2F4B8F"/>
+  <path d="M20.5 10.5c-1.2-1-2.8-1.5-4.5-1.5-3 0-5 1.4-5 3.6 0 1.9 1.4 2.9 4.3 3.6 2.4.6 3.2 1 3.2 1.9 0 1-1.1 1.7-2.8 1.7-1.8 0-3.4-.6-4.7-1.7"
+        fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

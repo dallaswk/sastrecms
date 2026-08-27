@@ -4,8 +4,11 @@ import { eq, and } from "drizzle-orm";
 import { contentTypes } from "@db/schema";
 import { generateId } from "@lib/id";
 import type { FieldDefinition } from "@db/schema";
+// `z` from astro:schema is only a value binding, so `z.ZodType` is not a namespace here.
+// Type-only import, so nothing changes at runtime and the zod version stays Astro's.
+import type { ZodType } from "zod";
 
-const FieldSchema: z.ZodType<FieldDefinition> = z.lazy(() =>
+const FieldSchema: ZodType<FieldDefinition> = z.lazy(() =>
   z.object({
     key: z.string().min(1).regex(/^[a-z_][a-z0-9_]*$/, "Only lowercase letters, numbers and underscores"),
     label: z.string().min(1),

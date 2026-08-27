@@ -6,14 +6,22 @@ import { isAdmin } from "@lib/permissions";
 import { DEFAULT_SITE_ID, resolveSiteId } from "@lib/site";
 import { sites, settings, roles, users } from "@db/schema";
 
-async function loadEnv(): Promise<Record<string, string | undefined>> {
+/**
+ * The runtime environment: plain vars in dev via dotenv, and on Workers the real `env`
+ * from `cloudflare:workers` — which also carries the bindings, not just strings.
+ *
+ * Never reach for `locals.runtime.env`: in @astrojs/cloudflare v14 that getter *throws*
+ * ("has been removed in Astro v6"), so optional chaining does not protect you. This is
+ * the single place bindings are resolved.
+ */
+async function loadEnv(): Promise<RuntimeEnv> {
   try {
     const { env } = await import("cloudflare:workers");
-    return (env ?? {}) as unknown as Record<string, string | undefined>;
+    return (env ?? {}) as unknown as RuntimeEnv;
   } catch {
     const { default: dotenv } = await import("dotenv");
     dotenv.config();
-    return process.env;
+    return process.env as unknown as RuntimeEnv;
   }
 }
 
@@ -65,9 +73,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const siteId = await resolveSiteId(db, context.url.host);
 
-  const siteSettings = await db.query.settings.findFirst({
-    where: eq(settings.siteId, siteId),
-  });
+  // One round trip for both rows. leftJoin and not innerJoin because a site can exist
+  // before ensureBootstrap has written its settings, and losing the site row in that
+  // window would take `defaultLocale` with it.
+  const [row] = await db
+    .select({ site: sites, settings: settings })
+    .from(sites)
+    .leftJoin(settings, eq(settings.siteId, sites.id))
+    .where(eq(sites.id, siteId))
+    .limit(1);
+
+  const siteSettings = row?.settings ?? null;
   const integrations = (siteSettings?.integrations as Record<string, string> | null) ?? {};
 
   // Better Auth reads `secret` and `baseURL` from process.env when they aren't passed
@@ -83,8 +99,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.siteId = siteId;
   context.locals.auth = auth;
   context.locals.env = env;
+  // The R2 bucket is a binding, so it can only come from here.
+  context.locals.r2 = env.R2_BUCKET ?? null;
   // Shared so BaseLayout and the page resolver don't each re-query the same row.
-  context.locals.settings = siteSettings ?? null;
+  context.locals.settings = siteSettings;
+  // Public routes need defaultLocale too, for the hreflang x-default and the locale
+  // prefix, so this is no longer admin-only.
+  context.locals.site = row?.site ?? null;
 
   const pathname = context.url.pathname;
   const isAdminRoute = pathname.startsWith("/admin");
@@ -117,13 +138,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   if (isAdminRoute || isApiRoute) {
     await ensureBootstrap(db);
-    // defaultLocale and locales are only read while administering content. Loading the
-    // row here saves the actions and admin pages a query each; public pages never need
-    // it, so they don't pay for it.
-    context.locals.site =
-      (await db.query.sites.findFirst({ where: eq(sites.id, siteId) })) ?? null;
-  } else {
-    context.locals.site = null;
   }
 
   if (!isAdminRoute && !isApiRoute) {
