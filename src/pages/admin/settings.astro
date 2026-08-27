@@ -1,7 +1,7 @@
 ---
 import AdminLayout from "@layouts/AdminLayout.astro";
-import { eq } from "drizzle-orm";
-import { settings } from "@db/schema";
+import { eq, and } from "drizzle-orm";
+import { settings, nodes } from "@db/schema";
 export const prerender = false;
 
 // Admin-only: this page reads the permission matrix / user roles / the Resend key.
@@ -224,6 +224,44 @@ const DAISY_THEMES = [
     <!-- Redirects -->
     <section class="card bg-base-100 border border-base-300">
       <div class="card-body gap-4">
+        <h2 class="card-title text-base">Navegación</h2>
+        <p class="text-sm text-base-content/60 -mt-1">
+          Se guarda la página, no su dirección, así que renombrar un slug no rompe el menú.
+        </p>
+
+        {MENU_SECTIONS.map((menu) => (
+          <div class="flex flex-col gap-2">
+            <label class="label py-0">
+              <span class="label-text font-medium">{menu.label}</span>
+              <span class="label-text-alt text-base-content/40">{menu.hint}</span>
+            </label>
+            <div id={`menu-${menu.key}-list`} class="flex flex-col gap-2">
+              {(menus[menu.key] ?? []).map((item, i) => (
+                <div class="flex gap-2 items-center menu-row" data-menu={menu.key}>
+                  <input type="text" name={`menu_${menu.key}_label_${i}`} value={item.label}
+                         class="input input-bordered input-sm w-40" placeholder="Etiqueta" />
+                  <select name={`menu_${menu.key}_node_${i}`} class="select select-bordered select-sm flex-1">
+                    <option value="">— enlace externo —</option>
+                    {linkables.map((n) => (
+                      <option value={n.id} selected={item.nodeId === n.id}>{n.title} ({n.path})</option>
+                    ))}
+                  </select>
+                  <input type="text" name={`menu_${menu.key}_url_${i}`} value={item.url ?? ""}
+                         class="input input-bordered input-sm w-52 font-mono text-xs" placeholder="https://… o #ancla" />
+                  <button type="button" class="btn btn-xs btn-ghost text-error remove-menu-row">✕</button>
+                </div>
+              ))}
+            </div>
+            <button type="button" class="btn btn-sm btn-ghost self-start add-menu-row" data-menu={menu.key}>
+              + Añadir enlace
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
         <h2 class="card-title text-base">Redirecciones</h2>
         <div id="redirects-list" class="flex flex-col gap-2">
           {redirects.map((r, i) => (
@@ -327,6 +365,66 @@ const DAISY_THEMES = [
     }
   }
 
+  const MENU_KEYS = ["main", "footer", "legal"] as const;
+
+  /**
+   * Reads the menu rows back out of the form.
+   *
+   * The inputs are numbered, and removing a row leaves a hole in the numbering, so this
+   * walks the DOM rather than counting indexes — otherwise deleting the second of three
+   * links would silently drop the third.
+   */
+  function collectMenus(data: FormData) {
+    const out: Record<string, { label: string; nodeId?: string; url?: string }[]> = {};
+
+    for (const key of MENU_KEYS) {
+      const rows = document.querySelectorAll<HTMLElement>(`.menu-row[data-menu="${key}"]`);
+      const items: { label: string; nodeId?: string; url?: string }[] = [];
+
+      for (const row of rows) {
+        const label = row.querySelector<HTMLInputElement>('input[name*="_label_"]')?.value.trim() ?? "";
+        const nodeId = row.querySelector<HTMLSelectElement>('select[name*="_node_"]')?.value ?? "";
+        const url = row.querySelector<HTMLInputElement>('input[name*="_url_"]')?.value.trim() ?? "";
+        if (!label) continue;
+        // A page wins over a URL: storing both would make which one is used ambiguous.
+        if (nodeId) items.push({ label, nodeId });
+        else if (url) items.push({ label, url });
+      }
+
+      if (items.length) out[key] = items;
+    }
+
+    return out;
+  }
+
+  let menuIndex = document.querySelectorAll(".menu-row").length;
+
+  for (const button of document.querySelectorAll<HTMLElement>(".add-menu-row")) {
+    button.addEventListener("click", () => {
+      const key = button.dataset.menu!;
+      const list = document.getElementById(`menu-${key}-list`)!;
+      const template = document.querySelector<HTMLElement>(`.menu-row[data-menu="${key}"]`);
+      const row = document.createElement("div");
+      row.className = "flex gap-2 items-center menu-row";
+      row.dataset.menu = key;
+      const i = menuIndex++;
+      // Reuse the rendered <select> so the page list does not have to be duplicated in JS.
+      const options = template?.querySelector("select")?.innerHTML ?? '<option value="">— enlace externo —</option>';
+      row.innerHTML = `
+        <input type="text" name="menu_${key}_label_${i}" class="input input-bordered input-sm w-40" placeholder="Etiqueta" />
+        <select name="menu_${key}_node_${i}" class="select select-bordered select-sm flex-1">${options}</select>
+        <input type="text" name="menu_${key}_url_${i}" class="input input-bordered input-sm w-52 font-mono text-xs" placeholder="https://… o #ancla" />
+        <button type="button" class="btn btn-xs btn-ghost text-error remove-menu-row">✕</button>`;
+      row.querySelector("select")!.value = "";
+      list.appendChild(row);
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    const remove = (event.target as HTMLElement)?.closest(".remove-menu-row");
+    if (remove) remove.closest(".menu-row")?.remove();
+  });
+
   document.getElementById("settings-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
@@ -362,6 +460,7 @@ const DAISY_THEMES = [
         youtube: data.get("social_youtube") as string,
         github: data.get("social_github") as string,
       },
+      menus: collectMenus(data),
       redirects,
       analyticsIds: {
         ga4: (data.get("analytics_ga4") as string)?.trim() || undefined,

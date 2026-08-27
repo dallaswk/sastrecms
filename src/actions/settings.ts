@@ -67,6 +67,18 @@ export const settingsActions = {
       theme: ThemeSchema.optional(),
       socialLinks: SocialLinksSchema.optional(),
       analyticsIds: AnalyticsSchema.optional(),
+      menus: z
+        .record(
+          z.enum(["main", "footer", "legal"]),
+          z.array(
+            z.object({
+              label: z.string().min(1),
+              nodeId: z.string().optional(),
+              url: z.string().optional(),
+            })
+          )
+        )
+        .optional(),
       redirects: z
         .array(z.object({ from: z.string(), to: z.string(), permanent: z.boolean() }))
         .optional(),
@@ -93,6 +105,7 @@ export const settingsActions = {
       if (input.theme !== undefined) updates.theme = input.theme;
       if (input.socialLinks !== undefined) updates.socialLinks = input.socialLinks;
       if (input.analyticsIds !== undefined) updates.analyticsIds = input.analyticsIds;
+      if (input.menus !== undefined) updates.menus = input.menus;
       if (input.redirects !== undefined) updates.redirects = input.redirects;
       if (input.integrations !== undefined) updates.integrations = input.integrations;
 

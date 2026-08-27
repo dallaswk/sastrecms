@@ -1,0 +1,97 @@
+---
+import { isCurrent, type ResolvedItem } from "@lib/menus";
+
+/**
+ * The site's own chrome. Until now BaseLayout's <body> was six lines and a page had no
+ * way out of itself: the landing rendered fine and the only exit was the back button.
+ *
+ * The mobile menu is a checkbox and CSS, deliberately — this is on every page of every
+ * client site, and a navigation that needs JavaScript to open is a navigation that is
+ * broken while the page is still loading.
+ */
+interface Props {
+  siteName: string;
+  logoUrl?: string | null;
+  homeHref: string;
+  items: ResolvedItem[];
+  languages?: { locale: string; path: string }[];
+  currentLocale?: string;
+  pathname: string;
+}
+const { siteName, logoUrl, homeHref, items, languages = [], currentLocale, pathname } = Astro.props;
+const showLanguages = languages.length > 1;
+---
+
+<header class="sticky top-0 z-40 bg-base-100/95 backdrop-blur border-b border-base-200">
+  <div class="max-w-5xl mx-auto px-4 h-16 flex items-center gap-4">
+    <a href={homeHref} class="flex items-center gap-2 font-semibold shrink-0" aria-label={`${siteName} — inicio`}>
+      {logoUrl
+        ? <img src={logoUrl} alt="" class="h-7 w-auto max-w-[9rem] object-contain" />
+        : <span class="text-lg">{siteName}</span>}
+    </a>
+
+    <nav class="hidden md:flex items-center gap-1 ml-auto" aria-label="Principal">
+      {items.map((item) => (
+        <a
+          href={item.href}
+          class:list={[
+            "px-3 py-2 rounded-md text-sm transition-colors hover:bg-base-200",
+            isCurrent(item.href, pathname) ? "font-medium text-primary" : "text-base-content/80",
+          ]}
+          aria-current={isCurrent(item.href, pathname) ? "page" : undefined}
+          {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        >{item.label}</a>
+      ))}
+    </nav>
+
+    {showLanguages && (
+      <div class="hidden md:flex items-center gap-1 text-sm" aria-label="Idioma">
+        {languages.map((l) => (
+          <a
+            href={l.path}
+            class:list={["px-2 py-1 rounded uppercase text-xs tracking-wide",
+              l.locale === currentLocale ? "font-semibold text-primary" : "text-base-content/50 hover:text-base-content"]}
+            hreflang={l.locale}
+            aria-current={l.locale === currentLocale ? "true" : undefined}
+          >{l.locale}</a>
+        ))}
+      </div>
+    )}
+
+    {items.length > 0 && (
+      <>
+        <input type="checkbox" id="sastre-nav" class="peer hidden" />
+        <label
+          for="sastre-nav"
+          class="md:hidden ml-auto btn btn-ghost btn-sm btn-square"
+          aria-label="Abrir menú"
+        >☰</label>
+
+        <nav
+          class="peer-checked:flex hidden md:hidden absolute top-16 inset-x-0 flex-col bg-base-100 border-b border-base-200 shadow-lg p-2"
+          aria-label="Principal"
+        >
+          {items.map((item) => (
+            <a
+              href={item.href}
+              class:list={["px-3 py-2.5 rounded-md hover:bg-base-200",
+                isCurrent(item.href, pathname) ? "font-medium text-primary" : ""]}
+              aria-current={isCurrent(item.href, pathname) ? "page" : undefined}
+              {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+            >{item.label}</a>
+          ))}
+          {showLanguages && (
+            <div class="flex gap-2 px-3 py-2 border-t border-base-200 mt-1">
+              {languages.map((l) => (
+                <a href={l.path} hreflang={l.locale}
+                   class:list={["uppercase text-xs tracking-wide py-1",
+                     l.locale === currentLocale ? "font-semibold text-primary" : "text-base-content/50"]}
+                >{l.locale}</a>
+              ))}
+            </div>
+          )}
+        </nav>
+      </>
+    )}
+  </div>
+</header>

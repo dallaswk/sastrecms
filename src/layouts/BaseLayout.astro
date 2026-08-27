@@ -3,6 +3,11 @@ import "@styles/global.css";
 import { buildWebSiteSchema } from "@lib/jsonld";
 import { sanitizeAnalyticsIds } from "@lib/analytics";
 import { themeColorValue } from "@lib/color";
+import { referencedNodeIds, resolveMenu } from "@lib/menus";
+import { inArray } from "drizzle-orm";
+import { nodes } from "@db/schema";
+import SiteHeader from "@components/site/SiteHeader.astro";
+import SiteFooter from "@components/site/SiteFooter.astro";
 
 interface Props {
   title: string;
@@ -79,6 +84,38 @@ const contrastVars = Object.entries(theme)
   .join(" ");
 
 const daisyuiTheme = (theme as Record<string, string>).daisyuiTheme ?? "light";
+/*
+ * Menus store node ids, not paths, so a renamed slug does not silently break every page's
+ * navigation. That costs one lookup — but only when a menu actually points at content;
+ * a site whose menu is all external links pays nothing.
+ */
+const menus = siteSettings?.menus ?? {};
+const menuNodeIds = referencedNodeIds(menus);
+const menuPaths = new Map<string, string>();
+if (menuNodeIds.length > 0 && Astro.locals.db) {
+  const rows = await Astro.locals.db.query.nodes.findMany({
+    where: inArray(nodes.id, menuNodeIds),
+    columns: { id: true, path: true, status: true },
+  });
+  for (const row of rows) {
+    // A draft in the menu would be a link to a 404 on every page of the site.
+    if (row.status === "published") menuPaths.set(row.id, row.path);
+  }
+}
+
+const mainMenu = resolveMenu(menus, "main", menuPaths);
+const footerMenu = resolveMenu(menus, "footer", menuPaths);
+const legalMenu = resolveMenu(menus, "legal", menuPaths);
+
+const socialLinks = Object.entries(
+  (siteSettings?.socialLinks as Record<string, string> | null) ?? {}
+)
+  .filter(([, url]) => typeof url === "string" && url.trim())
+  .map(([key, url]) => ({ label: key.charAt(0).toUpperCase() + key.slice(1), url }));
+
+const defaultLocale = Astro.locals.site?.defaultLocale ?? "es";
+const homeHref = (lang ?? defaultLocale) === defaultLocale ? "/" : `/${lang}`;
+
 const faviconUrl = siteSettings?.faviconUrl ?? "/favicon.svg";
 const siteTitle = siteSettings?.siteName ?? "sASTRe";
 // No suffix when the page is already the site: the home page of sASTRe was titled
@@ -147,11 +184,31 @@ const pageTitle = title === siteTitle ? title : `${title} — ${siteTitle}`;
       <script set:html={`(function(h,o,t,j,a,r){h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};h._hjSettings={hjid:${analytics.hotjar},hjsv:6};a=o.getElementsByTagName('head')[0];r=o.createElement('script');r.async=1;r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;a.appendChild(r);})(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');`} />
     )}
   </head>
-  <body>
+  <body class="min-h-screen flex flex-col">
     {/* Google Tag Manager — <body> noscript fallback */}
     {analytics.gtm && (
       <noscript set:html={`<iframe src="https://www.googletagmanager.com/ns.html?id=${analytics.gtm}" height="0" width="0" style="display:none;visibility:hidden"></iframe>`} />
     )}
-    <slot />
+    <SiteHeader
+      siteName={siteTitle}
+      logoUrl={siteSettings?.logoUrl}
+      homeHref={homeHref}
+      items={mainMenu}
+      languages={hreflangLinks ?? []}
+      currentLocale={lang ?? defaultLocale}
+      pathname={Astro.url.pathname}
+    />
+    
+    <main class="flex-1">
+      <slot />
+    </main>
+    
+    <SiteFooter
+      siteName={siteTitle}
+      tagline={siteSettings?.tagline}
+      items={footerMenu}
+      legal={legalMenu}
+      social={socialLinks}
+    />
   </body>
 </html>

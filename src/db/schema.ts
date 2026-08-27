@@ -241,6 +241,15 @@ export const settings = sqliteTable("settings", {
     .default(sql`'{}'`),
   logoUrl: text("logo_url"),
   faviconUrl: text("favicon_url"),
+  /**
+   * Navigation, as JSON rather than tables. Same call as `theme` and `socialLinks`: a
+   * menu is read on every public page, and a menus + menu_items pair would add a join to
+   * the hottest path in the app to model a handful of rows that are always fetched
+   * together and always rewritten as a whole.
+   */
+  menus: text("menus", { mode: "json" })
+    .$type<SiteMenus>()
+    .default(sql`'{}'`),
   redirects: text("redirects", { mode: "json" })
     .$type<{ from: string; to: string; permanent: boolean }[]>()
     .default(sql`'[]'`),
@@ -248,6 +257,9 @@ export const settings = sqliteTable("settings", {
     .$type<Record<string, string>>()
     .default(sql`'{}'`),
 });
+
+export type { MenuItem, SiteMenus } from "../lib/menus";
+import type { SiteMenus } from "../lib/menus";
 
 export type SiteTheme = {
   primaryColor?: string;
