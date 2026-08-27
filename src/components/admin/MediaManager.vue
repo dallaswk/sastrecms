@@ -35,11 +35,27 @@
     </div>
 
     <!-- Upload guidelines -->
-    <div v-if="!pickerMode" class="alert alert-info py-2 text-xs flex-col items-start gap-0.5">
-      <p class="font-medium">Guía de subida</p>
-      <p>Imágenes: JPG, PNG, WebP, SVG · Máx. <strong>5 MB</strong> · Recomendado ≤ 2500 px en el lado mayor</p>
-      <p>Vídeo: MP4, WebM · Máx. <strong>100 MB</strong> · PDF/DOC: cualquier tamaño razonable</p>
-      <p class="text-warning">⚠ No se aplica optimización automática. Sube imágenes ya comprimidas para no afectar Core Web Vitals.</p>
+<!--
+      A plain box, not `alert`. daisyUI's .alert is `display: grid` with column flow, so each
+      <p> became its own column — «Guía de subida» got a max-content column and the rest piled
+      up beside it, and the `flex-col` was inert. It is guidance, not an alert, so it also has
+      no business being information-blue.
+    -->
+    <div
+      v-if="!pickerMode"
+      class="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-xs flex flex-col gap-1"
+    >
+      <p class="font-medium text-base-content/80">Guía de subida</p>
+      <p class="text-base-content/70">
+        Imágenes: JPG, PNG, WebP, SVG · Máx. <strong>5 MB</strong> · Recomendado ≤ 2500 px en el lado mayor
+      </p>
+      <p class="text-base-content/70">
+        Vídeo: MP4, WebM · Máx. <strong>100 MB</strong> · PDF/DOC: cualquier tamaño razonable
+      </p>
+      <p class="text-warning">
+        ⚠ No se aplica optimización automática al subir. Sube imágenes ya comprimidas para no
+        afectar a las Core Web Vitals.
+      </p>
     </div>
 
     <!-- Upload progress -->

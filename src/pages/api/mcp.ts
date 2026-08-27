@@ -1,297 +1,256 @@
 import type { APIRoute } from "astro";
-import { eq, and } from "drizzle-orm";
-import { nodes, contentTypes, media, settings } from "@db/schema";
 import { validateApiToken } from "@lib/api-token";
-import { generateId, slugify, computePath, reservedSlugError } from "@lib/id";
+import { getTool, listTools, initializeResult, SERVER_INFO } from "@lib/mcp/registry";
+import { ToolError, type ToolContext } from "@lib/mcp/types";
 import {
-  requirePermission,
-  isAdmin,
-  viewableContentTypeIds,
-} from "@lib/permissions";
-import { sanitizeFields } from "@lib/sanitize";
-import { invalidateNode } from "@lib/cache-invalidate";
+  parseRpcBody,
+  isNotification,
+  success,
+  failure,
+  batchResponse,
+  RPC_ERRORS,
+  type RpcRequest,
+  type RpcResponse,
+} from "@lib/mcp/jsonrpc";
 
 export const prerender = false;
+
+/**
+ * The MCP endpoint.
+ *
+ * Speaks JSON-RPC 2.0 — `initialize`, `tools/list`, `tools/call` — which is what an actual MCP
+ * client sends. It also still accepts the old `{tool, params}` shape, because that is what the
+ * tokens already issued are calling, and breaking them to gain protocol purity would be a poor
+ * trade.
+ *
+ * The dispatch is thin on purpose: the tools live in @lib/mcp, where each is one declaration
+ * instead of a switch case plus an entry in a hand-written list that could disagree with it.
+ */
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      // Never stored: every response here is scoped to one token.
+      "Cache-Control": "private, no-store",
+    },
   });
 }
 
-function mcpError(message: string, status = 400) {
-  return json({ error: message }, status);
+/** Maps a failure to a JSON-RPC error, so the code says what kind of failure it was. */
+function errorFor(error: unknown) {
+  if (error instanceof ToolError) {
+    return {
+      rpc: error.kind === "forbidden" ? RPC_ERRORS.forbidden : RPC_ERRORS.invalidParams,
+      data: error.data,
+      message: error.message,
+    };
+  }
+
+  const message = error instanceof Error ? error.message : "Error interno";
+  // The permission helpers throw plain Errors prefixed this way. Recognised here so a
+  // permission failure does not read to the client as a server fault.
+  if (/^Forbidden/i.test(message)) {
+    return { rpc: RPC_ERRORS.forbidden, data: undefined, message };
+  }
+  return { rpc: RPC_ERRORS.internalError, data: undefined, message };
+}
+
+/**
+ * The `tools/call` result shape.
+ *
+ * The value goes back as JSON inside a text block *and* as `structuredContent`: the content
+ * array is what clients render for a person, the structured field is what a program parses.
+ * Sending only one means either a human sees nothing or a program has to scrape prose.
+ */
+function toolResult(value: unknown) {
+  return {
+    content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
+    ...(value && typeof value === "object" && !Array.isArray(value)
+      ? { structuredContent: value as Record<string, unknown> }
+      : {}),
+    isError: false,
+  };
+}
+
+/**
+ * An error *inside* a tool is a successful RPC call with `isError`, not an RPC failure: the
+ * call did reach the tool, and a model has to be able to read the message and correct itself.
+ * An RPC-level error is for the cases it cannot fix by sending different arguments.
+ */
+function toolErrorResult(message: string) {
+  return { content: [{ type: "text", text: message }], isError: true };
+}
+
+async function runMethod(
+  request: RpcRequest,
+  context: ToolContext
+): Promise<{ result: unknown } | { error: { code: number; message: string; data?: unknown } }> {
+  const params = (request.params ?? {}) as Record<string, unknown>;
+
+  switch (request.method) {
+    case "initialize":
+      return { result: initializeResult() };
+
+    // Sent by clients right after initialize. Notifications, so nothing goes back.
+    case "notifications/initialized":
+    case "initialized":
+      return { result: {} };
+
+    case "ping":
+      return { result: {} };
+
+    case "tools/list":
+      return { result: { tools: listTools() } };
+
+    case "tools/call": {
+      const name = String(params.name ?? "");
+      const tool = getTool(name);
+      if (!tool) {
+        return {
+          error: {
+            ...RPC_ERRORS.methodNotFound,
+            message: `No existe la herramienta "${name}"`,
+            data: { available: listTools().map((t) => t.name) },
+          },
+        };
+      }
+
+      const args = (params.arguments ?? {}) as Record<string, unknown>;
+      try {
+        return { result: toolResult(await tool.handler(args, context)) };
+      } catch (error) {
+        const mapped = errorFor(error);
+        if (mapped.rpc === RPC_ERRORS.internalError) {
+          console.error("[MCP]", error);
+        }
+        if (mapped.rpc === RPC_ERRORS.forbidden || mapped.rpc === RPC_ERRORS.internalError) {
+          return {
+            error: {
+              ...mapped.rpc,
+              message: mapped.message,
+              ...(mapped.data !== undefined ? { data: mapped.data } : {}),
+            },
+          };
+        }
+        const detail = mapped.data ? `\n${JSON.stringify(mapped.data)}` : "";
+        return { result: toolErrorResult(mapped.message + detail) };
+      }
+    }
+
+    default:
+      return {
+        error: { ...RPC_ERRORS.methodNotFound, message: `Método "${request.method}" no soportado` },
+      };
+  }
+}
+
+async function handleRpc(request: RpcRequest, context: ToolContext): Promise<RpcResponse | null> {
+  const outcome = await runMethod(request, context);
+  if (isNotification(request)) return null;
+  const id = request.id ?? null;
+  return "error" in outcome
+    ? failure(id, outcome.error, outcome.error.data)
+    : success(id, outcome.result);
 }
 
 export const POST: APIRoute = async ({ request, locals, cache }) => {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return mcpError("Missing or invalid Authorization header", 401);
+    return json({ error: "Falta la cabecera Authorization: Bearer <token>" }, 401);
   }
 
-  const rawToken = authHeader.slice(7);
-  const tokenResult = await validateApiToken(locals.db, rawToken);
+  const tokenResult = await validateApiToken(locals.db, authHeader.slice(7));
   if (!tokenResult) {
-    return mcpError("Invalid or revoked API token", 401);
+    return json({ error: "Token inválido o revocado" }, 401);
   }
 
-  let body: { tool: string; params?: Record<string, unknown> };
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return mcpError("Invalid JSON body");
+    return json(failure(null, RPC_ERRORS.parseError), 400);
   }
 
-  const { tool, params = {} } = body;
-  const db = locals.db;
-  const siteId = locals.siteId;
-  const userId = tokenResult.userId;
+  const context: ToolContext = {
+    db: locals.db,
+    siteId: locals.siteId,
+    userId: tokenResult.userId,
+    cache,
+    r2: locals.r2,
+    env: (locals.env ?? {}) as unknown as Record<string, unknown>,
+    defaultLocale: locals.site?.defaultLocale ?? "es",
+  };
 
-  try {
-    switch (tool) {
-      case "list_content_types": {
-        const cts = await db.query.contentTypes.findMany({
-          where: eq(contentTypes.siteId, siteId),
-        });
-        const viewable = await viewableContentTypeIds(db, userId, siteId);
-        return json({ result: cts.filter((ct) => viewable.has(ct.id)) });
-      }
+  /*
+   * The legacy shape: {tool, params}.
+   *
+   * Answered in its own envelope so an existing caller sees no change at all.
+   */
+  if (body && typeof body === "object" && !Array.isArray(body) && "tool" in (body as object)) {
+    const legacy = body as { tool: string; params?: Record<string, unknown> };
+    const tool = getTool(legacy.tool);
+    if (!tool) return json({ error: `Herramienta desconocida: ${legacy.tool}` }, 404);
 
-      case "list_nodes": {
-        const { contentTypeId, status } = params as { contentTypeId?: string; status?: string };
-        const conditions = [eq(nodes.siteId, siteId)];
-        if (contentTypeId) conditions.push(eq(nodes.contentTypeId, contentTypeId as string));
-        if (status) conditions.push(eq(nodes.status, status as "draft" | "published" | "scheduled"));
-        const list = await db.query.nodes.findMany({
-          where: and(...conditions),
-          with: { contentType: true },
-          orderBy: (n, { desc }) => [desc(n.updatedAt)],
-        });
-        const viewable = await viewableContentTypeIds(db, userId, siteId);
-        return json({ result: list.filter((n) => viewable.has(n.contentTypeId)) });
-      }
-
-      case "get_node": {
-        const { id, path } = params as { id?: string; path?: string };
-        if (!id && !path) return mcpError("id or path required");
-        const node = await db.query.nodes.findFirst({
-          where: and(
-            eq(nodes.siteId, siteId),
-            id ? eq(nodes.id, id) : eq(nodes.path, path!)
-          ),
-          with: { contentType: true },
-        });
-        if (!node) return mcpError("Node not found", 404);
-        await requirePermission(db, userId, siteId, node.contentTypeId, "view");
-        return json({ result: node });
-      }
-
-      case "create_node": {
-        const { contentTypeId, title, slug: rawSlug, parentId, locale = "es", fields = {}, seo = {} } =
-          params as { contentTypeId: string; title: string; slug?: string; parentId?: string; locale?: string; fields?: Record<string, unknown>; seo?: Record<string, unknown> };
-
-        if (!contentTypeId || !title) return mcpError("contentTypeId and title are required");
-
-        const ct = await db.query.contentTypes.findFirst({ where: eq(contentTypes.id, contentTypeId) });
-        if (!ct) return mcpError("Content type not found", 404);
-        await requirePermission(db, userId, siteId, contentTypeId, "create");
-
-        const slug = rawSlug ? slugify(rawSlug) : slugify(title);
-
-        const reserved = reservedSlugError(slug, Boolean(parentId));
-        if (reserved) return mcpError(reserved);
-
-        let parentPath: string | null = null;
-        if (parentId) {
-          const parent = await db.query.nodes.findFirst({ where: eq(nodes.id, parentId) });
-          if (!parent) return mcpError("Parent node not found", 404);
-          parentPath = parent.path;
-        }
-
-        const path = computePath(parentPath, slug, locale, locals.site?.defaultLocale);
-        const existing = await db.query.nodes.findFirst({
-          where: and(eq(nodes.siteId, siteId), eq(nodes.path, path)),
-        });
-        if (existing) {
-          if (slug === "index" && !parentId) {
-            return mcpError(
-              `El slug "index" es la portada de este idioma (${path}), y ya existe.`
-            );
-          }
-          return mcpError(`Path "${path}" already exists`);
-        }
-
-        const id = generateId("node");
-        const now = new Date();
-        await db.insert(nodes).values({
-          id, siteId, contentTypeId, parentId: parentId ?? null,
-          locale, slug, path, position: 0, status: "draft",
-          title, fields: sanitizeFields(fields), seo, createdBy: tokenResult.userId,
-          createdVia: "mcp", createdAt: now, updatedAt: now,
-        });
-        /*
-         * The MCP surface writes nodes directly, so it has to purge directly too. Without
-         * this an agent would publish successfully against a cache that never hears about
-         * it, and the client would be told the change is live while the edge serves the old
-         * page for an hour.
-         */
-        await invalidateNode(cache, {
-          siteId, nodeId: id, contentTypeId, parentId: parentId ?? null,
-        });
-
-        return json({ result: { id, path } }, 201);
-      }
-
-      case "update_node": {
-        const { id, ...updates } = params as { id: string; [k: string]: unknown };
-        if (!id) return mcpError("id is required");
-        const node = await db.query.nodes.findFirst({
-          where: and(eq(nodes.id, id), eq(nodes.siteId, siteId)),
-        });
-        if (!node) return mcpError("Node not found", 404);
-        await requirePermission(db, userId, siteId, node.contentTypeId, "edit");
-        // Changing status is publishing, not editing — same rule as nodes.update.
-        if (updates.status && updates.status !== node.status) {
-          await requirePermission(db, userId, siteId, node.contentTypeId, "publish");
-        }
-
-        const patch: Record<string, unknown> = { updatedAt: new Date() };
-        if (updates.title) patch.title = updates.title;
-        // The MCP surface writes fields without going through the actions, so the
-        // sanitising has to happen here too — an agent is exactly the caller most
-        // likely to paste markup it did not write.
-        if (updates.fields) patch.fields = sanitizeFields(updates.fields);
-        if (updates.seo) patch.seo = updates.seo;
-        if (updates.status) patch.status = updates.status;
-        if (updates.slug && updates.slug !== node.slug) {
-          const newSlug = slugify(updates.slug as string);
-          const reserved = reservedSlugError(newSlug, Boolean(node.parentId));
-          if (reserved) return mcpError(reserved);
-          const parentPath = node.path.substring(0, node.path.lastIndexOf("/")) || null;
-          patch.slug = newSlug;
-          patch.path = computePath(
-            parentPath, newSlug, node.locale, locals.site?.defaultLocale
-          );
-        }
-        await db.update(nodes).set(patch).where(eq(nodes.id, id));
-        await invalidateNode(cache, {
-          siteId, nodeId: id, contentTypeId: node.contentTypeId, parentId: node.parentId,
-        });
-        return json({ result: { id } });
-      }
-
-      case "publish_node": {
-        const { id } = params as { id: string };
-        if (!id) return mcpError("id is required");
-        const node = await db.query.nodes.findFirst({
-          where: and(eq(nodes.id, id), eq(nodes.siteId, siteId)),
-        });
-        if (!node) return mcpError("Node not found", 404);
-        await requirePermission(db, userId, siteId, node.contentTypeId, "publish");
-        const now = new Date();
-        await db.update(nodes)
-          .set({ status: "published", publishedAt: now, updatedAt: now })
-          .where(and(eq(nodes.id, id), eq(nodes.siteId, siteId)));
-        await invalidateNode(cache, {
-          siteId, nodeId: id, contentTypeId: node.contentTypeId, parentId: node.parentId,
-        });
-        return json({ result: { id, publishedAt: now } });
-      }
-
-      case "delete_node": {
-        const { id } = params as { id: string };
-        if (!id) return mcpError("id is required");
-        const node = await db.query.nodes.findFirst({
-          where: and(eq(nodes.id, id), eq(nodes.siteId, siteId)),
-        });
-        if (!node) return mcpError("Node not found", 404);
-        await requirePermission(db, userId, siteId, node.contentTypeId, "delete");
-        const children = await db.query.nodes.findMany({ where: eq(nodes.parentId, id) });
-        if (children.length > 0) return mcpError("Cannot delete a node that has children");
-        await db.delete(nodes).where(and(eq(nodes.id, id), eq(nodes.siteId, siteId)));
-        await invalidateNode(cache, {
-          siteId, nodeId: id, contentTypeId: node.contentTypeId, parentId: node.parentId,
-        });
-        return json({ result: { id } });
-      }
-
-      case "list_media": {
-        const files = await db.query.media.findMany({
-          where: eq(media.siteId, siteId),
-          orderBy: (m, { desc }) => [desc(m.createdAt)],
-        });
-        return json({ result: files });
-      }
-
-      case "search_content": {
-        const { query } = params as { query: string };
-        if (!query) return mcpError("query is required");
-        const allNodes = await db.query.nodes.findMany({
-          where: eq(nodes.siteId, siteId),
-          with: { contentType: true },
-        });
-        const q = query.toLowerCase();
-        const viewable = await viewableContentTypeIds(db, userId, siteId);
-        const results = allNodes.filter(
-          (n) =>
-            viewable.has(n.contentTypeId) &&
-            (n.title.toLowerCase().includes(q) || n.path.toLowerCase().includes(q))
-        );
-        return json({ result: results });
-      }
-
-      case "get_settings": {
-        if (!(await isAdmin(db, userId, siteId))) {
-          return mcpError("Forbidden: se requiere rol de administrador", 403);
-        }
-        const row = await db.query.settings.findFirst({
-          where: eq(settings.siteId, siteId),
-        });
-        return json({ result: row });
-      }
-
-      case "update_settings": {
-        if (!(await isAdmin(db, userId, siteId))) {
-          return mcpError("Forbidden: se requiere rol de administrador", 403);
-        }
-        const row = await db.query.settings.findFirst({ where: eq(settings.siteId, siteId) });
-        const patch: Record<string, unknown> = {};
-        const allowed = ["siteName", "tagline", "theme", "socialLinks", "analyticsIds"];
-        for (const key of allowed) {
-          if (params[key] !== undefined) patch[key] = params[key];
-        }
-        if (row) {
-          await db.update(settings).set(patch).where(eq(settings.siteId, siteId));
-        }
-        return json({ result: { ok: true } });
-      }
-
-      default:
-        return mcpError(`Unknown tool: ${tool}`, 404);
+    try {
+      return json({ result: await tool.handler(legacy.params ?? {}, context) });
+    } catch (error) {
+      const mapped = errorFor(error);
+      if (mapped.rpc === RPC_ERRORS.internalError) console.error("[MCP]", error);
+      const status =
+        mapped.rpc === RPC_ERRORS.forbidden
+          ? 403
+          : mapped.rpc === RPC_ERRORS.internalError
+            ? 500
+            : 400;
+      return json({ error: mapped.message, ...(mapped.data ? { data: mapped.data } : {}) }, status);
     }
-  } catch (err: unknown) {
-    console.error("[MCP]", err);
-    return mcpError(err instanceof Error ? err.message : "Internal error", 500);
   }
+
+  const parsed = parseRpcBody(body);
+  if (parsed.kind === "error") return json(parsed.response, 400);
+
+  if (parsed.kind === "single") {
+    const response = await handleRpc(parsed.request, context);
+    // A notification gets 202 with no body, which is what the spec asks for.
+    return response ? json(response) : new Response(null, { status: 202 });
+  }
+
+  const responses: RpcResponse[] = [];
+  for (const item of parsed.requests) {
+    if (
+      !item ||
+      typeof item !== "object" ||
+      item.jsonrpc !== "2.0" ||
+      typeof item.method !== "string"
+    ) {
+      responses.push(failure(null, RPC_ERRORS.invalidRequest));
+      continue;
+    }
+    const response = await handleRpc(item, context);
+    if (response) responses.push(response);
+  }
+
+  const batch = batchResponse(responses);
+  return batch ? json(batch) : new Response(null, { status: 202 });
 };
 
-export const GET: APIRoute = async () => {
+/**
+ * Discovery over GET.
+ *
+ * Unauthenticated and deliberately thin: it says what this is and which protocol it speaks, so
+ * a client can find out how to talk to it before it has a token. The tool list is *not* here —
+ * that needs a token, because enumerating the write surface of a CMS to anybody who asks is
+ * free reconnaissance.
+ */
+export const GET: APIRoute = async ({ url }) => {
   return json({
-    name: "sASTRe CMS",
-    version: "0.1.0",
-    tools: [
-      { name: "list_content_types", description: "List all content types" },
-      { name: "list_nodes", description: "List nodes, optionally filtered by contentTypeId and status" },
-      { name: "get_node", description: "Get a node by id or path" },
-      { name: "create_node", description: "Create a new node" },
-      { name: "update_node", description: "Update an existing node" },
-      { name: "publish_node", description: "Publish a node (sets status=published)" },
-      { name: "delete_node", description: "Delete a node (must have no children)" },
-      { name: "list_media", description: "List all media files" },
-      { name: "search_content", description: "Search nodes by title or path" },
-      { name: "get_settings", description: "Get site settings" },
-      { name: "update_settings", description: "Update site settings (admin only)" },
-    ],
+    ...SERVER_INFO,
+    protocol: "jsonrpc-2.0",
+    endpoint: new URL("/api/mcp", url.origin).toString(),
+    methods: ["initialize", "tools/list", "tools/call", "ping"],
+    authentication: "Bearer <token de /admin/tokens>",
+    note: "Se acepta también el formato antiguo {tool, params} para los tokens ya emitidos.",
   });
 };
