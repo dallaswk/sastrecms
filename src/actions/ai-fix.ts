@@ -7,6 +7,18 @@ import { chatCompletion, missingAiFields, type AiConfig } from "@lib/ai";
 import { visibleNodes } from "@lib/node-queries";
 import { invalidateNode } from "@lib/cache-invalidate";
 import { findUrlInValue, urlMatchCandidates } from "@lib/media-usage";
+import { sectionsFieldOf } from "@lib/renderers";
+import { hasVisibleContent } from "@lib/page-content";
+import { sanitizeFields } from "@lib/sanitize";
+import { generateId } from "@lib/id";
+import {
+  contentPrompt,
+  extractJsonArray,
+  checkBlocks,
+  summariseBlocks,
+  issuesAsInstruction,
+  MIN_BLOCKS,
+} from "@lib/ai-content";
 import {
   AI_TASKS,
   ALT_LIMITS,
@@ -100,6 +112,184 @@ function pagesUsing(
 
 export const aiFixActions = {
   /**
+   * Proposes the blocks of a whole page.
+   *
+   * A hint is required, not optional: at this volume a model with only a title invents a sector
+   * and produces four confident paragraphs about a different business. One retry is attempted
+   * automatically when the first answer has fixable problems, with those problems fed back — a
+   * second identical request would just get a second identical answer.
+   */
+  proposeContent: defineAction({
+    input: z.object({
+      nodeId: z.string(),
+      hint: z.string().min(10).max(2000),
+    }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new ActionError({ code: "UNAUTHORIZED", message: "Unauthorized" });
+      const siteId = context.locals.siteId;
+      const db = context.locals.db;
+      await requireSiteRole(db, context.locals.user.id, siteId);
+
+      const config = await loadAi(context);
+      const missing = missingAiFields(config);
+      if (missing.length) {
+        return { ok: false as const, reason: `Falta ${missing.join(" y ")} en Ajustes → Inteligencia artificial.` };
+      }
+
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
+        with: { contentType: true },
+      });
+      if (!node) return { ok: false as const, reason: "Esa página ya no existe." };
+
+      const sectionsField = sectionsFieldOf(node.contentType ?? null);
+      if (!sectionsField) {
+        return {
+          ok: false as const,
+          reason: `El tipo «${node.contentType?.key}» no se compone de bloques, así que no hay nada que generar.`,
+        };
+      }
+
+      const site = await loadSiteContext(context);
+      const built = contentPrompt(site, {
+        title: node.title,
+        path: node.path,
+        hint: input.hint,
+      });
+
+      let attempt = 0;
+      let issues: ReturnType<typeof checkBlocks>["issues"] = [];
+      let blocks: ReturnType<typeof checkBlocks>["blocks"] = [];
+      let lastReason = "";
+
+      // Two attempts at most. A third would be a third bill for the same request.
+      while (attempt < 2) {
+        const retry = attempt > 0 ? `\n\n${issuesAsInstruction(issues)}` : "";
+        const result = await chatCompletion(
+          config,
+          [
+            { role: "system", content: built.system },
+            { role: "user", content: built.prompt + retry },
+          ],
+          { maxTokens: 2500, temperature: 0.7, timeoutMs: 60_000 }
+        );
+
+        if (!result.ok) return { ok: false as const, reason: result.reason };
+
+        const extracted = extractJsonArray(result.text);
+        if (!extracted.ok) {
+          lastReason = extracted.reason;
+          issues = [{ index: 0, message: extracted.reason }];
+          attempt++;
+          continue;
+        }
+
+        const checked = checkBlocks(extracted.value, () => generateId("sec"));
+        blocks = checked.blocks;
+        issues = checked.issues;
+
+        // Enough usable blocks to be a page. One valid block out of six is not worth showing.
+        if (blocks.length >= MIN_BLOCKS) break;
+        lastReason = `Sólo ${blocks.length} bloque(s) válidos.`;
+        attempt++;
+      }
+
+      if (blocks.length === 0) {
+        return {
+          ok: false as const,
+          reason: lastReason || "El modelo no ha devuelto bloques utilizables.",
+          issues,
+        };
+      }
+
+      return {
+        ok: true as const,
+        blocks,
+        summary: summariseBlocks(blocks),
+        issues,
+        attempts: attempt + 1,
+      };
+    },
+  }),
+
+  /**
+   * Saves blocks a person has seen.
+   *
+   * Re-validated here rather than trusted: the browser could have been sitting on the proposal
+   * while somebody edited the section registry, and the value arrives over the wire either way.
+   * Appended, never replacing — a page that turned out not to be empty keeps what it had.
+   */
+  acceptContent: defineAction({
+    input: z.object({
+      nodeId: z.string(),
+      blocks: z.array(z.record(z.string(), z.unknown())).min(1).max(12),
+    }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new ActionError({ code: "UNAUTHORIZED", message: "Unauthorized" });
+      const siteId = context.locals.siteId;
+      const db = context.locals.db;
+
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
+        with: { contentType: true },
+      });
+      if (!node) throw new ActionError({ code: "BAD_REQUEST", message: "Esa página ya no existe." });
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "edit");
+
+      const sectionsField = sectionsFieldOf(node.contentType ?? null);
+      if (!sectionsField) {
+        throw new ActionError({ code: "BAD_REQUEST", message: "Ese tipo no se compone de bloques." });
+      }
+
+      const checked = checkBlocks(input.blocks, () => generateId("sec"));
+      if (checked.blocks.length === 0) {
+        throw new ActionError({
+          code: "BAD_REQUEST",
+          message: `Ninguno de los bloques es válido. ${checked.issues.map((i) => i.message).join(" ")}`,
+        });
+      }
+
+      const fields = { ...((node.fields ?? {}) as Record<string, unknown>) };
+      const existing = Array.isArray(fields[sectionsField.key])
+        ? (fields[sectionsField.key] as unknown[])
+        : [];
+      fields[sectionsField.key] = [...existing, ...checked.blocks];
+
+      /*
+       * Saved as a draft when the page was published.
+       *
+       * An empty published page is already visible; replacing it with four paragraphs nobody has
+       * read on the live site is worse than leaving it empty. Unpublishing makes the next step —
+       * look at it, then publish — explicit.
+       */
+      const wasPublished = node.status === "published";
+
+      await db
+        .update(nodes)
+        .set({
+          fields: sanitizeFields(fields),
+          ...(wasPublished ? { status: "draft" as const } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(nodes.id, node.id), eq(nodes.siteId, siteId)));
+
+      await invalidateNode(context.cache, {
+        siteId,
+        nodeId: node.id,
+        contentTypeId: node.contentTypeId,
+        parentId: node.parentId,
+      });
+
+      return {
+        ok: true,
+        added: checked.blocks.length,
+        path: node.path,
+        unpublished: wasPublished,
+      };
+    },
+  }),
+
+  /**
    * What this task has to work through.
    *
    * Returns the context too, so the panel can show what the model will be told — a proposal you
@@ -167,16 +357,36 @@ export const aiFixActions = {
         return { task: input.task, site, items, missing, limits: ALT_LIMITS };
       }
 
-      // empty-pages: the panel is not built for this yet, but the count is honest.
+      /*
+       * Empty pages, by the shared rule.
+       *
+       * `extractPageText` alone counted the three legal pages as empty — their `legal` block
+       * generates its whole text at render time — and offered them up for the AI to write
+       * invented legal text over. `hasVisibleContent` is the same rule the dashboard uses.
+       */
       const published = await db.query.nodes.findMany({
         where: visibleNodes(siteId, new Date()),
         columns: { id: true, title: true, path: true, fields: true },
+        with: { contentType: true },
       });
-      const items = published
-        .filter((node) => !extractPageText(node.fields).trim())
+      const empty = published.filter((node) => !hasVisibleContent(node.fields, node.contentType));
+
+      /*
+       * Only pages that can actually hold blocks.
+       *
+       * Without this the panel listed three empty pages and every attempt on them failed with
+       * «el tipo post no se compone de bloques» — a list of buttons that cannot work. A `post`
+       * with no body needs its richtext written in the editor, which is a different job.
+       */
+      const items = empty
+        .filter((node) => !!sectionsFieldOf(node.contentType ?? null))
         .map((node) => ({ id: node.id, path: node.path, title: node.title, content: "", siblings: [] }));
 
-      return { task: input.task, site, items, missing, limits: DESCRIPTION_LIMITS };
+      const notComposable = empty
+        .filter((node) => !sectionsFieldOf(node.contentType ?? null))
+        .map((node) => ({ path: node.path, title: node.title, type: node.contentType?.key ?? "?" }));
+
+      return { task: input.task, site, items, missing, limits: DESCRIPTION_LIMITS, notComposable };
     },
   }),
 

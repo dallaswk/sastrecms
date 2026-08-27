@@ -1,6 +1,8 @@
 ---
 import AdminLayout from "@layouts/AdminLayout.astro";
 import AiFixPanel from "@components/admin/AiFixPanel.vue";
+import AiContentPanel from "@components/admin/AiContentPanel.vue";
+import { contentSectionLabels } from "@lib/ai-content";
 import { AI_TASKS, type AiTaskId } from "@lib/ai-tasks";
 import { hasSiteRole } from "@lib/permissions";
 export const prerender = false;
@@ -28,8 +30,11 @@ const TITLES: Record<AiTaskId, { title: string; description: string }> = {
       "vez de inventárselo.",
   },
   "empty-pages": {
-    title: "Redactar contenido",
-    description: "Páginas publicadas que no muestran nada.",
+    title: "Componer páginas",
+    description:
+      "Páginas publicadas que no muestran nada. La IA propone los bloques a partir de lo que le " +
+      "cuentes de cada una — la explicación es obligatoria, porque con sólo el título se " +
+      "inventaría el sector. Nada se guarda hasta que revisas los bloques.",
   },
 };
 
@@ -46,6 +51,12 @@ const { data, error } = await Astro.callAction(
 
 if (error) throw error;
 
+const TAB_LABELS: Record<AiTaskId, string> = {
+  descriptions: "Descripciones",
+  alt: "Imágenes",
+  "empty-pages": "Páginas vacías",
+};
+
 const meta = TITLES[task];
 ---
 
@@ -55,23 +66,33 @@ const meta = TITLES[task];
   breadcrumbs={[{ label: "Panel", href: "/admin" }]}
 >
   <div slot="actions" class="flex gap-1">
-    {AI_TASKS.filter((id) => id !== "empty-pages").map((id) => (
+    {AI_TASKS.map((id) => (
       <a
         href={`/admin/asistente?tarea=${id}`}
         class:list={[
           "btn btn-sm",
           id === task ? "btn-primary" : "btn-ghost border border-base-300",
         ]}
-      >{id === "descriptions" ? "Descripciones" : "Imágenes"}</a>
+      >{TAB_LABELS[id]}</a>
     ))}
   </div>
 
-  <AiFixPanel
-    client:load
-    task={task}
-    items={JSON.stringify(data!.items)}
-    missing={JSON.stringify(data!.missing)}
-    limits={JSON.stringify(data!.limits)}
-    siteContext={JSON.stringify(data!.site)}
-  />
+  {task === "empty-pages" ? (
+    <AiContentPanel
+      client:load
+      items={JSON.stringify(data!.items)}
+      missing={JSON.stringify(data!.missing)}
+      sectionLabels={JSON.stringify(contentSectionLabels())}
+      notComposable={JSON.stringify(("notComposable" in data! ? data!.notComposable : []) ?? [])}
+    />
+  ) : (
+    <AiFixPanel
+      client:load
+      task={task}
+      items={JSON.stringify(data!.items)}
+      missing={JSON.stringify(data!.missing)}
+      limits={JSON.stringify(data!.limits)}
+      siteContext={JSON.stringify(data!.site)}
+    />
+  )}
 </AdminLayout>
