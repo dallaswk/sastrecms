@@ -4,6 +4,7 @@ import { eq, and, desc, isNotNull, inArray } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
 import { generateId, slugify, computePath, reservedSlugError } from "@lib/id";
 import { requirePermission, viewableContentTypeIds } from "@lib/permissions";
+import { sanitizeFields } from "@lib/sanitize";
 
 const NodeSeoSchema = z.object({
   metaTitle: z.string().optional(),
@@ -134,7 +135,7 @@ export const nodeActions = {
         position: 0,
         status: "draft",
         title: input.title,
-        fields: input.fields,
+        fields: sanitizeFields(input.fields),
         seo: input.seo ?? {},
         createdBy: context.locals.user.id,
         createdVia: "web",
@@ -175,7 +176,7 @@ export const nodeActions = {
       const updates: Partial<typeof node> = { updatedAt: new Date() };
 
       if (input.title) updates.title = input.title;
-      if (input.fields) updates.fields = input.fields;
+      if (input.fields) updates.fields = sanitizeFields(input.fields);
       if (input.seo) updates.seo = input.seo;
       if (input.status) updates.status = input.status;
 

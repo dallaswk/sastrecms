@@ -1,4 +1,5 @@
 ---
+import { sanitizeHtml } from "@lib/sanitize";
 interface Props {
   media?: Map<string, import("@lib/media-lookup").MediaInfo>; id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data } = Astro.props;
@@ -12,6 +13,6 @@ const width = WIDTH[(data.width as keyof typeof WIDTH) ?? "normal"] ?? WIDTH.nor
 <section id={anchor ?? id} class="bg-base-100">
   <div class={`${width} mx-auto px-4 py-14 flex flex-col gap-4`}>
     {title && <h2 class="text-3xl font-bold">{title}</h2>}
-    <div class="prose max-w-none" set:html={(data.body as string) ?? ""} />
+    <div class="prose max-w-none" set:html={sanitizeHtml((data.body as string) ?? "")} />
   </div>
 </section>

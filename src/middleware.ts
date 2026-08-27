@@ -1,4 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
+import { SECURITY_HEADERS, HSTS_HEADER, buildCsp, CSP_HEADER_REPORT } from "@lib/headers";
 import { eq } from "drizzle-orm";
 import { createDb, type Database } from "@db/client";
 import { createAuth } from "@lib/auth";
@@ -152,5 +153,47 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect("/admin/login");
   }
 
-  return next();
+  // The R2 host, so img-src can name it instead of allowing every https origin.
+  let mediaHost: string | undefined;
+  const publicBase = env.R2_PUBLIC_URL;
+  if (publicBase) {
+    try {
+      mediaHost = new URL(publicBase).origin;
+    } catch {
+      // A malformed value leaves img-src without it, which fails closed.
+    }
+  }
+
+  const response = await next();
+
+  /*
+   * Security headers on the way out.
+   *
+   * Applied here rather than in a host config so they follow the app to any deployment, and
+   * after `next()` so a route that sets its own Content-Type or Cache-Control keeps it.
+   *
+   * The CSP is report-only for now. Enforcing it before it has been watched in production is
+   * how a site silently loses its own JavaScript for every visitor, and the whole point of
+   * report-only is that the reports arrive first.
+   */
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    if (!response.headers.has(name)) response.headers.set(name, value);
+  }
+
+  if (context.url.protocol === "https:") {
+    response.headers.set("Strict-Transport-Security", HSTS_HEADER);
+  }
+
+  // Only on documents: a CSP on a stylesheet or an image is noise in the report endpoint.
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (contentType.includes("text/html")) {
+    const analytics = (siteSettings?.analyticsIds ?? {}) as Record<string, string>;
+    const csp = buildCsp({
+      allowAnalytics: Object.values(analytics).some((v) => typeof v === "string" && v.trim()),
+      ...(mediaHost ? { mediaHost } : {}),
+    });
+    response.headers.set(CSP_HEADER_REPORT, csp);
+  }
+
+  return response;
 });

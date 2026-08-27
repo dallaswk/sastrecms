@@ -1,4 +1,5 @@
 ---
+import { sanitizeHtml } from "@lib/sanitize";
 interface Props {
   node: Record<string, unknown>;
   contentType: Record<string, unknown>;
@@ -12,7 +13,7 @@ const { node, contentType, children, fields } = Astro.props;
   <header class="mb-10">
     <h1 class="text-4xl font-bold">{node.title as string}</h1>
     {fields.body && (
-      <div class="prose mt-4" set:html={fields.body as string} />
+      <div class="prose mt-4" set:html={sanitizeHtml(fields.body as string)} />
     )}
   </header>
 

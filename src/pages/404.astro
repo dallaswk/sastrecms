@@ -1,0 +1,28 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+export const prerender = false;
+
+/*
+ * A real page, not an empty 404.
+ *
+ * `[...slug]` used to answer `new Response(null, { status: 404 })`, so a mistyped URL on a
+ * client's site showed the browser's own error page: no header, no menu, no way back. On a
+ * site being handed to a client that reads as the site being broken.
+ *
+ * Deliberately noindex and never cached: a 404 that gets cached is a page that stays missing
+ * after it has been created, which is exactly what happens when a draft is published and
+ * someone had already tried the URL.
+ */
+Astro.response.headers.set("Cache-Control", "no-store");
+---
+
+<BaseLayout title="Página no encontrada" noindex>
+  <div class="site-narrow px-4 py-24 flex flex-col items-center text-center gap-4">
+    <p class="text-5xl font-black text-primary">404</p>
+    <h1 class="text-2xl font-bold">Esta página no existe</h1>
+    <p class="text-base-content/70">
+      Puede que el enlace esté mal escrito o que la página se haya movido.
+    </p>
+    <a href="/" class="btn btn-primary mt-2">Volver al inicio</a>
+  </div>
+</BaseLayout>

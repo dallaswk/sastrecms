@@ -8,6 +8,7 @@ import {
   isAdmin,
   viewableContentTypeIds,
 } from "@lib/permissions";
+import { sanitizeFields } from "@lib/sanitize";
 
 export const prerender = false;
 
@@ -125,7 +126,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         await db.insert(nodes).values({
           id, siteId, contentTypeId, parentId: parentId ?? null,
           locale, slug, path, position: 0, status: "draft",
-          title, fields, seo, createdBy: tokenResult.userId,
+          title, fields: sanitizeFields(fields), seo, createdBy: tokenResult.userId,
           createdVia: "mcp", createdAt: now, updatedAt: now,
         });
         return json({ result: { id, path } }, 201);
@@ -146,7 +147,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
         const patch: Record<string, unknown> = { updatedAt: new Date() };
         if (updates.title) patch.title = updates.title;
-        if (updates.fields) patch.fields = updates.fields;
+        // The MCP surface writes fields without going through the actions, so the
+        // sanitising has to happen here too — an agent is exactly the caller most
+        // likely to paste markup it did not write.
+        if (updates.fields) patch.fields = sanitizeFields(updates.fields);
         if (updates.seo) patch.seo = updates.seo;
         if (updates.status) patch.status = updates.status;
         if (updates.slug && updates.slug !== node.slug) {

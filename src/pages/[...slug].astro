@@ -29,7 +29,9 @@ const node = await db.query.nodes.findFirst({
   with: { contentType: true },
 });
 
-if (!node) return new Response(null, { status: 404 });
+// Rewritten rather than answered empty: the visitor gets the site's own 404 page, with its
+// header and a way back, and the status stays 404 for a crawler.
+if (!node) return Astro.rewrite("/404");
 
 const ct = (node as typeof node & { contentType: typeof contentTypes.$inferSelect }).contentType;
 

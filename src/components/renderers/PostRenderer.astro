@@ -1,4 +1,5 @@
 ---
+import { sanitizeHtml } from "@lib/sanitize";
 interface Props {
   node: Record<string, unknown>;
   contentType: Record<string, unknown>;
@@ -33,6 +34,6 @@ const publishedAt = node.publishedAt
   </header>
 
   {fields.body && (
-    <div class="prose prose-lg" set:html={fields.body as string} />
+    <div class="prose prose-lg" set:html={sanitizeHtml(fields.body as string)} />
   )}
 </article>
