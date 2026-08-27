@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { eq, and } from "drizzle-orm";
 import { nodes } from "@db/schema";
+import { visibleNodes } from "@lib/node-queries";
 
 export const prerender = false;
 
@@ -10,7 +11,7 @@ export const GET: APIRoute = async ({ locals, site, url }) => {
   const baseUrl = site?.origin ?? url.origin;
 
   const publishedNodes = await db.query.nodes.findMany({
-    where: and(eq(nodes.siteId, siteId), eq(nodes.status, "published")),
+    where: visibleNodes(siteId, new Date()),
     orderBy: (n, { desc }) => [desc(n.updatedAt)],
   });
 

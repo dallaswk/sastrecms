@@ -91,6 +91,23 @@ export const nodes = sqliteTable(
       .notNull()
       .default("draft"),
     publishedAt: integer("published_at", { mode: "timestamp" }),
+    /**
+     * When a scheduled node becomes visible.
+     *
+     * No cron involved: the public query accepts `scheduled AND publish_at <= now`, so the page
+     * appears on the first request after the moment passes. That is also why the cache TTL of a
+     * listing shortens as its next scheduled child approaches — nothing writes at that instant,
+     * so nothing would purge.
+     */
+    publishAt: integer("publish_at", { mode: "timestamp" }),
+    /**
+     * Soft delete. Non-null means the node is in the trash.
+     *
+     * Every read has to filter on this, which is the risk: one query that forgets and deleted
+     * content is still live. `visibleNodes()` and `activeNodes()` in lib/publishing exist so
+     * there is one definition of the filter rather than nine.
+     */
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
     title: text("title").notNull(),
     fields: text("fields", { mode: "json" })
       .notNull()
@@ -114,6 +131,9 @@ export const nodes = sqliteTable(
     uniqueIndex("nodes_site_path_idx").on(t.siteId, t.path),
     index("nodes_parent_idx").on(t.parentId),
     index("nodes_status_idx").on(t.status),
+    // The public query filters on both of these on every request.
+    index("nodes_visibility_idx").on(t.siteId, t.status, t.publishAt),
+    index("nodes_deleted_idx").on(t.siteId, t.deletedAt),
   ]
 );
 
@@ -502,4 +522,45 @@ export const formSubmissions = sqliteTable(
     // The rate limiter's query: count by hash within a window.
     index("form_submissions_rate_idx").on(t.ipHash, t.createdAt),
   ]
+);
+
+
+/**
+ * A snapshot of a node, taken before it is overwritten.
+ *
+ * Written on every update rather than on demand: the moment somebody wants a previous version
+ * is always *after* the change that lost it. Capped per node, because `fields` holds a whole
+ * page of sections and an unbounded history would be the largest table in the database.
+ *
+ * Not a diff. A full copy is a few kilobytes and restoring it is one write; a diff chain saves
+ * space and turns "restore this" into replaying every step since, which is where that design
+ * goes wrong.
+ */
+export const nodeRevisions = sqliteTable(
+  "node_revisions",
+  {
+    id: text("id").primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    nodeId: text("node_id").notNull(),
+    /** Snapshot of the fields that can be restored. */
+    title: text("title").notNull(),
+    slug: text("slug").notNull(),
+    fields: text("fields", { mode: "json" })
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'`),
+    seo: text("seo", { mode: "json" }).$type<NodeSeo>().default(sql`'{}'`),
+    status: text("status").notNull(),
+    /** Who made the change this snapshot precedes, and how. */
+    authorId: text("author_id").references(() => users.id),
+    authorVia: text("author_via", { enum: ["web", "mcp"] }).notNull().default("web"),
+    /** Short description of what changed, computed at write time. */
+    summary: text("summary"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => [index("node_revisions_node_idx").on(t.nodeId, t.createdAt)]
 );

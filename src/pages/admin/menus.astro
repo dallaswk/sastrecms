@@ -4,6 +4,7 @@ import MenuEditor from "@components/admin/MenuEditor.vue";
 import { eq, and } from "drizzle-orm";
 import { settings, nodes } from "@db/schema";
 import { hasSiteRole } from "@lib/permissions";
+import { visibleNodes } from "@lib/node-queries";
 export const prerender = false;
 
 const db = Astro.locals.db;
@@ -23,7 +24,7 @@ const siteSettings = await db.query.settings.findFirst({
 // Only published pages are offered: an entry pointing at a draft is a link to a 404 on
 // every page of the site.
 const linkables = await db.query.nodes.findMany({
-  where: and(eq(nodes.siteId, Astro.locals.siteId), eq(nodes.status, "published")),
+  where: visibleNodes(Astro.locals.siteId, new Date()),
   columns: { id: true, title: true, path: true },
   orderBy: (n, { asc }) => [asc(n.path)],
 });

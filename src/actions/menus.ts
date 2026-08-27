@@ -5,6 +5,7 @@ import { settings, nodes } from "@db/schema";
 import { requireSiteRole } from "@lib/permissions";
 import { normalizeMenus } from "@lib/menus";
 import { invalidateSettings } from "@lib/cache-invalidate";
+import { visibleNodes } from "@lib/node-queries";
 
 const MenuItemSchema = z.object({
   label: z.string().min(1),
@@ -47,7 +48,7 @@ export const menuActions = {
       // Only published pages: an entry pointing at a draft is a link to a 404 on every
       // page of the site.
       const linkables = await db.query.nodes.findMany({
-        where: and(eq(nodes.siteId, siteId), eq(nodes.status, "published")),
+        where: visibleNodes(siteId, new Date()),
         columns: { id: true, title: true, path: true },
         orderBy: (n, { asc }) => [asc(n.path)],
       });

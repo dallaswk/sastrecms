@@ -6,6 +6,9 @@ import { buildWebPageSchema, buildArticleSchema, buildBreadcrumbSchema, buildOrg
 import { resolveRenderer, sectionsFieldOf } from "@lib/renderers";
 import { lookupMedia } from "@lib/media-lookup";
 import { tagsForNode, PUBLIC_CACHE } from "@lib/cache-tags";
+import { visibleNodes, previewableNodes } from "@lib/node-queries";
+import { verifyPreviewToken, PREVIEW_PARAM } from "@lib/preview";
+import { nextScheduledAt, cacheTtlFor } from "@lib/publishing";
 import { collectMediaUrls } from "@lib/media-url";
 import { parseSections } from "@lib/sections/validate";
 import GenericRenderer from "@components/renderers/GenericRenderer.astro";
@@ -21,11 +24,30 @@ const siteId = Astro.locals.siteId;
 const slugParam = Astro.params.slug ?? "";
 const path = slugParam ? `/${slugParam}` : "/";
 
+/*
+ * One `now` for the whole render.
+ *
+ * Two queries comparing against two different instants could include a node in a listing and
+ * then 404 on its own page — a race that would only show up at the moment something goes live.
+ */
+const now = new Date();
+
+/*
+ * A preview link lets a draft through, for this one page only.
+ *
+ * The node id is inside the signature, so a token cannot be moved to another page, and the
+ * response is never cached or indexed — a preview that got cached would serve the draft to
+ * everybody who asked for the real URL afterwards.
+ */
+const previewToken = Astro.url.searchParams.get(PREVIEW_PARAM);
+const preview = previewToken
+  ? await verifyPreviewToken(previewToken, Astro.locals.env?.BETTER_AUTH_SECRET ?? "", now)
+  : null;
+
 const node = await db.query.nodes.findFirst({
   where: and(
-    eq(nodes.siteId, siteId),
-    eq(nodes.path, path),
-    eq(nodes.status, "published")
+    preview?.valid ? previewableNodes(siteId) : visibleNodes(siteId, now),
+    eq(nodes.path, path)
   ),
   with: { contentType: true },
 });
@@ -61,10 +83,7 @@ const jsonLd = ct?.key === "post"
 let children: typeof nodes.$inferSelect[] = [];
 if (ct?.hasArchive) {
   children = await db.query.nodes.findMany({
-    where: and(
-      eq(nodes.parentId, node.id),
-      eq(nodes.status, "published")
-    ),
+    where: and(visibleNodes(siteId, now), eq(nodes.parentId, node.id)),
     orderBy: (n, { desc }) => [desc(n.publishedAt)],
   });
 }
@@ -121,17 +140,45 @@ const mediaMap = await lookupMedia(db, collectMediaUrls(fields));
  * stale page looks exactly like a working one, which makes this the one place where a naming
  * mistake is invisible until a client notices their update never appeared.
  */
-Astro.cache.set({
-  ...PUBLIC_CACHE,
-  tags: tagsForNode({
-    siteId: Astro.locals.siteId,
-    nodeId: node.id,
-    contentTypeId: node.contentTypeId,
-    referencedNodeIds: children.map((child) => child.id),
-    ...(ct?.id ? { referencedTypeIds: [ct.id] } : {}),
-  }),
-  ...(node.updatedAt ? { lastModified: node.updatedAt } : {}),
-});
+/*
+ * Scheduled publishing has no write at the moment of publication, so nothing purges. A page
+ * cached for an hour would keep showing yesterday's listing for up to an hour after a post went
+ * live, so the lifetime is capped at the time left until the next scheduled child.
+ */
+const upcoming = nextScheduledAt(children, now);
+
+/*
+ * A valid token for a *different* page does not open this one.
+ *
+ * Checked after the lookup because the path is what identifies the page; without this, one
+ * token would unlock every draft on the site.
+ */
+const isPreviewing = !!preview?.valid && preview.nodeId === node.id;
+
+if (previewToken && !isPreviewing) {
+  return Astro.rewrite("/404");
+}
+
+if (isPreviewing) {
+  Astro.response.headers.set("Cache-Control", "private, no-store");
+  Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
+  Astro.cache.set({ maxAge: 0, swr: 0 });
+}
+
+if (!isPreviewing) {
+  Astro.cache.set({
+    ...PUBLIC_CACHE,
+    maxAge: cacheTtlFor(PUBLIC_CACHE.maxAge, now, upcoming),
+    tags: tagsForNode({
+      siteId: Astro.locals.siteId,
+      nodeId: node.id,
+      contentTypeId: node.contentTypeId,
+      referencedNodeIds: children.map((child) => child.id),
+      ...(ct?.id ? { referencedTypeIds: [ct.id] } : {}),
+    }),
+    ...(node.updatedAt ? { lastModified: node.updatedAt } : {}),
+  });
+}
 
 const renderer = resolveRenderer(ct, fields, {
   hasChildren: children.length > 0,

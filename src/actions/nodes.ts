@@ -1,11 +1,15 @@
-import { defineAction } from "astro:actions";
+import { defineAction, ActionError } from "astro:actions";
 import { z } from "astro:schema";
-import { eq, and, desc, isNotNull, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
 import { generateId, slugify, computePath, reservedSlugError } from "@lib/id";
-import { requirePermission, viewableContentTypeIds } from "@lib/permissions";
+import { requireAdmin, requirePermission, requireSiteRole, viewableContentTypeIds } from "@lib/permissions";
 import { sanitizeFields } from "@lib/sanitize";
 import { invalidateNode } from "@lib/cache-invalidate";
+import { nodeRevisions } from "@db/schema";
+import { checkConflict, checkSchedule } from "@lib/publishing";
+import { isWorthSnapshotting, summariseChange, revisionsToPrune } from "@lib/revisions";
+import { createPreviewToken, previewUrl, DEFAULT_PREVIEW_TTL_SECONDS } from "@lib/preview";
 
 const NodeSeoSchema = z.object({
   metaTitle: z.string().optional(),
@@ -163,6 +167,15 @@ export const nodeActions = {
       fields: z.record(z.string(), z.unknown()).optional(),
       seo: NodeSeoSchema.optional(),
       status: z.enum(["draft", "published", "scheduled"]).optional(),
+      /**
+       * The `updatedAt` the editor loaded.
+       *
+       * Optional so a script or an agent that does not care is not blocked, but the form always
+       * sends it: without it this was last-writer-wins over the *whole* `fields` object, so two
+       * people on the same page did not merge — the second save replaced every block the first
+       * one had added.
+       */
+      expectedUpdatedAt: z.coerce.date().optional(),
     }),
     handler: async (input, context) => {
       if (!context.locals.user) throw new Error("Unauthorized");
@@ -170,7 +183,7 @@ export const nodeActions = {
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
-        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
+        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
       });
       if (!node) throw new Error("Node not found");
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "edit");
@@ -179,6 +192,57 @@ export const nodeActions = {
       // nodes.publish enforces. Any status transition — including unpublishing — needs it.
       if (input.status && input.status !== node.status) {
         await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "publish");
+      }
+
+      const conflict = checkConflict(node, input.expectedUpdatedAt);
+      if (!conflict.ok) {
+        throw new ActionError({ code: "CONFLICT", message: conflict.reason });
+      }
+
+      /*
+       * The snapshot goes in before the write, and only when something actually changed.
+       *
+       * Before, because the moment somebody wants the previous version is always after the
+       * change that lost it. Only on a real change, because a save that alters nothing is
+       * common — open a page, look at it, hit save — and twenty of those would push every
+       * real revision out of a capped history.
+       */
+      const snapshot = {
+        title: node.title,
+        slug: node.slug,
+        status: node.status,
+        fields: node.fields as Record<string, unknown>,
+        seo: node.seo,
+      };
+      const proposed = {
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.slug !== undefined ? { slug: slugify(input.slug) } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.fields !== undefined ? { fields: input.fields } : {}),
+        ...(input.seo !== undefined ? { seo: input.seo } : {}),
+      };
+
+      if (isWorthSnapshotting(snapshot, proposed)) {
+        await db.insert(nodeRevisions).values({
+          id: generateId("rev"),
+          siteId,
+          nodeId: node.id,
+          ...snapshot,
+          authorId: context.locals.user.id,
+          authorVia: "web",
+          summary: summariseChange(snapshot, proposed),
+          createdAt: new Date(),
+        });
+
+        const existing = await db.query.nodeRevisions.findMany({
+          where: eq(nodeRevisions.nodeId, node.id),
+          columns: { id: true },
+          orderBy: (r, { asc }) => [asc(r.createdAt)],
+        });
+        const stale = revisionsToPrune(existing.map((row) => row.id));
+        if (stale.length) {
+          await db.delete(nodeRevisions).where(inArray(nodeRevisions.id, stale));
+        }
       }
 
       const updates: Partial<typeof node> = { updatedAt: new Date() };
@@ -257,18 +321,29 @@ export const nodeActions = {
     },
   }),
 
+  /**
+   * Deleting is now moving to the trash.
+   *
+   * `permanent` exists for emptying it, and is admin-only: a page is the client's work, and a
+   * mis-click that used to be irreversible now costs a click to undo. The path is freed either
+   * way — a trashed node keeps its own path, which would block re-creating a page at the same
+   * URL, so the trash renames it out of the way.
+   */
   delete: defineAction({
-    input: z.object({ id: z.string() }),
+    input: z.object({ id: z.string(), permanent: z.boolean().optional() }),
     handler: async (input, context) => {
       if (!context.locals.user) throw new Error("Unauthorized");
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const children = await db.query.nodes.findMany({
-        where: eq(nodes.parentId, input.id),
+        where: and(eq(nodes.parentId, input.id), isNull(nodes.deletedAt)),
       });
       if (children.length > 0) {
-        throw new Error("Cannot delete a node that has children");
+        throw new ActionError({
+          code: "BAD_REQUEST",
+          message: `Esa página tiene ${children.length} hija(s). Muévelas o bórralas primero.`,
+        });
       }
 
       const node = await db.query.nodes.findFirst({
@@ -277,8 +352,68 @@ export const nodeActions = {
       if (!node) throw new Error("Node not found");
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "delete");
 
+      if (input.permanent) {
+        await requireAdmin(db, context.locals.user.id, siteId);
+        await db.delete(nodeRevisions).where(eq(nodeRevisions.nodeId, input.id));
+        await db.delete(nodes).where(and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)));
+      } else {
+        const now = new Date();
+        await db
+          .update(nodes)
+          .set({
+            deletedAt: now,
+            // The path carries a unique index with siteId, so a trashed node would block
+            // creating a new page at the same URL. Suffixed rather than blanked so restoring
+            // can put it back.
+            path: `${node.path}#papelera-${now.getTime()}`,
+            updatedAt: now,
+          })
+          .where(and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)));
+      }
+
+      await invalidateNode(context.cache, {
+        siteId,
+        nodeId: input.id,
+        contentTypeId: node.contentTypeId,
+        parentId: node.parentId,
+      });
+
+      return { id: input.id, permanent: !!input.permanent };
+    },
+  }),
+
+  /** Puts a trashed node back, unless something has taken its path in the meantime. */
+  restore: defineAction({
+    input: z.object({ id: z.string() }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      const db = context.locals.db;
+
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
+      });
+      if (!node) throw new Error("Node not found");
+      if (!node.deletedAt) return { id: node.id, path: node.path, alreadyActive: true };
+
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "edit");
+
+      const originalPath = node.path.split("#papelera-")[0]!;
+      const clash = await db.query.nodes.findFirst({
+        where: and(eq(nodes.siteId, siteId), eq(nodes.path, originalPath), isNull(nodes.deletedAt)),
+      });
+      if (clash) {
+        throw new ActionError({
+          code: "CONFLICT",
+          message: `Ya hay otra página en "${originalPath}" («${clash.title}»). Cámbiale el slug a una de las dos antes de restaurar.`,
+        });
+      }
+
+      // Restored as a draft, never straight back to published: whatever the reason it was
+      // deleted, putting it live again without anyone looking is the wrong default.
       await db
-        .delete(nodes)
+        .update(nodes)
+        .set({ deletedAt: null, path: originalPath, status: "draft", updatedAt: new Date() })
         .where(and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)));
 
       await invalidateNode(context.cache, {
@@ -288,7 +423,199 @@ export const nodeActions = {
         parentId: node.parentId,
       });
 
-      return { id: input.id };
+      return { id: node.id, path: originalPath, status: "draft" };
+    },
+  }),
+
+  /**
+   * Scheduled publishing, with no cron.
+   *
+   * Sets the status and the moment; the public query accepts `scheduled AND publish_at <= now`,
+   * so the page appears on the first request after that instant. Nothing has to run.
+   */
+  schedule: defineAction({
+    input: z.object({ id: z.string(), publishAt: z.string() }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      const db = context.locals.db;
+
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
+      });
+      if (!node) throw new Error("Node not found");
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "publish");
+
+      const check = checkSchedule(input.publishAt, new Date());
+      if (!check.ok) throw new ActionError({ code: "BAD_REQUEST", message: check.reason });
+
+      await db
+        .update(nodes)
+        .set({ status: "scheduled", publishAt: check.publishAt, updatedAt: new Date() })
+        .where(and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)));
+
+      await invalidateNode(context.cache, {
+        siteId,
+        nodeId: input.id,
+        contentTypeId: node.contentTypeId,
+        parentId: node.parentId,
+      });
+
+      return { id: node.id, publishAt: check.publishAt };
+    },
+  }),
+
+  /** The history of one page, newest first. Summaries only: the snapshots are pages of JSON. */
+  revisions: defineAction({
+    input: z.object({ nodeId: z.string() }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      const db = context.locals.db;
+
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId)),
+      });
+      if (!node) throw new Error("Node not found");
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "view");
+
+      const rows = await db.query.nodeRevisions.findMany({
+        where: and(eq(nodeRevisions.nodeId, input.nodeId), eq(nodeRevisions.siteId, siteId)),
+        columns: { id: true, title: true, status: true, summary: true, authorVia: true, createdAt: true },
+        orderBy: [desc(nodeRevisions.createdAt)],
+      });
+
+      return rows;
+    },
+  }),
+
+  /**
+   * Puts a revision back.
+   *
+   * Restoring is itself an edit, so it goes through the same snapshot path — otherwise going
+   * back one version and then changing your mind would have nothing to go forward to.
+   */
+  restoreRevision: defineAction({
+    input: z.object({ revisionId: z.string() }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      const db = context.locals.db;
+
+      const revision = await db.query.nodeRevisions.findFirst({
+        where: and(eq(nodeRevisions.id, input.revisionId), eq(nodeRevisions.siteId, siteId)),
+      });
+      if (!revision) throw new Error("Revision not found");
+
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, revision.nodeId), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
+      });
+      if (!node) throw new Error("Node not found");
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "edit");
+
+      const snapshot = {
+        title: node.title,
+        slug: node.slug,
+        status: node.status,
+        fields: node.fields as Record<string, unknown>,
+        seo: node.seo,
+      };
+
+      await db.insert(nodeRevisions).values({
+        id: generateId("rev"),
+        siteId,
+        nodeId: node.id,
+        ...snapshot,
+        authorId: context.locals.user.id,
+        authorVia: "web",
+        summary: `antes de restaurar la versión del ${revision.createdAt.toLocaleString("es-ES")}`,
+        createdAt: new Date(),
+      });
+
+      /*
+       * The slug and the path are deliberately *not* restored.
+       *
+       * A URL that has been live is linked to from elsewhere, and silently moving the page back
+       * to a previous address breaks those links without anybody deciding to. The content comes
+       * back; the address stays where it is.
+       */
+      await db
+        .update(nodes)
+        .set({
+          title: revision.title,
+          fields: sanitizeFields(revision.fields as Record<string, unknown>),
+          seo: revision.seo,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(nodes.id, node.id), eq(nodes.siteId, siteId)));
+
+      await invalidateNode(context.cache, {
+        siteId,
+        nodeId: node.id,
+        contentTypeId: node.contentTypeId,
+        parentId: node.parentId,
+      });
+
+      return { nodeId: node.id, restoredFrom: revision.createdAt, keptPath: node.path };
+    },
+  }),
+
+  /** What is in the trash. */
+  trash: defineAction({
+    handler: async (_input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      const db = context.locals.db;
+      await requireSiteRole(db, context.locals.user.id, siteId);
+
+      const rows = await db.query.nodes.findMany({
+        where: and(eq(nodes.siteId, siteId), isNotNull(nodes.deletedAt)),
+        columns: { id: true, title: true, path: true, deletedAt: true, contentTypeId: true },
+        orderBy: [desc(nodes.deletedAt)],
+      });
+
+      const viewable = await viewableContentTypeIds(db, context.locals.user.id, siteId);
+      return rows
+        .filter((row) => viewable.has(row.contentTypeId))
+        .map((row) => ({ ...row, path: row.path.split("#papelera-")[0]! }));
+    },
+  }),
+
+  /**
+   * A shareable link to a draft.
+   *
+   * Signed and stateless: nothing is stored, so nothing has to be cleaned up, and rotating the
+   * app secret revokes every link at once.
+   */
+  previewLink: defineAction({
+    input: z.object({ nodeId: z.string() }),
+    handler: async (input, context) => {
+      if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      const db = context.locals.db;
+
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
+      });
+      if (!node) throw new Error("Node not found");
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "view");
+
+      const secret = context.locals.env?.BETTER_AUTH_SECRET;
+      if (!secret) {
+        throw new ActionError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "No hay secreto configurado, así que no se puede firmar el enlace.",
+        });
+      }
+
+      const now = new Date();
+      const token = await createPreviewToken(node.id, secret, now);
+      const path = node.path.split("#papelera-")[0]!;
+
+      return {
+        url: previewUrl(new URL(context.request.url).origin, path, token),
+        expiresAt: new Date(now.getTime() + DEFAULT_PREVIEW_TTL_SECONDS * 1000),
+      };
     },
   }),
 

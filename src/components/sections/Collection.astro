@@ -1,4 +1,5 @@
 ---
+import { visibleNodes } from "@lib/node-queries";
 import SmartImage from "@components/SmartImage.astro";
 import { imgProps } from "@lib/media-lookup";
 import { eq, and } from "drizzle-orm";
@@ -26,17 +27,20 @@ const db = Astro.locals.db;
 const siteId = Astro.locals.siteId;
 
 let parent: { id: string; title: string; path: string } | null = null;
+// One instant for both queries in this block.
+const now = new Date();
+
 let items: { id: string; title: string; path: string; fields: unknown; publishedAt: Date | null }[] = [];
 
 if (parentId) {
   parent = (await db.query.nodes.findFirst({
-    where: and(eq(nodes.id, parentId), eq(nodes.siteId, siteId)),
+    where: and(visibleNodes(siteId, now), eq(nodes.id, parentId)),
     columns: { id: true, title: true, path: true },
   })) ?? null;
 
   if (parent) {
     items = await db.query.nodes.findMany({
-      where: and(eq(nodes.parentId, parent.id), eq(nodes.status, "published")),
+      where: and(visibleNodes(siteId, now), eq(nodes.parentId, parent.id)),
       orderBy: (n, { desc }) => [desc(n.publishedAt)],
       limit,
       columns: { id: true, title: true, path: true, fields: true, publishedAt: true },
