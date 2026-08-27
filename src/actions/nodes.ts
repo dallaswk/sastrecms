@@ -104,7 +104,17 @@ export const nodeActions = {
       const existing = await db.query.nodes.findFirst({
         where: and(eq(nodes.siteId, siteId), eq(nodes.path, path)),
       });
-      if (existing) throw new Error(`Path "${path}" already exists`);
+      if (existing) {
+        // "index" at root level resolves to the locale root, so the clash is with the
+        // home page and "Path / already exists" reads as a non sequitur.
+        if (slug === "index" && !input.parentId) {
+          throw new Error(
+            `El slug "index" es la portada de este idioma (${path}), y ya existe. ` +
+              "Usa otro slug, o edita la portada existente."
+          );
+        }
+        throw new Error(`Path "${path}" already exists`);
+      }
 
       const id = generateId("node");
       const now = new Date();

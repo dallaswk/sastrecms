@@ -107,7 +107,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
         const existing = await db.query.nodes.findFirst({
           where: and(eq(nodes.siteId, siteId), eq(nodes.path, path)),
         });
-        if (existing) return mcpError(`Path "${path}" already exists`);
+        if (existing) {
+          if (slug === "index" && !parentId) {
+            return mcpError(
+              `El slug "index" es la portada de este idioma (${path}), y ya existe.`
+            );
+          }
+          return mcpError(`Path "${path}" already exists`);
+        }
 
         const id = generateId("node");
         const now = new Date();

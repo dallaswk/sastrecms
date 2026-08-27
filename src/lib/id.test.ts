@@ -56,6 +56,12 @@ describe("computePath", () => {
     it("is the root of its own locale for a translation", () => {
       expect(computePath(null, "index", "en", ES)).toBe("/en");
     });
+
+    it("is only special at root level", () => {
+      // Nested, "index" is just a path segment: a node called index under /blog is
+      // /blog/index, not /blog. Only the root of each locale has a home page.
+      expect(computePath("/blog", "index", "es", ES)).toBe("/blog/index");
+    });
   });
 
   describe("nested nodes", () => {

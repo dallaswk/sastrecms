@@ -14,13 +14,27 @@ export function createAuth(
   db: Database,
   resendApiKey?: string,
   emailFrom?: string,
+  // Optional in the type only because it follows optional parameters; the guard below
+  // makes the secret mandatory at runtime for every caller.
   options?: { secret?: string; baseURL?: string }
 ) {
+  // Better Auth falls back to process.env.BETTER_AUTH_SECRET when no secret is passed,
+  // and on Workers process.env isn't populated from bindings below compat date
+  // 2025-04-01. That fallback failing is invisible: sessions get signed with whatever it
+  // derives, and stop validating after a redeploy. Fail here instead, where the message
+  // says what is missing.
+  if (!options?.secret) {
+    throw new Error(
+      "BETTER_AUTH_SECRET no está configurado. Sin él las sesiones no sobreviven a un " +
+        "redespliegue. Genera uno con `openssl rand -base64 32` y añádelo al entorno."
+    );
+  }
+
   const key = resendApiKey ?? "";
   const from = emailFrom || "sASTRe <noreply@example.com>";
 
   return betterAuth({
-    ...(options?.secret ? { secret: options.secret } : {}),
+    secret: options.secret,
     ...(options?.baseURL ? { baseURL: options.baseURL } : {}),
     database: drizzleAdapter(db, {
       provider: "sqlite",

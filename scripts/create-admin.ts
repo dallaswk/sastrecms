@@ -28,6 +28,10 @@ async function main() {
     console.error(`${C.red}Error:${C.reset} TURSO_DATABASE_URL is not set`);
     process.exit(1);
   }
+  if (!process.env.BETTER_AUTH_SECRET) {
+    console.error(`${C.red}Error:${C.reset} BETTER_AUTH_SECRET is not set`);
+    process.exit(1);
+  }
 
   const db = createDb(url, process.env.TURSO_AUTH_TOKEN);
   const auth = createAuth(db, "", "", {

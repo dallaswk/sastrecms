@@ -52,6 +52,48 @@ Estado del proyecto a fecha 17 Ago 2026. Rama activa: `dev`.
 
 ### Funcionalidad
 
+- [x] **Grafo de dependencias consistente y adaptador explícito** ✅ *(27 Ago 2026)*
+  `npm install` ya funciona **sin `--legacy-peer-deps`**. La auditoría decía dos peers
+  incumplidos; eran cuatro, y cada uno tapaba al siguiente:
+
+  - `@astrojs/node` 9 → **10.1.4** (peer `astro ^6.3.0`; la 9.x pedía `^5.17.3` y la 11.x
+    ya apunta a Astro 7). De paso desaparece el aviso de `entrypointResolution` en cada
+    arranque.
+  - `@astrojs/vue` 5 → **6.0.1** (peer `astro ^6.0.0`). No estaba en la auditoría: apareció
+    sólo cuando npm llegó lo bastante lejos para reportarlo.
+  - `@astrojs/tailwind` **eliminado**. Su peer se queda en Astro 5 y lo único que hacía era
+    cargar `postcss.config`, que Vite ya hace solo. Ahora hay `postcss.config.mjs`.
+    **Tailwind sigue en 3.4 y daisyUI en 4.12**: es un cambio de empaquetado, no una
+    actualización. Comprobado capturando la hoja de estilos generada antes y después:
+    119571 bytes, mismo sha256.
+  - `drizzle-orm` 0.42 → **0.45.2** y `drizzle-kit` → `^0.31.4`, que es lo que `better-auth`
+    1.6 pide como peer opcional.
+
+  **Corrección a la auditoría:** `@astrojs/tailwind` no está marcado como deprecado en npm.
+  Su problema es el rango de peers, no la deprecación. Lo dije mal.
+
+  `astro.config.ts` además: el adaptador se elige con `SASTRE_ADAPTER` si está definida, y
+  si no cae en la inferencia anterior — leer `process.argv` hacía imposible que
+  `astro build` apuntara a Node, o sea que lo único que no se podía buildear era lo que
+  corre el dev server. Y fuera `platformProxy`: `@astrojs/cloudflare` v13 no acepta esa
+  opción, así que no hacía nada, y era uno de los errores de `tsc`.
+
+- [x] **Secreto de Better Auth obligatorio, y el choque de `index` explicado** ✅ *(27 Ago 2026)*
+
+  - `createAuth` lanza si no recibe secreto. Better Auth caía en
+    `process.env.BETTER_AUTH_SECRET`, que en Workers no se rellena desde los bindings con
+    `compatibility_date` < 2025-04-01, y ese fallo es **invisible**: las sesiones se firman
+    con lo que derive y dejan de validar tras un redespliegue. Ahora el único fallo que
+    sólo se veía en producción salta al arrancar, nombrando la variable.
+  - Auditados los cinco llamadores de `computePath`: **nada depende de la cadena
+    `/index`**, y el wizard ya escribía `slug: "index"` con `path: "/"`, así que el cambio
+    alinea la función con los datos. Pero sí salió un cambio de comportamiento real: un
+    segundo nodo raíz con slug `index` antes caía en `/index` y ahora choca con la portada,
+    diciendo `Path "/" already exists` — que no tiene sentido para quien escribió `index`.
+    La action y la herramienta MCP ahora lo explican.
+  - `index` anidado sigue siendo un segmento normal (`/blog/index`, no `/blog`): sólo la
+    raíz de cada idioma tiene portada. La asimetría queda fijada por un test.
+
 - [x] **Permiso de lectura en los endpoints que faltaban** ✅ *(27 Ago 2026)*
   Tras la auditoría, el MCP filtraba por `view` pero la web no: la misma cuenta recibía
   inventarios distintos según por qué puerta entrase.
