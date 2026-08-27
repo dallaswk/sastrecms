@@ -9,6 +9,7 @@ import { presetActions } from "./presets";
 import { menuActions } from "./menus";
 import { formActions } from "./forms";
 import { aiActions } from "./ai";
+import { fixActions } from "./fixes";
 
 export const server = {
   nodes: nodeActions,
@@ -22,4 +23,5 @@ export const server = {
   menus: menuActions,
   forms: formActions,
   ai: aiActions,
+  fixes: fixActions,
 };

@@ -6,6 +6,7 @@ import { buildChecklist, summarise, type SiteSnapshot } from "@lib/launch-checkl
 import { sanitizeAnalyticsIds } from "@lib/analytics";
 import { readMenu } from "@lib/menus";
 import { sectionsFieldOf } from "@lib/renderers";
+import { fixFor } from "@lib/fixes";
 export const prerender = false;
 
 const db = Astro.locals.db;
@@ -120,7 +121,19 @@ const ordered = [...checks]
     check.href === "/admin/settings" && !Astro.locals.isAdmin
       ? { ...check, href: undefined, detail: `${check.detail} Lo tiene que hacer un administrador.` }
       : check
-  );
+  )
+  .map((check) => ({
+    ...check,
+    /*
+     * The fix, if there is one.
+     *
+     * Three kinds, and the distinction is deliberately visible: an `auto` fix runs from here, an
+     * `ai` one opens a panel that proposes and never saves on its own, and a `manual` one says
+     * *why* it cannot be automatic. Hiding that behind one «Arreglar» would imply the system
+     * could invent a NIF.
+     */
+    fix: check.status === "ok" ? undefined : fixFor(check.id),
+  }));
 
 const recent = allNodes.slice(0, 6);
 
@@ -205,13 +218,43 @@ const subtitle = [siteSettings?.siteName, siteSettings?.tagline].filter(Boolean)
                 {check.detail && (
                   <span class="text-xs text-base-content/60">{check.detail}</span>
                 )}
+                {check.fix?.kind === "manual" && check.fix.because && (
+                  <span class="text-xs text-base-content/40">{check.fix.because}</span>
+                )}
               </div>
 
-              {check.href && (
-                <a href={check.href} class="btn btn-xs btn-ghost border border-base-300 shrink-0">
-                  Arreglar
-                </a>
-              )}
+              <div class="flex shrink-0 items-center gap-1.5">
+                {check.fix?.kind === "auto" && Astro.locals.isAdmin && (
+                  <button
+                    type="button"
+                    class="fix-run btn btn-xs btn-primary"
+                    data-check={check.id}
+                    data-confirm={check.fix.confirm}
+                  >{check.fix.label}</button>
+                )}
+
+                {check.fix?.kind === "ai" && (
+                  <button
+                    type="button"
+                    class="btn btn-xs btn-ghost border border-base-300"
+                    disabled
+                    title="En camino: propondrá el texto y tú lo confirmas."
+                  >{check.fix.label}</button>
+                )}
+
+                {check.fix?.kind === "manual" && check.href && (
+                  <a href={check.href} class="btn btn-xs btn-ghost border border-base-300">
+                    {check.fix.label}
+                  </a>
+                )}
+
+                {/* No fix declared at all: at least offer the page where it lives. */}
+                {!check.fix && check.href && (
+                  <a href={check.href} class="btn btn-xs btn-ghost border border-base-300">
+                    Ver
+                  </a>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -336,4 +379,47 @@ const subtitle = [siteSettings?.siteName, siteSettings?.tagline].filter(Boolean)
       )}
     </section>
   </div>
+<script>
+  import { actions } from "astro:actions";
+
+  /*
+   * Running a fix.
+   *
+   * Reloads on success rather than patching the row: a fix can satisfy *other* checks too —
+   * creating the legal pages changes what the legal-menu row says — and recomputing the whole
+   * list from the server is both simpler and honest about it.
+   */
+  for (const button of document.querySelectorAll<HTMLButtonElement>(".fix-run")) {
+    button.addEventListener("click", async () => {
+      const checkId = button.dataset.check!;
+      const confirmText = button.dataset.confirm;
+      if (confirmText && !confirm(confirmText)) return;
+
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = "Aplicando…";
+
+      const { data, error } = await actions.fixes.apply({ checkId });
+
+      if (error) {
+        button.disabled = false;
+        button.textContent = original;
+        window.sastreToast?.error(error.message);
+        return;
+      }
+
+      // «Nothing to do» is said as an ordinary message, not a success: a button that claims
+      // «Hecho» when it changed nothing is a button people stop trusting.
+      if (data?.noop) {
+        button.disabled = false;
+        button.textContent = original;
+        window.sastreToast?.info(data.message);
+        return;
+      }
+
+      window.sastreToast?.success(data?.message ?? "Hecho.");
+      setTimeout(() => window.location.reload(), 900);
+    });
+  }
+</script>
 </AdminLayout>
