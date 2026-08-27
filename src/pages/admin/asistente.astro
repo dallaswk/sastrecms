@@ -1,0 +1,77 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import AiFixPanel from "@components/admin/AiFixPanel.vue";
+import { AI_TASKS, type AiTaskId } from "@lib/ai-tasks";
+import { hasSiteRole } from "@lib/permissions";
+export const prerender = false;
+
+const db = Astro.locals.db;
+if (!(await hasSiteRole(db, Astro.locals.user!.id, Astro.locals.siteId))) {
+  return Astro.redirect("/admin");
+}
+
+const raw = Astro.url.searchParams.get("tarea") ?? "descriptions";
+const task = (AI_TASKS as readonly string[]).includes(raw) ? (raw as AiTaskId) : "descriptions";
+
+const TITLES: Record<AiTaskId, { title: string; description: string }> = {
+  descriptions: {
+    title: "Redactar descripciones",
+    description:
+      "La meta descripción es lo que se lee bajo el título en Google. La IA propone una por " +
+      "página con el contenido real de cada una, y no se guarda nada hasta que la aceptas.",
+  },
+  alt: {
+    title: "Describir imágenes",
+    description:
+      "El texto alternativo es lo que lee un lector de pantalla y lo que entiende la búsqueda " +
+      "de imágenes. Si con el nombre del archivo no se puede saber qué se ve, la IA lo dice en " +
+      "vez de inventárselo.",
+  },
+  "empty-pages": {
+    title: "Redactar contenido",
+    description: "Páginas publicadas que no muestran nada.",
+  },
+};
+
+/*
+ * Everything is gathered on the server, including the context that will go into the prompt.
+ *
+ * The island could fetch it on mount, but then the page would flash empty and the «no queda
+ * nada» case would look like a loading state that never resolved.
+ */
+const { data, error } = await Astro.callAction(
+  (await import("@actions/index")).server.aiFix.items,
+  { task }
+);
+
+if (error) throw error;
+
+const meta = TITLES[task];
+---
+
+<AdminLayout
+  title={meta.title}
+  description={meta.description}
+  breadcrumbs={[{ label: "Panel", href: "/admin" }]}
+>
+  <div slot="actions" class="flex gap-1">
+    {AI_TASKS.filter((id) => id !== "empty-pages").map((id) => (
+      <a
+        href={`/admin/asistente?tarea=${id}`}
+        class:list={[
+          "btn btn-sm",
+          id === task ? "btn-primary" : "btn-ghost border border-base-300",
+        ]}
+      >{id === "descriptions" ? "Descripciones" : "Imágenes"}</a>
+    ))}
+  </div>
+
+  <AiFixPanel
+    client:load
+    task={task}
+    items={JSON.stringify(data!.items)}
+    missing={JSON.stringify(data!.missing)}
+    limits={JSON.stringify(data!.limits)}
+    siteContext={JSON.stringify(data!.site)}
+  />
+</AdminLayout>

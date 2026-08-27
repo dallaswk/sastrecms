@@ -234,12 +234,10 @@ const subtitle = [siteSettings?.siteName, siteSettings?.tagline].filter(Boolean)
                 )}
 
                 {check.fix?.kind === "ai" && (
-                  <button
-                    type="button"
+                  <a
+                    href={`/admin/asistente?tarea=${check.id}`}
                     class="btn btn-xs btn-ghost border border-base-300"
-                    disabled
-                    title="En camino: propondrá el texto y tú lo confirmas."
-                  >{check.fix.label}</button>
+                  >{check.fix.label}</a>
                 )}
 
                 {check.fix?.kind === "manual" && check.href && (
