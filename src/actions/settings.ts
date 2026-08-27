@@ -90,6 +90,9 @@ export const settingsActions = {
       redirects: z
         .array(z.object({ from: z.string(), to: z.string(), permanent: z.boolean() }))
         .optional(),
+      // Free text: these are names, addresses and registry entries, and a shape check would
+      // reject a perfectly valid foreign address. They are escaped at render time.
+      business: z.record(z.string(), z.string()).optional(),
       integrations: z.object({
         resendApiKey: z.string().optional(),
         resendFrom: z.string().optional(),
@@ -118,6 +121,7 @@ export const settingsActions = {
       if (input.analyticsIds !== undefined) updates.analyticsIds = input.analyticsIds;
       if (input.menus !== undefined) updates.menus = normalizeMenus(input.menus);
       if (input.redirects !== undefined) updates.redirects = input.redirects;
+      if (input.business !== undefined) updates.business = input.business;
       if (input.integrations !== undefined) updates.integrations = input.integrations;
 
       if (existing) {

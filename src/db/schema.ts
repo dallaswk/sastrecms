@@ -256,6 +256,16 @@ export const settings = sqliteTable("settings", {
   integrations: text("integrations", { mode: "json" })
     .$type<Record<string, string>>()
     .default(sql`'{}'`),
+  /**
+   * The identity behind the site.
+   *
+   * Required by Spanish law (LSSI-CE art. 10) on the legal notice of every commercial site,
+   * and it is the input the privacy policy and the legal notice are generated from — a site
+   * cannot be delivered without it, and it is the same handful of fields every time.
+   */
+  business: text("business", { mode: "json" })
+    .$type<Record<string, string>>()
+    .default(sql`'{}'`),
 });
 
 export type { MenuItem, SiteMenus } from "../lib/menus";

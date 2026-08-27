@@ -1,0 +1,57 @@
+---
+import { legalDocumentHtml, missingBusinessFields, LEGAL_LABELS, type LegalDocument } from "@lib/legal";
+import { sanitizeAnalyticsIds } from "@lib/analytics";
+
+interface Props {
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>;
+  id: string;
+  anchor?: string;
+  data: Record<string, unknown>;
+  index: number;
+}
+const { id, anchor, data } = Astro.props;
+
+const kind = (data.document as LegalDocument) ?? "aviso-legal";
+const settings = Astro.locals.settings;
+const business = (settings?.business ?? {}) as Record<string, string>;
+
+// Generated on every render rather than stored, so a change of address or a new pixel is
+// reflected everywhere at once instead of in whichever copy someone remembered to edit.
+const html = legalDocumentHtml(kind, {
+  business,
+  siteName: settings?.siteName ?? "",
+  domain: Astro.url.host,
+  analytics: sanitizeAnalyticsIds(settings?.analyticsIds),
+  cookiesPath: undefined,
+});
+
+const missing = missingBusinessFields(business);
+const showDisclaimer = (data.show_disclaimer ?? "sí") !== "no";
+---
+
+<section id={anchor ?? id} class="bg-base-100">
+  <div class="site-narrow px-4 py-14 flex flex-col gap-5">
+    <h1 class="text-3xl font-bold">{LEGAL_LABELS[kind]}</h1>
+
+    {/* Visible in the editor's preview and in dev, not to the public: a client's visitor
+        should not be told the site's legal notice is unfinished. */}
+    {import.meta.env.DEV && missing.length > 0 && (
+      <div class="alert alert-warning text-sm">
+        <span>
+          Faltan datos de empresa obligatorios: <strong>{missing.join(", ")}</strong>. Complétalos
+          en Ajustes → Datos de empresa.
+        </span>
+      </div>
+    )}
+
+    {showDisclaimer && (
+      <p class="text-sm text-base-content/60 border-l-2 border-base-300 pl-3">
+        Este texto es una plantilla generada automáticamente a partir de los datos del sitio.
+        No constituye asesoramiento jurídico: conviene que lo revise un profesional antes de
+        publicar el sitio.
+      </p>
+    )}
+
+    <div class="prose max-w-none" set:html={html} />
+  </div>
+</section>

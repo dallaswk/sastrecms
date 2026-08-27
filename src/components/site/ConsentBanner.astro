@@ -1,0 +1,88 @@
+---
+import { CATEGORY_DESCRIPTIONS, CATEGORY_LABELS, neededCategories } from "@lib/consent";
+import type { AnalyticsIds } from "@lib/analytics";
+
+interface Props {
+  analytics: AnalyticsIds;
+  /** Path of the cookie policy, for the link. */
+  cookiesPath?: string;
+}
+const { analytics, cookiesPath } = Astro.props;
+
+// A site with no tracker asks for nothing: an unnecessary banner is a reason to click away,
+// and consent for a purpose that does not exist is not valid consent anyway.
+const categories = neededCategories(analytics);
+---
+
+{categories.length > 0 && (
+  <Fragment>
+    {/*
+      The ids as data, not interpolated into a script.
+      This is what lets the consent script be a static file with a build-time hash — a
+      per-request inline script can never match one, which is what blocks a strict CSP.
+    */}
+    <script id="consent-config" type="application/json" set:html={JSON.stringify(analytics)} />
+
+    <div
+      id="consent-banner"
+      hidden
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="consent-title"
+      class="fixed bottom-0 left-0 right-0 z-50 bg-base-100 border-t border-base-300 shadow-lg"
+    >
+      <div class="site-wide px-4 py-4 flex flex-col gap-3">
+        <div class="flex flex-col gap-1">
+          <h2 id="consent-title" class="font-semibold">Cookies</h2>
+          <p class="text-sm text-base-content/70">
+            Usamos cookies propias necesarias para que la web funcione y, si nos das permiso,
+            de terceros para medir el uso del sitio. Puedes aceptarlas, rechazarlas o elegir.
+            {cookiesPath && (
+              <Fragment> Más detalle en la <a href={cookiesPath} class="link">política de cookies</a>.</Fragment>
+            )}
+          </p>
+        </div>
+
+        <div id="consent-details" hidden class="flex flex-col gap-2 border-t border-base-200 pt-3">
+          <label class="flex items-start gap-3">
+            <input type="checkbox" checked disabled class="checkbox checkbox-sm mt-0.5" />
+            <span class="text-sm">
+              <strong>{CATEGORY_LABELS.necesarias}</strong>
+              <span class="block text-base-content/60">{CATEGORY_DESCRIPTIONS.necesarias}</span>
+            </span>
+          </label>
+
+          {categories.map((category) => (
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input id={`consent-${category}`} type="checkbox" class="checkbox checkbox-sm mt-0.5" />
+              <span class="text-sm">
+                <strong>{CATEGORY_LABELS[category]}</strong>
+                <span class="block text-base-content/60">{CATEGORY_DESCRIPTIONS[category]}</span>
+              </span>
+            </label>
+          ))}
+
+          <button id="consent-save" type="button" class="btn btn-sm btn-primary self-start mt-1">
+            Guardar mi elección
+          </button>
+        </div>
+
+        {/*
+          Reject is a button of the same weight as Accept, on purpose. A greyed-out or
+          hidden reject is a dark pattern, and it is what the AEPD fines.
+        */}
+        <div class="flex flex-wrap gap-2">
+          <button id="consent-accept" type="button" class="btn btn-sm btn-primary">Aceptar todas</button>
+          <button id="consent-reject" type="button" class="btn btn-sm btn-neutral">Rechazar todas</button>
+          <button id="consent-configure" type="button" class="btn btn-sm btn-ghost border border-base-300">
+            Configurar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      import "@/scripts/consent";
+    </script>
+  </Fragment>
+)}
