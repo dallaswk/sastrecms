@@ -13,13 +13,16 @@ const activeTokens = await db.query.apiTokens.findMany({
 });
 ---
 
-<AdminLayout title="API Tokens">
+<AdminLayout
+  title="Tokens MCP"
+  description="Credenciales para que un agente edite este sitio por MCP. Un token lleva los permisos de quien lo creó."
+>
   <div class=" flex flex-col gap-6">
 
     <!-- Generate new token -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">Nuevo token</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">Nuevo token</h2>
         <div class="form-control">
           <label class="label"><span class="label-text">Etiqueta</span></label>
           <input id="token-label" type="text" class="input input-bordered" placeholder="Mi agente MCP" />
@@ -39,9 +42,9 @@ const activeTokens = await db.query.apiTokens.findMany({
     </section>
 
     <!-- Token list -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">Tokens activos</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">Tokens activos</h2>
 
         {activeTokens.filter(t => !t.revokedAt).length === 0 ? (
           <p class="text-sm text-base-content/50">No tienes tokens activos.</p>

@@ -1,21 +1,30 @@
 ---
 import "@styles/global.css";
+import "@styles/admin.css";
+import NavIcon from "@components/admin/NavIcon.astro";
 import { and, count, eq } from "drizzle-orm";
 import { formSubmissions } from "@db/schema";
+import { ADMIN_THEME_DARK, ADMIN_THEME_LIGHT } from "@lib/theme";
+import type { AdminIconName } from "@lib/admin-icons";
 
 interface Props {
   title: string;
+  /** One line under the title. What this page is for, when that is not obvious from the title. */
+  description?: string;
+  /** Extra crumbs between «Panel» and this page. */
+  breadcrumbs?: { label: string; href: string }[];
 }
 
-const { title } = Astro.props;
+const { title, description, breadcrumbs = [] } = Astro.props;
 const user = Astro.locals.user;
 const isAdmin = Astro.locals.isAdmin;
+const pathname = Astro.url.pathname;
 
 /**
  * Unread enquiries, as a badge in the sidebar.
  *
- * One indexed COUNT on every admin page, which is worth paying: an inbox nobody is told
- * about is an inbox where a client's lead sits for a week.
+ * One indexed COUNT on every admin page, which is worth paying: an inbox nobody is told about
+ * is an inbox where a client's lead sits for a week.
  */
 const unread = user
   ? Number(
@@ -32,74 +41,207 @@ const unread = user
       )[0]?.n ?? 0
     )
   : 0;
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: AdminIconName;
+  badge?: number;
+  /** Also current on deeper paths, e.g. /admin/content/<id>. */
+  nested?: boolean;
+};
+
+const MAIN_NAV: NavItem[] = [
+  { href: "/admin", label: "Panel", icon: "dashboard" },
+  { href: "/admin/content", label: "Contenido", icon: "content", nested: true },
+  { href: "/admin/media", label: "Medios", icon: "media" },
+  { href: "/admin/menus", label: "Menús", icon: "menu" },
+  {
+    href: "/admin/forms",
+    label: "Mensajes",
+    icon: "inbox",
+    ...(unread > 0 ? { badge: unread } : {}),
+  },
+];
+
+const CONFIG_NAV: NavItem[] = [
+  { href: "/admin/content-types", label: "Tipos de contenido", icon: "types", nested: true },
+  ...(isAdmin
+    ? ([
+        { href: "/admin/users", label: "Usuarios", icon: "users" },
+        { href: "/admin/permissions", label: "Permisos", icon: "permissions" },
+        { href: "/admin/settings", label: "Ajustes", icon: "settings" },
+      ] as NavItem[])
+    : []),
+  { href: "/admin/tokens", label: "Tokens MCP", icon: "token" },
+];
+
+/**
+ * Which link is the current page.
+ *
+ * `/admin` needs an exact match or it lights up everywhere; the nested ones need a prefix or
+ * editing a node leaves the sidebar looking like nothing is selected.
+ */
+function isCurrent(item: NavItem): boolean {
+  if (item.href === "/admin") return pathname === "/admin" || pathname === "/admin/";
+  return item.nested ? pathname.startsWith(item.href) : pathname === item.href;
+}
+
+const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "";
+const initials = displayName
+  .split(/\s+/)
+  .slice(0, 2)
+  .map((part) => part[0]?.toUpperCase() ?? "")
+  .join("");
 ---
 
 <!doctype html>
-<html lang="es" data-theme="dark">
+<html lang="es" data-theme={ADMIN_THEME_DARK} data-mode="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>{title} — sASTRe Admin</title>
+    <title>{title} — sASTRe</title>
     <meta name="robots" content="noindex, nofollow" />
+
+    {/*
+      The theme, decided before the first paint.
+
+      Inline and synchronous on purpose: applying it after hydration means every page load
+      flashes dark at somebody who chose light, which is the one thing a theme toggle must not
+      do. `data-mode` is what the CSS keys on, so the theme names can change without breaking
+      a stylesheet that hardcoded one.
+    */}
+    <script is:inline define:vars={{ dark: ADMIN_THEME_DARK, light: ADMIN_THEME_LIGHT }}>
+      (function () {
+        try {
+          var stored = localStorage.getItem("sastre-admin-mode");
+          var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+          var mode = stored === "light" || (!stored && prefersLight) ? "light" : "dark";
+          document.documentElement.dataset.mode = mode;
+          document.documentElement.dataset.theme = mode === "light" ? light : dark;
+        } catch (e) {
+          /* Private mode, or site data blocked. The server default stands. */
+        }
+      })();
+    </script>
   </head>
-  <body class="bg-base-200 min-h-screen">
+
+  <body class="admin-root bg-base-200 min-h-screen text-base-content">
     <div class="drawer lg:drawer-open">
       <input id="admin-drawer" type="checkbox" class="drawer-toggle" />
 
-      <div class="drawer-content flex flex-col">
-        <header class="navbar bg-base-100 shadow-sm lg:hidden">
-          <label for="admin-drawer" class="btn btn-ghost btn-square">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+      <div class="drawer-content flex min-h-screen flex-col">
+        {/* Mobile bar. On a wide screen the sidebar is always open, so this is hidden. */}
+        <header
+          class="lg:hidden sticky top-0 z-30 flex items-center gap-2 border-b border-base-300 bg-base-100/95 px-3 py-2 backdrop-blur"
+        >
+          <label for="admin-drawer" class="btn btn-ghost btn-sm btn-square" aria-label="Abrir el menú">
+            <NavIcon name="menu" class="h-5 w-5" />
           </label>
-          <span class="text-xl font-bold ml-2">sASTRe</span>
+          <span class="font-bold tracking-tight">sASTRe</span>
+          {unread > 0 && <span class="badge badge-primary badge-sm ml-auto tabular">{unread}</span>}
         </header>
 
-        <main class="flex-1 p-6">
-          <h1 class="text-2xl font-bold mb-6">{title}</h1>
+        <main class="flex-1 px-5 py-5 lg:px-8 lg:py-7">
+          {/* One page header for every page, instead of each one inventing its own. */}
+          <div class="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+            <div class="flex min-w-0 flex-col gap-1">
+              {breadcrumbs.length > 0 && (
+                <nav aria-label="Ruta" class="flex items-center gap-1.5 text-xs text-base-content/45">
+                  <a href="/admin" class="transition-colors hover:text-base-content/80">Panel</a>
+                  {breadcrumbs.map((crumb) => (
+                    <Fragment>
+                      <span aria-hidden="true">/</span>
+                      <a href={crumb.href} class="transition-colors hover:text-base-content/80">
+                        {crumb.label}
+                      </a>
+                    </Fragment>
+                  ))}
+                </nav>
+              )}
+              <h1 class="admin-h1">{title}</h1>
+              {description && <p class="admin-hint">{description}</p>}
+            </div>
+
+            {/* Page actions. Collapses to nothing on the pages that have none. */}
+            <div class="flex shrink-0 items-center gap-2">
+              <slot name="actions" />
+            </div>
+          </div>
+
           <slot />
         </main>
       </div>
 
       <aside class="drawer-side z-50">
-        <label for="admin-drawer" class="drawer-overlay"></label>
-        <nav class="menu bg-base-100 text-base-content min-h-full w-64 p-4 gap-1">
-          <div class="flex items-center gap-2 mb-6 px-2">
-            <span class="text-2xl font-black text-primary">sASTRe</span>
-          </div>
+        <label for="admin-drawer" class="drawer-overlay" aria-label="Cerrar el menú"></label>
 
-          <li><a href="/admin" class="font-medium">Dashboard</a></li>
-          <li><a href="/admin/content">Contenido</a></li>
-          <li><a href="/admin/media">Medios</a></li>
-          <li><a href="/admin/menus">Menús</a></li>
-          <li>
-            <a href="/admin/forms">
-              Mensajes
-              {unread > 0 && <span class="badge badge-primary badge-sm">{unread}</span>}
+        <div class="flex min-h-full w-64 flex-col gap-1 border-r border-base-300 bg-base-100 px-3 py-4">
+          <a
+            href="/admin"
+            class="mb-5 flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200"
+          >
+            <span class="text-xl font-black tracking-tight text-primary">sASTRe</span>
+          </a>
+
+          <nav class="flex flex-col gap-0.5" aria-label="Secciones">
+            {MAIN_NAV.map((item) => (
+              <a href={item.href} class="nav-link" aria-current={isCurrent(item) ? "page" : undefined}>
+                <NavIcon name={item.icon} />
+                <span class="flex-1">{item.label}</span>
+                {item.badge && <span class="badge badge-primary badge-sm tabular">{item.badge}</span>}
+              </a>
+            ))}
+
+            <p class="admin-eyebrow mb-1 mt-5 px-2.5">Configuración</p>
+
+            {CONFIG_NAV.map((item) => (
+              <a href={item.href} class="nav-link" aria-current={isCurrent(item) ? "page" : undefined}>
+                <NavIcon name={item.icon} />
+                <span class="flex-1">{item.label}</span>
+              </a>
+            ))}
+          </nav>
+
+          <div class="mt-auto flex flex-col gap-2 pt-4">
+            <a href="/" target="_blank" rel="noopener" class="nav-link text-base-content/55">
+              <NavIcon name="external" />
+              <span>Ver el sitio</span>
             </a>
-          </li>
-          <li class="menu-title mt-4">Configuración</li>
-          <li><a href="/admin/content-types">Tipos de contenido</a></li>
-          {isAdmin && (
-            <Fragment>
-              <li><a href="/admin/users">Usuarios</a></li>
-              <li><a href="/admin/permissions">Permisos</a></li>
-              <li><a href="/admin/settings">Ajustes</a></li>
-            </Fragment>
-          )}
-          <li><a href="/admin/tokens">Tokens MCP</a></li>
 
-          <div class="mt-auto pt-4 border-t border-base-200">
-            <div class="text-sm text-base-content/60 px-2 mb-2">{user?.email}</div>
-            <li>
-              <form method="POST" action="/api/auth/sign-out">
-                <button type="submit" class="text-error w-full text-left">Cerrar sesión</button>
+            <div class="flex items-center gap-2.5 border-t border-base-300 px-1 pt-3">
+              <div
+                class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-semibold text-primary"
+                aria-hidden="true"
+              >{initials}</div>
+              <div class="flex min-w-0 flex-col leading-tight">
+                <span class="truncate text-sm font-medium">{displayName}</span>
+                <span class="truncate text-xs text-base-content/45">{user?.email}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1">
+              <button
+                id="admin-theme-toggle"
+                type="button"
+                class="nav-link flex-1 text-base-content/55"
+                aria-label="Cambiar entre tema claro y oscuro"
+              >
+                <NavIcon name="sun" class="theme-icon-light" />
+                <NavIcon name="moon" class="theme-icon-dark" />
+                <span>Tema</span>
+              </button>
+
+              <form method="POST" action="/api/auth/sign-out" class="flex-1">
+                <button type="submit" class="nav-link w-full text-error/80 hover:text-error">
+                  <NavIcon name="logout" />
+                  <span>Salir</span>
+                </button>
               </form>
-            </li>
+            </div>
           </div>
-        </nav>
+        </div>
       </aside>
     </div>
 
@@ -112,10 +254,27 @@ const unread = user
     */}
     <div
       id="sastre-toasts"
-      class="fixed bottom-4 right-4 z-[70] flex flex-col-reverse gap-2 pointer-events-none"
+      class="pointer-events-none fixed bottom-4 right-4 z-[70] flex flex-col-reverse gap-2"
     ></div>
+
     <script>
       import "@/scripts/toast";
+    </script>
+
+    <script is:inline define:vars={{ dark: ADMIN_THEME_DARK, light: ADMIN_THEME_LIGHT }}>
+      document.getElementById("admin-theme-toggle")?.addEventListener("click", function () {
+        var root = document.documentElement;
+        var next = root.dataset.mode === "light" ? "dark" : "light";
+        root.dataset.mode = next;
+        root.dataset.theme = next === "light" ? light : dark;
+        try {
+          // Stored as light/dark, not as the theme name: the names can change, and a stored
+          // value that no longer matches anything would silently stop working.
+          localStorage.setItem("sastre-admin-mode", next);
+        } catch (e) {
+          /* The choice still applies to this page. */
+        }
+      });
     </script>
   </body>
 </html>

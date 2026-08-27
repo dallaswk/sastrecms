@@ -225,3 +225,78 @@ export function themeFingerprint(raw: SiteTheme | null | undefined): string {
   }
   return (hash >>> 0).toString(36);
 }
+
+/* ------------------------------------------------------- tema del backoffice */
+
+/**
+ * The backoffice has its own palette, separate from the site's.
+ *
+ * Two reasons it cannot share one. It has to stay legible whatever the client picks — an editor
+ * should not end up working eight hours inside «cyberpunk» because that is what the site uses.
+ * And the admin is a tool, so it wants a quiet neutral and one accent, which is the opposite of
+ * what a brand palette is for.
+ *
+ * The neutrals are hue-shifted towards the accent rather than pure grey: a pure mid-grey reads
+ * as unconsidered, and a few degrees of blue in the ramp is what makes a dark UI look chosen.
+ */
+export const ADMIN_THEME_DARK = "sastreadmin";
+export const ADMIN_THEME_LIGHT = "sastreadminlight";
+
+export const ADMIN_THEMES = [ADMIN_THEME_DARK, ADMIN_THEME_LIGHT] as const;
+
+export const ADMIN_THEME_DEFINITIONS = [
+  {
+    [ADMIN_THEME_DARK]: {
+      primary: "#7C9CF5",
+      "primary-content": "#0B1020",
+      secondary: "#8B93A7",
+      "secondary-content": "#0B1020",
+      accent: "#D9A54B",
+      "accent-content": "#1A1206",
+      neutral: "#1B2030",
+      "neutral-content": "#D6DAE6",
+      "base-100": "#12151F",
+      "base-200": "#171B28",
+      "base-300": "#242A3B",
+      "base-content": "#DCE0EC",
+      info: "#6FA8DC",
+      success: "#5FC79B",
+      warning: "#E0B15C",
+      error: "#F08A7C",
+      "--rounded-box": "0.625rem",
+      "--rounded-btn": "0.5rem",
+      "--rounded-badge": "0.375rem",
+      "--border-btn": "1px",
+      "--tab-radius": "0.5rem",
+      "--animation-btn": "0.15s",
+      "--animation-input": "0.15s",
+    },
+  },
+  {
+    [ADMIN_THEME_LIGHT]: {
+      primary: "#3355C4",
+      "primary-content": "#FFFFFF",
+      secondary: "#5A6377",
+      "secondary-content": "#FFFFFF",
+      accent: "#9A6B14",
+      "accent-content": "#FFFFFF",
+      neutral: "#2A3040",
+      "neutral-content": "#F2F4F9",
+      "base-100": "#FFFFFF",
+      "base-200": "#F4F6FB",
+      "base-300": "#E2E7F1",
+      "base-content": "#1A1F2C",
+      info: "#2E6DA8",
+      success: "#1F7A55",
+      warning: "#8A6410",
+      error: "#B03A2C",
+      "--rounded-box": "0.625rem",
+      "--rounded-btn": "0.5rem",
+      "--rounded-badge": "0.375rem",
+      "--border-btn": "1px",
+      "--tab-radius": "0.5rem",
+      "--animation-btn": "0.15s",
+      "--animation-input": "0.15s",
+    },
+  },
+];

@@ -72,8 +72,9 @@
       <span class="loading loading-spinner loading-lg"></span>
     </div>
 
-    <div v-else-if="folders.length === 0 && files.length === 0" class="text-center py-16 text-base-content/40">
-      <p>Esta carpeta está vacía.</p>
+    <div v-else-if="folders.length === 0 && files.length === 0" class="empty-state">
+      <strong>Esta carpeta está vacía</strong>
+      <p>Arrastra archivos aquí, o usa el botón «Subir archivos».</p>
     </div>
 
     <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -81,10 +82,10 @@
       <div
         v-for="folder in folders"
         :key="folder.id"
-        class="card bg-base-200 border border-base-300 cursor-pointer hover:border-primary transition-colors"
+        class="panel !bg-base-200 cursor-pointer transition-colors hover:border-primary"
         @click="navigateInto(folder.id)"
       >
-        <div class="card-body p-3 items-center text-center">
+        <div class="flex flex-col items-center gap-1 p-3 text-center">
           <div class="text-4xl">📁</div>
           <p class="text-xs font-medium truncate w-full">{{ folder.name }}</p>
           <button
@@ -98,11 +99,11 @@
       <div
         v-for="file in files"
         :key="file.id"
-        class="card bg-base-100 border border-base-300 hover:border-primary transition-colors"
+        class="panel transition-colors hover:border-primary"
         :class="{ 'ring-2 ring-primary': selectedIds.includes(file.id) }"
         @click="toggleSelect(file.id)"
       >
-        <div class="card-body p-3 gap-1">
+        <div class="flex flex-col gap-1 p-3">
           <div class="aspect-square bg-base-200 rounded overflow-hidden flex items-center justify-center">
             <img
               v-if="file.type === 'image'"

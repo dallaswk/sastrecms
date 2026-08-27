@@ -4,6 +4,9 @@ import MediaManager from "@components/admin/MediaManager.vue";
 export const prerender = false;
 ---
 
-<AdminLayout title="Medios">
+<AdminLayout
+  title="Medios"
+  description="Imágenes, vídeos y documentos del sitio. El texto alternativo de cada imagen es lo que leen un lector de pantalla y la búsqueda de imágenes."
+>
   <MediaManager client:load />
 </AdminLayout>

@@ -3,11 +3,11 @@
     <section
       v-for="menu in MENU_SECTIONS"
       :key="menu.key"
-      class="card bg-base-100 border border-base-300"
+      class="panel"
     >
-      <div class="card-body gap-3">
+      <div class="panel-body">
         <div>
-          <h2 class="card-title text-base">{{ menu.label }}</h2>
+          <h2 class="admin-h2">{{ menu.label }}</h2>
           <p class="text-sm text-base-content/60">{{ menu.hint }}</p>
         </div>
 
@@ -75,9 +75,10 @@
 
         <p
           v-else
-          class="text-sm text-base-content/50 border border-dashed border-base-300 rounded-lg px-3 py-5 text-center"
+          class="empty-state !py-6"
         >
-          Sin enlaces. {{ menu.empty }}
+          <strong>Sin enlaces</strong>
+          <p>{{ menu.empty }}</p>
         </p>
 
         <button

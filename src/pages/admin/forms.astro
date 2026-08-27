@@ -60,7 +60,10 @@ const FILTERS = [
 ] as const;
 ---
 
-<AdminLayout title="Mensajes">
+<AdminLayout
+  title="Mensajes"
+  description="Lo que llega por los formularios del sitio. Se guarda aquí aunque el aviso por correo falle."
+>
   <div class="flex flex-col gap-4">
     {!siteSettings?.contactEmail && (
       <div class="alert alert-warning">

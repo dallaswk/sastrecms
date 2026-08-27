@@ -29,7 +29,10 @@ const linkables = await db.query.nodes.findMany({
 });
 ---
 
-<AdminLayout title="Menús">
+<AdminLayout
+  title="Menús"
+  description="La navegación de la cabecera y el pie. Se guarda la página, no su dirección, así que renombrar un slug no rompe el menú."
+>
   <div class="flex flex-col gap-4">
     <p class="text-sm text-base-content/60">
       Se guarda la página, no su dirección, así que renombrar un slug no rompe el menú.

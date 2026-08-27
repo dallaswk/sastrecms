@@ -46,13 +46,16 @@ const missingBusiness = missingBusinessFields(business);
 
 ---
 
-<AdminLayout title="Ajustes">
+<AdminLayout
+  title="Ajustes"
+  description="Identidad, tema, datos de empresa y credenciales de los servicios externos."
+>
   <form id="settings-form" class="flex flex-col gap-6">
 
     <!-- General -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">General</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">General</h2>
         <div class="form-control">
           <label class="label"><span class="label-text">Nombre del sitio</span></label>
           <input name="siteName" type="text" class="input input-bordered" value={siteSettings?.siteName ?? ""} />
@@ -97,9 +100,9 @@ const missingBusiness = missingBusinessFields(business);
     </section>
 
     <!-- Theme -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">Tema</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">Tema</h2>
 
         <div class="form-control">
           <label class="label">
@@ -205,9 +208,9 @@ const missingBusiness = missingBusinessFields(business);
     </section>
 
     <!-- Social links -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">Redes sociales</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">Redes sociales</h2>
         {(["twitter","instagram","linkedin","facebook","youtube","github"] as const).map((net) => (
           <div class="form-control">
             <label class="label"><span class="label-text capitalize">{net}</span></label>
@@ -218,9 +221,9 @@ const missingBusiness = missingBusinessFields(business);
     </section>
 
     <!-- Analytics -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">Analytics y seguimiento</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">Analytics y seguimiento</h2>
         <p class="text-sm text-base-content/50">Deja en blanco los que no uses. Los scripts se inyectan automáticamente en todas las páginas públicas.</p>
 
         <div class="form-control">
@@ -280,9 +283,9 @@ const missingBusiness = missingBusinessFields(business);
     </section>
 
     <!-- Datos de empresa -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">Datos de empresa</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">Datos de empresa</h2>
         <p class="text-sm text-base-content/60 -mt-1">
           Obligatorios en el aviso legal de cualquier web comercial (LSSI-CE art. 10), y es de
           aquí de donde se generan el aviso legal y la política de privacidad. Añade el bloque
@@ -325,9 +328,9 @@ const missingBusiness = missingBusinessFields(business);
     </section>
 
     <!-- Integraciones -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">Integraciones</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">Integraciones</h2>
         <p class="text-sm text-base-content/50">Credenciales de servicios externos. Se almacenan en la base de datos del sitio.</p>
 
         <div class="form-control">
@@ -418,10 +421,10 @@ const missingBusiness = missingBusinessFields(business);
     </section>
 
     <!-- Inteligencia artificial -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
+    <section class="panel">
+      <div class="panel-body">
         <div class="flex items-center gap-3 flex-wrap">
-          <h2 class="card-title text-base">Inteligencia artificial</h2>
+          <h2 class="admin-h2">Inteligencia artificial</h2>
           {aiReady
             ? <span class="badge badge-success badge-sm">configurada</span>
             : <span class="badge badge-ghost badge-sm">sin configurar</span>}
@@ -514,9 +517,9 @@ const missingBusiness = missingBusinessFields(business);
     </p>
 
     <!-- Redirects -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">Redirecciones</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">Redirecciones</h2>
         <div id="redirects-list" class="flex flex-col gap-2">
           {redirects.map((r, i) => (
             <div class="flex gap-2 items-center redirect-row">

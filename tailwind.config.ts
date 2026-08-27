@@ -4,7 +4,7 @@ import daisyui from "daisyui";
 // where the alias does not exist. The list of themes lives there so the settings selector
 // and the compiled stylesheet cannot disagree — offering 32 while compiling 2 meant 30 of
 // the choices silently did nothing.
-import { SITE_THEMES } from "./src/lib/theme";
+import { SITE_THEMES, ADMIN_THEME_DEFINITIONS } from "./src/lib/theme";
 
 export default {
   content: ["./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}"],
@@ -20,7 +20,10 @@ export default {
   },
   plugins: [daisyui],
   daisyui: {
-    themes: [...SITE_THEMES],
+    // The site's themes plus the backoffice's own two. Kept in one array because daisyUI
+    // takes one, but the settings selector only ever offers SITE_THEMES — an editor must not
+    // be able to put the admin palette on a client's website.
+    themes: [...SITE_THEMES, ...ADMIN_THEME_DEFINITIONS],
     darkTheme: "dark",
     base: true,
     styled: true,

@@ -1,9 +1,9 @@
 <template>
   <div class="flex flex-col gap-8">
-    <div v-for="role in roles" :key="role.id" class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
+    <div v-for="role in roles" :key="role.id" class="panel">
+      <div class="panel-body">
         <div class="flex items-center gap-2">
-          <h2 class="card-title text-base capitalize">{{ role.label }}</h2>
+          <h2 class="admin-h2 capitalize">{{ role.label }}</h2>
           <span class="badge badge-outline badge-sm">{{ role.key }}</span>
           <span v-if="role.key === 'admin'" class="badge badge-success badge-sm">Acceso total siempre</span>
         </div>

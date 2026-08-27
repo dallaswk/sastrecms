@@ -32,7 +32,10 @@ const siteRoles = await db.query.roles.findMany({
 const currentUserId = Astro.locals.user!.id;
 ---
 
-<AdminLayout title="Usuarios">
+<AdminLayout
+  title="Usuarios"
+  description="Quién puede entrar y con qué rol."
+>
   <div class="flex flex-col gap-6 ">
 
     <div class="overflow-x-auto">

@@ -1,7 +1,8 @@
 <template>
   <div class="flex flex-col gap-3">
-    <div v-if="!rows.length" class="text-center py-16 text-base-content/50 border border-dashed border-base-300 rounded-lg">
-      No hay mensajes que mostrar.
+    <div v-if="!rows.length" class="empty-state">
+      <strong>No hay mensajes que mostrar</strong>
+      <p>Cuando alguien escriba por un formulario del sitio, aparecerá aquí.</p>
     </div>
 
     <template v-else>

@@ -13,7 +13,10 @@ const allTypes = await db.query.contentTypes.findMany({
 });
 ---
 
-<AdminLayout title="Tipos de contenido">
+<AdminLayout
+  title="Tipos de contenido"
+  description="Los campos que tendrá cada página. La clave de un campo no se puede cambiar una vez creada."
+>
   <div class="flex justify-end mb-6">
     <a href="/admin/content-types/new" class="btn btn-primary btn-sm">+ Nuevo tipo</a>
   </div>

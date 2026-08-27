@@ -1,0 +1,24 @@
+---
+import { ADMIN_ICONS, type AdminIconName } from "@lib/admin-icons";
+
+/**
+ * `aria-hidden` on every one: the label next to it already says what the link is, and a screen
+ * reader announcing «icono de contenido, Contenido» is worse than silence.
+ */
+interface Props {
+  name: AdminIconName;
+  class?: string;
+}
+const { name, class: className = "" } = Astro.props;
+---
+
+<svg
+  class={className}
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="1.75"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+><path d={ADMIN_ICONS[name]} /></svg>

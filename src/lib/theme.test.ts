@@ -10,6 +10,7 @@ import {
   DEFAULT_CONTAINER,
   DEFAULT_TYPE_SCALE,
   isSiteTheme,
+  ADMIN_THEMES,
   getFont,
   googleFontsHref,
   buildThemeCss,
@@ -26,9 +27,22 @@ import tailwindConfig from "../../tailwind.config";
  * del mismo array, y este test lo sujeta.
  */
 describe("temas: una sola fuente", () => {
-  it("lo que Tailwind compila es exactamente lo que se ofrece", () => {
-    const compiled = (tailwindConfig as any).daisyui.themes as string[];
-    expect([...compiled].sort()).toEqual([...SITE_THEMES].sort());
+  it("lo que Tailwind compila para el sitio es exactamente lo que se ofrece", () => {
+    // La configuración compila además los dos temas del backoffice, que son objetos y no
+    // cadenas. Los del sitio son los que puede elegir un cliente, y son los que se comparan.
+    const compiled = (tailwindConfig as any).daisyui.themes as unknown[];
+    const siteNames = compiled.filter((t): t is string => typeof t === "string");
+    expect([...siteNames].sort()).toEqual([...SITE_THEMES].sort());
+  });
+
+  it("los temas del backoffice se compilan, y no se ofrecen al sitio", () => {
+    const compiled = (tailwindConfig as any).daisyui.themes as unknown[];
+    const adminNames = compiled
+      .filter((t): t is Record<string, unknown> => typeof t === "object" && t !== null)
+      .flatMap((t) => Object.keys(t));
+    expect(adminNames.sort()).toEqual([...ADMIN_THEMES].sort());
+    // Un editor no debe poder ponerle al sitio de un cliente la paleta del panel.
+    for (const name of adminNames) expect(isSiteTheme(name)).toBe(false);
   });
 
   it("cada tema tiene etiqueta en castellano", () => {

@@ -21,13 +21,13 @@ const allContentTypes = await db.query.contentTypes.findMany({
 });
 ---
 
-<AdminLayout title="Permisos">
-  <div class="mb-6">
-    <h1 class="text-xl font-bold">Permisos por rol</h1>
-    <p class="text-sm text-base-content/50 mt-1">
-      Define qué puede hacer cada rol con cada tipo de contenido. Los cambios se guardan automáticamente al marcar o desmarcar.
-    </p>
-  </div>
+<AdminLayout
+  title="Permisos"
+  description="Qué puede hacer cada rol con cada tipo de contenido."
+>
+  <p class="admin-hint mb-5">
+    Los cambios se guardan automáticamente al marcar o desmarcar.
+  </p>
 
   {allRoles.length === 0 ? (
     <div class="alert alert-warning">

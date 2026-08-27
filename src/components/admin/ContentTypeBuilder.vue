@@ -1,9 +1,9 @@
 <template>
   <div class="flex flex-col gap-8 max-w-3xl">
     <!-- Basic info -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
-        <h2 class="card-title text-base">Información básica</h2>
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="admin-h2">Información básica</h2>
 
         <div class="grid grid-cols-2 gap-4">
           <div class="form-control">
@@ -45,10 +45,10 @@
     </section>
 
     <!-- Fields -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-4">
+    <section class="panel">
+      <div class="panel-body">
         <div class="flex justify-between items-center">
-          <h2 class="card-title text-base">Campos</h2>
+          <h2 class="admin-h2">Campos</h2>
           <button type="button" class="btn btn-sm btn-outline" @click="addField">
             + Añadir campo
           </button>

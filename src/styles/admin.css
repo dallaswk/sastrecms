@@ -1,0 +1,394 @@
+/*
+ * The backoffice's own layer.
+ *
+ * Not a second framework: daisyUI still supplies the components. What is here is the handful of
+ * decisions that were being re-taken, slightly differently, on every page — the panel, the field
+ * rhythm, the empty state, the focus ring — plus a type scale, because everything was text-sm
+ * and text-base and nothing had a hierarchy.
+ */
+
+/*
+ * No @layer wrapper: a Tailwind @layer is only valid in a file that also declares the
+ * @tailwind directives, and this sheet is separate on purpose so a visitor never downloads
+ * the backoffice's styles. It is imported *after* global.css, so at equal specificity these
+ * rules win over a utility — which is why every one of them is a single class doing one thing,
+ * and why none of them sets a property a utility is likely to be layered on top of.
+ */
+
+  /*
+   * A system UI stack rather than a webfont.
+   *
+   * On macOS this is SF Pro and on Windows Segoe UI, both of which are better UI faces than
+   * anything worth downloading — and the backoffice is a tool people open forty times a day,
+   * so a render-blocking font request is a cost paid forty times for no gain.
+   */
+  .admin-root {
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings: "cv05", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Anything that is a number in a column: counters, dates, sizes, ids. */
+  .admin-root .tabular,
+  .admin-root time,
+  .admin-root code {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * One focus ring, everywhere.
+   *
+   * daisyUI's differs per component, and several of them are nearly invisible on a dark
+   * ground — which for a form-heavy tool means keyboard users cannot tell where they are.
+   */
+  .admin-root :focus-visible {
+    outline: 2px solid oklch(var(--p));
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+
+  .admin-root ::selection {
+    background: oklch(var(--p) / 0.25);
+  }
+
+  /* Scrollbars in the sidebar and long lists, so they stop being chunky light bars. */
+  .admin-root * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(var(--b3)) transparent;
+  }
+  .admin-root *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .admin-root *::-webkit-scrollbar-thumb {
+    background: oklch(var(--b3));
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .admin-root *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* ---------------------------------------------------------------- tipografía */
+
+  .admin-h1 {
+    font-size: 1.375rem;
+    line-height: 1.25;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  .admin-h2 {
+    font-size: 0.9375rem;
+    line-height: 1.35;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  /* Small caps for a group label. Uppercase needs letter-spacing or it reads as a smudge. */
+  .admin-eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: oklch(var(--bc) / 0.45);
+  }
+
+  .admin-hint {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: oklch(var(--bc) / 0.6);
+    max-width: 62ch;
+  }
+
+  /* ------------------------------------------------------------------- paneles */
+
+  /*
+   * The card, with one shadow instead of daisyUI's.
+   *
+   * A border *and* a very soft shadow: on a dark ground a border alone reads flat, and a shadow
+   * alone disappears. The pair is what gives a panel an edge without looking like a pop-up.
+   */
+  .panel {
+    background: oklch(var(--b1));
+    border: 1px solid oklch(var(--b3) / 0.8);
+    border-radius: var(--rounded-box, 0.625rem);
+    box-shadow:
+      0 1px 2px oklch(0% 0 0 / 0.06),
+      0 8px 24px -18px oklch(0% 0 0 / 0.35);
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.875rem 1.125rem;
+    border-bottom: 1px solid oklch(var(--b3) / 0.7);
+  }
+
+  .panel-body {
+    padding: 1.125rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .panel-body-tight {
+    padding: 0.5rem 0.75rem;
+  }
+
+  /* -------------------------------------------------------------------- campos */
+
+  /*
+   * Label above, hint below, and the hint is part of the field.
+   *
+   * daisyUI's `label` puts a second slot on the *right*, which is where a hint ends up looking
+   * like a value. Putting it under the input is where people read it.
+   */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .field > label,
+  .field-label {
+    font-size: 0.8125rem;
+    font-weight: 550;
+    color: oklch(var(--bc) / 0.85);
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: oklch(var(--bc) / 0.5);
+    max-width: 60ch;
+  }
+
+  .field-error {
+    font-size: 0.75rem;
+    color: oklch(var(--er));
+  }
+
+  .field-required {
+    color: oklch(var(--er));
+    font-weight: 600;
+  }
+
+  /* A grid of fields that collapses on a narrow window rather than at a fixed breakpoint. */
+  .field-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+    gap: 0.875rem 1.125rem;
+  }
+
+  /* ---------------------------------------------------------------- listas */
+
+  /*
+   * A row in a list. Hover is a background, not a border: a border on hover shifts the
+   * layout by a pixel and the whole list twitches as the pointer moves down it.
+   */
+  .data-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.12s ease;
+  }
+
+  .data-row:hover {
+    background: oklch(var(--b2));
+  }
+
+  .data-list > * + * {
+    border-top: 1px solid oklch(var(--b3) / 0.55);
+  }
+
+  /* ------------------------------------------------------------- estado vacío */
+
+  /*
+   * An empty state says what to do, not that there is nothing.
+   *
+   * «Esta carpeta está vacía» tells someone what they can already see. The useful half is the
+   * next action, so the primitive has room for it.
+   */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 2.75rem 1.5rem;
+    text-align: center;
+    border: 1px dashed oklch(var(--b3));
+    border-radius: var(--rounded-box, 0.625rem);
+    color: oklch(var(--bc) / 0.55);
+  }
+
+  .empty-state strong {
+    color: oklch(var(--bc) / 0.85);
+    font-weight: 600;
+  }
+
+  /* ------------------------------------------------------------ navegación */
+
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.4375rem 0.625rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: oklch(var(--bc) / 0.72);
+    position: relative;
+    transition:
+      background-color 0.12s ease,
+      color 0.12s ease;
+  }
+
+  .nav-link:hover {
+    background: oklch(var(--b2));
+    color: oklch(var(--bc));
+  }
+
+  /*
+   * The current page.
+   *
+   * A tinted background *and* a rail on the left edge. The tint alone is too quiet next to a
+   * hover state, and «which page am I on» is the one question a sidebar exists to answer.
+   */
+  .nav-link[aria-current="page"] {
+    background: oklch(var(--p) / 0.14);
+    color: oklch(var(--p));
+    font-weight: 600;
+  }
+
+  .nav-link[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    left: -0.5rem;
+    top: 0.3rem;
+    bottom: 0.3rem;
+    width: 2px;
+    border-radius: 999px;
+    background: oklch(var(--p));
+  }
+
+  .nav-link svg {
+    width: 1.0625rem;
+    height: 1.0625rem;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+
+  .nav-link[aria-current="page"] svg {
+    opacity: 1;
+  }
+
+  /* --------------------------------------------------------------- detalles */
+
+  /* A key/value pair, for the detail panels. */
+  .kv {
+    display: grid;
+    grid-template-columns: minmax(7rem, max-content) 1fr;
+    gap: 0.25rem 1rem;
+    font-size: 0.8125rem;
+  }
+
+  .kv dt {
+    color: oklch(var(--bc) / 0.55);
+  }
+
+  .kv dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+/* Nothing here is load-bearing, so it all goes when someone asks for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .admin-root *,
+  .admin-root *::before,
+  .admin-root *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/*
+ * The theme toggle's two icons.
+ *
+ * Keyed on `data-mode`, which this project sets, rather than on `data-theme`, whose values are
+ * daisyUI theme names that could be renamed out from under a stylesheet.
+ */
+.theme-icon-light {
+  display: none;
+}
+html[data-mode="light"] .theme-icon-light {
+  display: block;
+}
+html[data-mode="light"] .theme-icon-dark {
+  display: none;
+}
+
+/*
+ * Input borders, measured rather than eyeballed.
+ *
+ * daisyUI's `input-bordered` is `--bc / 0.2`, which measures 1.70:1 against a dark panel and
+ * 1.51:1 against a light one. WCAG 1.4.11 asks 3:1 for the boundary of a control, and for a
+ * form-heavy tool that boundary *is* how you find the field — there is nothing else marking it.
+ *
+ * The alphas below were computed against each theme's own panel colour: 0.42 reaches 3.2:1 on
+ * the dark ground and 0.52 reaches 3.4:1 on the white one. They differ because the same alpha
+ * over black and over white does not produce the same contrast, which is why one value for both
+ * themes always leaves one of them short.
+ */
+.admin-root :is(.input, .select, .textarea, .file-input) {
+  border-color: oklch(var(--bc) / 0.42);
+}
+
+html[data-mode="light"] .admin-root :is(.input, .select, .textarea, .file-input) {
+  border-color: oklch(var(--bc) / 0.52);
+}
+
+/* Hover lifts it a little, so a field reads as interactive before it is focused. */
+.admin-root :is(.input, .select, .textarea):hover:not(:disabled):not(:focus) {
+  border-color: oklch(var(--bc) / 0.6);
+}
+
+.admin-root :is(.input, .select, .textarea):focus,
+.admin-root :is(.input, .select, .textarea):focus-visible {
+  border-color: oklch(var(--p));
+}
+
+/* A rejected field says so with colour *and* the message under it, never colour alone. */
+.admin-root :is(.input-error, .select-error, .textarea-error) {
+  border-color: oklch(var(--er)) !important;
+}
+
+.admin-root :is(.input, .select, .textarea, .file-input):disabled {
+  border-color: oklch(var(--bc) / 0.15);
+  color: oklch(var(--bc) / 0.4);
+}
+
+/*
+ * Placeholders at 0.42 rather than daisyUI's 0.2.
+ *
+ * A placeholder is the hint of last resort — it disappears the moment someone types — but while
+ * it is there it has to be readable, and 0.2 over a dark panel is 1.7:1.
+ */
+.admin-root ::placeholder {
+  color: oklch(var(--bc) / 0.42);
+  opacity: 1;
+}

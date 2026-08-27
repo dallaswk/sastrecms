@@ -143,30 +143,20 @@ const relative = (date: Date | null) => {
 };
 
 const firstName = user?.name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "";
+
+// The greeting *is* the page title: two headers on the landing page of the backoffice — one
+// saying «Panel» and one saying «Hola, Miguel» — is one too many, and the greeting is the more
+// useful of the two because it confirms who you are signed in as.
+const greeting = firstName ? `Hola, ${firstName}` : "Panel";
+const subtitle = [siteSettings?.siteName, siteSettings?.tagline].filter(Boolean).join(" · ");
 ---
 
-<AdminLayout title="Dashboard">
+<AdminLayout title={greeting} description={subtitle}>
   <div class="flex flex-col gap-6">
 
-    <!-- Cabecera -->
-    <header class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-bold">
-          {firstName ? `Hola, ${firstName}` : "Panel"}
-        </h1>
-        <p class="text-base-content/60">
-          {siteSettings?.siteName ?? "Sin nombre"}
-          {siteSettings?.tagline && <span class="text-base-content/40"> · {siteSettings.tagline}</span>}
-        </p>
-      </div>
-      <a href="/" target="_blank" rel="noopener" class="btn btn-sm btn-ghost border border-base-300">
-        Ver el sitio ↗
-      </a>
-    </header>
-
     <!-- Estado de entrega: la razón de ser de esta página -->
-    <section class="card bg-base-100 border border-base-300">
-      <div class="card-body gap-5">
+    <section class="panel">
+      <div class="panel-body">
         <div class="flex items-center gap-5 flex-wrap">
           <div
             class="radial-progress shrink-0"
@@ -181,7 +171,7 @@ const firstName = user?.name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "";
           </div>
 
           <div class="flex flex-col gap-1 min-w-0">
-            <h2 class="card-title text-base">
+            <h2 class="admin-h2">
               {summary.ready ? "Listo para entregar" : "Aún no se puede entregar"}
             </h2>
             <p class="text-sm text-base-content/60">
@@ -230,28 +220,28 @@ const firstName = user?.name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "";
 
     <!-- Cifras -->
     <div class="grid gap-3 grid-cols-2 lg:grid-cols-4">
-      <a href="/admin/content" class="card bg-base-100 border border-base-300 hover:border-primary/40 transition-colors">
-        <div class="card-body p-4 gap-0">
+      <a href="/admin/content" class="panel transition-colors hover:border-primary/40">
+        <div class="panel-body !p-4 !gap-0">
           <span class="text-xs uppercase tracking-wide text-base-content/50">Publicadas</span>
           <span class="text-3xl font-bold tabular-nums">{published.length}</span>
         </div>
       </a>
-      <a href="/admin/content" class="card bg-base-100 border border-base-300 hover:border-primary/40 transition-colors">
-        <div class="card-body p-4 gap-0">
+      <a href="/admin/content" class="panel transition-colors hover:border-primary/40">
+        <div class="panel-body !p-4 !gap-0">
           <span class="text-xs uppercase tracking-wide text-base-content/50">Borradores</span>
           <span class="text-3xl font-bold tabular-nums">{drafts.length}</span>
         </div>
       </a>
-      <a href="/admin/forms" class="card bg-base-100 border border-base-300 hover:border-primary/40 transition-colors">
-        <div class="card-body p-4 gap-0">
+      <a href="/admin/forms" class="panel transition-colors hover:border-primary/40">
+        <div class="panel-body !p-4 !gap-0">
           <span class="text-xs uppercase tracking-wide text-base-content/50">Mensajes sin leer</span>
           <span
             class:list={["text-3xl font-bold tabular-nums", unreadCount > 0 && "text-primary"]}
           >{unreadCount}</span>
         </div>
       </a>
-      <a href="/admin/media" class="card bg-base-100 border border-base-300 hover:border-primary/40 transition-colors">
-        <div class="card-body p-4 gap-0">
+      <a href="/admin/media" class="panel transition-colors hover:border-primary/40">
+        <div class="panel-body !p-4 !gap-0">
           <span class="text-xs uppercase tracking-wide text-base-content/50">Archivos</span>
           <span class="text-3xl font-bold tabular-nums">{mediaRows.length}</span>
         </div>
@@ -260,10 +250,10 @@ const firstName = user?.name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "";
 
     <!-- Actividad -->
     <div class="grid gap-4 lg:grid-cols-2">
-      <section class="card bg-base-100 border border-base-300">
-        <div class="card-body gap-3">
+      <section class="panel">
+        <div class="panel-body">
           <div class="flex items-baseline justify-between">
-            <h2 class="card-title text-base">Editado hace poco</h2>
+            <h2 class="admin-h2">Editado hace poco</h2>
             <a href="/admin/content" class="link text-sm">Todo el contenido</a>
           </div>
 
@@ -292,10 +282,10 @@ const firstName = user?.name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "";
         </div>
       </section>
 
-      <section class="card bg-base-100 border border-base-300">
-        <div class="card-body gap-3">
+      <section class="panel">
+        <div class="panel-body">
           <div class="flex items-baseline justify-between">
-            <h2 class="card-title text-base">Últimos mensajes</h2>
+            <h2 class="admin-h2">Últimos mensajes</h2>
             <a href="/admin/forms" class="link text-sm">La bandeja</a>
           </div>
 
