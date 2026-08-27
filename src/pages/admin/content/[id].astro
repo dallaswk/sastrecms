@@ -2,13 +2,13 @@
 import AdminLayout from "@layouts/AdminLayout.astro";
 import NodeForm from "@components/admin/NodeForm.vue";
 import { eq, and, isNotNull } from "drizzle-orm";
-import { nodes, contentTypes, sites } from "@db/schema";
+import { nodes, contentTypes } from "@db/schema";
 import { checkPermission } from "@lib/permissions";
 export const prerender = false;
 
 const { id } = Astro.params;
 const db = Astro.locals.db;
-const SITE_ID = "site_default";
+const siteId = Astro.locals.siteId;
 const userId = Astro.locals.user!.id;
 
 const isNew = id === "new";
@@ -24,21 +24,21 @@ if (isNew) {
   if (!contentType) return Astro.redirect("/admin/content");
 } else {
   node = await db.query.nodes.findFirst({
-    where: and(eq(nodes.id, id!), eq(nodes.siteId, SITE_ID)),
+    where: and(eq(nodes.id, id!), eq(nodes.siteId, siteId)),
     with: { contentType: true },
   }) ?? null;
   if (!node) return Astro.redirect("/admin/content");
   contentType = (node as any).contentType;
 }
 
-const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
+const site = Astro.locals.site;
 const allLocales = (site?.locales as string[] | null) ?? ["es"];
 const isTranslatable = contentType?.translatable ?? true;
 const availableLocales = isTranslatable ? allLocales : [allLocales[0]];
 
-const canEdit = await checkPermission(db, userId, SITE_ID, contentType?.id ?? "", "edit");
-const canPublish = await checkPermission(db, userId, SITE_ID, contentType?.id ?? "", "publish");
-const canDelete = await checkPermission(db, userId, SITE_ID, contentType?.id ?? "", "delete");
+const canEdit = await checkPermission(db, userId, siteId, contentType?.id ?? "", "edit");
+const canPublish = await checkPermission(db, userId, siteId, contentType?.id ?? "", "publish");
+const canDelete = await checkPermission(db, userId, siteId, contentType?.id ?? "", "delete");
 
 let translations: { id: string; locale: string; title: string; path: string }[] = [];
 if (!isNew && node?.translationGroupId) {

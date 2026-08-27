@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { createDb, type Database } from "@db/client";
 import { createAuth } from "@lib/auth";
 import { isAdmin } from "@lib/permissions";
+import { DEFAULT_SITE_ID, resolveSiteId } from "@lib/site";
 import { sites, settings, roles, users } from "@db/schema";
 
 async function loadEnv(): Promise<Record<string, string | undefined>> {
@@ -16,8 +17,6 @@ async function loadEnv(): Promise<Record<string, string | undefined>> {
   }
 }
 
-const SITE_ID = "site_default";
-
 /**
  * The site row and the base roles only ever need creating once. Running this on every
  * request cost two extra Turso round trips per page, including anonymous public pages
@@ -27,6 +26,9 @@ const SITE_ID = "site_default";
 let bootstrapped = false;
 
 async function ensureBootstrap(db: Database) {
+  // Bootstrap creates the mono-tenant default site, so it is the one place that still
+  // names it directly. Request handling goes through locals.siteId.
+  const SITE_ID = DEFAULT_SITE_ID;
   if (bootstrapped) return;
 
   const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
@@ -61,8 +63,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const db = createDb(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN);
 
+  const siteId = await resolveSiteId(db, context.url.host);
+
   const siteSettings = await db.query.settings.findFirst({
-    where: eq(settings.siteId, SITE_ID),
+    where: eq(settings.siteId, siteId),
   });
   const integrations = (siteSettings?.integrations as Record<string, string> | null) ?? {};
 
@@ -76,6 +80,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   });
 
   context.locals.db = db;
+  context.locals.siteId = siteId;
   context.locals.auth = auth;
   context.locals.env = env;
   // Shared so BaseLayout and the page resolver don't each re-query the same row.
@@ -107,11 +112,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.user = session?.user ?? null;
   // Resolved once here so the layout and the page don't each re-run the role lookup.
   context.locals.isAdmin = session?.user
-    ? await isAdmin(db, session.user.id, SITE_ID)
+    ? await isAdmin(db, session.user.id, siteId)
     : false;
 
   if (isAdminRoute || isApiRoute) {
     await ensureBootstrap(db);
+    // defaultLocale and locales are only read while administering content. Loading the
+    // row here saves the actions and admin pages a query each; public pages never need
+    // it, so they don't pay for it.
+    context.locals.site =
+      (await db.query.sites.findFirst({ where: eq(sites.id, siteId) })) ?? null;
+  } else {
+    context.locals.site = null;
   }
 
   if (!isAdminRoute && !isApiRoute) {

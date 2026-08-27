@@ -3,28 +3,27 @@ import AdminLayout from "@layouts/AdminLayout.astro";
 import NodeTree from "@components/admin/NodeTree.vue";
 import type { TreeNode } from "@components/admin/nodeTreeContext";
 import { eq, and } from "drizzle-orm";
-import { nodes, contentTypes, userRoles, sites } from "@db/schema";
+import { nodes, contentTypes, userRoles } from "@db/schema";
 import { checkPermission } from "@lib/permissions";
 export const prerender = false;
 
 const db = Astro.locals.db;
-const SITE_ID = "site_default";
+const siteId = Astro.locals.siteId;
 const userId = Astro.locals.user!.id;
 
 const allNodes = await db.query.nodes.findMany({
-  where: eq(nodes.siteId, SITE_ID),
+  where: eq(nodes.siteId, siteId),
   orderBy: (n, { asc }) => [asc(n.position), asc(n.path)],
   with: { contentType: true },
 });
 
 const allContentTypes = await db.query.contentTypes.findMany({
-  where: eq(contentTypes.siteId, SITE_ID),
+  where: eq(contentTypes.siteId, siteId),
 });
 
-const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
 
 const assignment = await db.query.userRoles.findFirst({
-  where: and(eq(userRoles.userId, userId), eq(userRoles.siteId, SITE_ID)),
+  where: and(eq(userRoles.userId, userId), eq(userRoles.siteId, siteId)),
   with: { role: true },
 });
 const isAdmin = assignment?.role.key === "admin";
@@ -33,9 +32,9 @@ const canCreatePerType: Record<string, boolean> = {};
 const editableTypeIds: string[] = [];
 const deletableTypeIds: string[] = [];
 for (const ct of allContentTypes) {
-  canCreatePerType[ct.id] = await checkPermission(db, userId, SITE_ID, ct.id, "create");
-  if (await checkPermission(db, userId, SITE_ID, ct.id, "edit")) editableTypeIds.push(ct.id);
-  if (await checkPermission(db, userId, SITE_ID, ct.id, "delete")) deletableTypeIds.push(ct.id);
+  canCreatePerType[ct.id] = await checkPermission(db, userId, siteId, ct.id, "create");
+  if (await checkPermission(db, userId, siteId, ct.id, "edit")) editableTypeIds.push(ct.id);
+  if (await checkPermission(db, userId, siteId, ct.id, "delete")) deletableTypeIds.push(ct.id);
 }
 
 type RawNode = typeof allNodes[number] & { contentType: typeof allContentTypes[number] | null };
@@ -97,7 +96,7 @@ const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
           nodes={JSON.stringify(treeData)}
           editableTypes={isAdmin ? null : JSON.stringify(editableTypeIds)}
           deletableTypes={isAdmin ? null : JSON.stringify(deletableTypeIds)}
-          defaultLocale={site?.defaultLocale ?? "es"}
+          defaultLocale={Astro.locals.site?.defaultLocale ?? "es"}
         />
       </div>
     </div>

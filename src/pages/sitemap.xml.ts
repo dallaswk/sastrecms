@@ -4,14 +4,13 @@ import { nodes } from "@db/schema";
 
 export const prerender = false;
 
-const SITE_ID = "site_default";
-
 export const GET: APIRoute = async ({ locals, site, url }) => {
   const db = locals.db;
+  const siteId = locals.siteId;
   const baseUrl = site?.origin ?? url.origin;
 
   const publishedNodes = await db.query.nodes.findMany({
-    where: and(eq(nodes.siteId, SITE_ID), eq(nodes.status, "published")),
+    where: and(eq(nodes.siteId, siteId), eq(nodes.status, "published")),
     orderBy: (n, { desc }) => [desc(n.updatedAt)],
   });
 

@@ -5,8 +5,6 @@ import { contentTypes } from "@db/schema";
 import { generateId } from "@lib/id";
 import type { FieldDefinition } from "@db/schema";
 
-const SITE_ID = "site_default";
-
 const FieldSchema: z.ZodType<FieldDefinition> = z.lazy(() =>
   z.object({
     key: z.string().min(1).regex(/^[a-z_][a-z0-9_]*$/, "Only lowercase letters, numbers and underscores"),
@@ -22,9 +20,10 @@ const FieldSchema: z.ZodType<FieldDefinition> = z.lazy(() =>
 export const contentTypeActions = {
   list: defineAction({
     handler: async (_input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       return context.locals.db.query.contentTypes.findMany({
-        where: eq(contentTypes.siteId, SITE_ID),
+        where: eq(contentTypes.siteId, siteId),
         orderBy: (ct, { asc }) => [asc(ct.label)],
       });
     },
@@ -41,12 +40,13 @@ export const contentTypeActions = {
       fieldSchema: z.array(FieldSchema).default([]),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const existing = await db.query.contentTypes.findFirst({
         where: and(
-          eq(contentTypes.siteId, SITE_ID),
+          eq(contentTypes.siteId, siteId),
           eq(contentTypes.key, input.key)
         ),
       });
@@ -55,7 +55,7 @@ export const contentTypeActions = {
       const id = generateId("ct");
       await db.insert(contentTypes).values({
         id,
-        siteId: SITE_ID,
+        siteId,
         key: input.key,
         label: input.label,
         icon: input.icon,
@@ -81,11 +81,12 @@ export const contentTypeActions = {
       fieldSchema: z.array(FieldSchema).optional(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const ct = await db.query.contentTypes.findFirst({
-        where: and(eq(contentTypes.id, input.id), eq(contentTypes.siteId, SITE_ID)),
+        where: and(eq(contentTypes.id, input.id), eq(contentTypes.siteId, siteId)),
       });
       if (!ct) throw new Error("Content type not found");
 
@@ -105,11 +106,12 @@ export const contentTypeActions = {
   delete: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const ct = await db.query.contentTypes.findFirst({
-        where: and(eq(contentTypes.id, input.id), eq(contentTypes.siteId, SITE_ID)),
+        where: and(eq(contentTypes.id, input.id), eq(contentTypes.siteId, siteId)),
       });
       if (!ct) throw new Error("Content type not found");
       if (ct.isSystem) throw new Error("System content types cannot be deleted");

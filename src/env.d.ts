@@ -25,6 +25,10 @@ declare namespace App {
     env: Record<string, string | undefined>;
     /** Site settings row, loaded once per request and shared with the layout. */
     settings: typeof import("@db/schema").settings.$inferSelect | null;
+    /** Which site this request is for. Never hardcode the id — read it from here. */
+    siteId: string;
+    /** The site row. Only loaded on /admin and API routes, which are the ones that need it. */
+    site: typeof import("@db/schema").sites.$inferSelect | null;
     session: { session: import("better-auth").Session; user: import("better-auth").User } | null;
     user: import("better-auth").User | null;
     /** True when the signed-in user holds the admin role on this site. */

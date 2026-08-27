@@ -9,7 +9,7 @@ if (Astro.locals.session) {
 }
 
 const siteSettings = await Astro.locals.db.query.settings.findFirst({
-  where: eq(settings.siteId, "site_default"),
+  where: eq(settings.siteId, Astro.locals.siteId),
 });
 const integrations = (siteSettings?.integrations as Record<string, string> | null) ?? {};
 const hasMagicLink = !!(integrations.resendApiKey && integrations.resendFrom);

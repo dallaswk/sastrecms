@@ -2,7 +2,7 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 
-const SITE_ID = "site_default";
+import { DEFAULT_SITE_ID as SITE_ID } from "../lib/site";
 
 async function seed() {
   const url = process.env.TURSO_DATABASE_URL;

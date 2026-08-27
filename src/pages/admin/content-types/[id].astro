@@ -5,16 +5,16 @@ import { eq, and } from "drizzle-orm";
 import { contentTypes } from "@db/schema";
 export const prerender = false;
 
+const siteId = Astro.locals.siteId;
+
 const { id } = Astro.params;
 const db = Astro.locals.db;
-const SITE_ID = "site_default";
-
 const isNew = id === "new";
 let ct = null;
 
 if (!isNew) {
   ct = await db.query.contentTypes.findFirst({
-    where: and(eq(contentTypes.id, id!), eq(contentTypes.siteId, SITE_ID)),
+    where: and(eq(contentTypes.id, id!), eq(contentTypes.siteId, siteId)),
   });
   if (!ct) return Astro.redirect("/admin/content-types");
 }

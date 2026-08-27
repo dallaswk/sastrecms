@@ -4,11 +4,11 @@ import { eq } from "drizzle-orm";
 import { contentTypes } from "@db/schema";
 export const prerender = false;
 
-const db = Astro.locals.db;
-const SITE_ID = "site_default";
+const siteId = Astro.locals.siteId;
 
+const db = Astro.locals.db;
 const allTypes = await db.query.contentTypes.findMany({
-  where: eq(contentTypes.siteId, SITE_ID),
+  where: eq(contentTypes.siteId, siteId),
   orderBy: (ct, { asc }) => [asc(ct.label)],
 });
 ---

@@ -5,19 +5,19 @@ import { eq } from "drizzle-orm";
 import { roles, contentTypes } from "@db/schema";
 export const prerender = false;
 
+const siteId = Astro.locals.siteId;
+
 // Admin-only: this page reads the permission matrix / user roles / the Resend key.
 if (!Astro.locals.isAdmin) return Astro.redirect("/admin");
 
 const db = Astro.locals.db;
-const SITE_ID = "site_default";
-
 const allRoles = await db.query.roles.findMany({
-  where: eq(roles.siteId, SITE_ID),
+  where: eq(roles.siteId, siteId),
   with: { permissions: { with: { contentType: true } } },
 });
 
 const allContentTypes = await db.query.contentTypes.findMany({
-  where: eq(contentTypes.siteId, SITE_ID),
+  where: eq(contentTypes.siteId, siteId),
 });
 ---
 

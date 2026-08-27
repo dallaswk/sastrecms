@@ -5,22 +5,21 @@ import { users, roles, userRoles, sessions } from "@db/schema";
 import { requireAdmin as assertAdmin } from "@lib/permissions";
 import type { Database } from "@db/client";
 
-const SITE_ID = "site_default";
-
 /**
  * Authentication is not authorisation. This used to check `locals.user` only, which
  * let any collaborator with a session call assignRole and promote themselves.
  */
 async function requireAdmin(context: {
-  locals: { user: { id: string } | null; db: Database };
+  locals: { user: { id: string } | null; db: Database; siteId: string };
 }) {
   if (!context.locals.user) throw new Error("Unauthorized");
-  await assertAdmin(context.locals.db, context.locals.user.id, SITE_ID);
+  await assertAdmin(context.locals.db, context.locals.user.id, context.locals.siteId);
 }
 
 export const userActions = {
   list: defineAction({
     handler: async (_input, context) => {
+      const siteId = context.locals.siteId;
       await requireAdmin(context);
       const db = context.locals.db;
 
@@ -29,7 +28,7 @@ export const userActions = {
       });
 
       const assignments = await db.query.userRoles.findMany({
-        where: eq(userRoles.siteId, SITE_ID),
+        where: eq(userRoles.siteId, siteId),
         with: { role: true },
       });
 
@@ -47,18 +46,19 @@ export const userActions = {
       roleKey: z.enum(["admin", "editor", "collaborator"]),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       await requireAdmin(context);
       const db = context.locals.db;
 
       const role = await db.query.roles.findFirst({
-        where: and(eq(roles.siteId, SITE_ID), eq(roles.key, input.roleKey)),
+        where: and(eq(roles.siteId, siteId), eq(roles.key, input.roleKey)),
       });
       if (!role) throw new Error(`Role "${input.roleKey}" not found`);
 
       const existing = await db.query.userRoles.findFirst({
         where: and(
           eq(userRoles.userId, input.userId),
-          eq(userRoles.siteId, SITE_ID)
+          eq(userRoles.siteId, siteId)
         ),
       });
 
@@ -69,14 +69,14 @@ export const userActions = {
           .where(
             and(
               eq(userRoles.userId, input.userId),
-              eq(userRoles.siteId, SITE_ID)
+              eq(userRoles.siteId, siteId)
             )
           );
       } else {
         await db.insert(userRoles).values({
           userId: input.userId,
           roleId: role.id,
-          siteId: SITE_ID,
+          siteId,
           assignedAt: new Date(),
         });
       }
@@ -88,6 +88,7 @@ export const userActions = {
   removeRole: defineAction({
     input: z.object({ userId: z.string() }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       await requireAdmin(context);
       const db = context.locals.db;
 
@@ -96,7 +97,7 @@ export const userActions = {
         .where(
           and(
             eq(userRoles.userId, input.userId),
-            eq(userRoles.siteId, SITE_ID)
+            eq(userRoles.siteId, siteId)
           )
         );
 

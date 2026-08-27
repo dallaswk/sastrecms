@@ -9,7 +9,7 @@ if (!Astro.locals.isAdmin) return Astro.redirect("/admin");
 
 const db = Astro.locals.db;
 const siteSettings = await db.query.settings.findFirst({
-  where: eq(settings.siteId, "site_default"),
+  where: eq(settings.siteId, Astro.locals.siteId),
 });
 
 const theme = (siteSettings?.theme as Record<string, string>) ?? {};

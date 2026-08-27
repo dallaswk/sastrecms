@@ -9,15 +9,15 @@ import PortfolioItemRenderer from "@components/renderers/PortfolioItemRenderer.a
 import ArchiveRenderer from "@components/renderers/ArchiveRenderer.astro";
 export const prerender = false;
 
-const SITE_ID = "site_default";
 const db = Astro.locals.db;
+const siteId = Astro.locals.siteId;
 
 const slugParam = Astro.params.slug ?? "";
 const path = slugParam ? `/${slugParam}` : "/";
 
 const node = await db.query.nodes.findFirst({
   where: and(
-    eq(nodes.siteId, SITE_ID),
+    eq(nodes.siteId, siteId),
     eq(nodes.path, path),
     eq(nodes.status, "published")
   ),

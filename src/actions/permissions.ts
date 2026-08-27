@@ -6,32 +6,31 @@ import { generateId } from "@lib/id";
 import { requireAdmin as assertAdmin } from "@lib/permissions";
 import type { Database } from "@db/client";
 
-const SITE_ID = "site_default";
-
 /**
  * Only admins may read or rewrite the permission matrix. Checking for a session
  * alone let any role edit the rules that constrain it.
  */
 async function requireAdmin(context: {
-  locals: { user: { id: string } | null; db: Database };
+  locals: { user: { id: string } | null; db: Database; siteId: string };
 }) {
   if (!context.locals.user) throw new Error("Unauthorized");
-  await assertAdmin(context.locals.db, context.locals.user.id, SITE_ID);
+  await assertAdmin(context.locals.db, context.locals.user.id, context.locals.siteId);
 }
 
 export const permissionActions = {
   listRolesWithPermissions: defineAction({
     handler: async (_input, context) => {
+      const siteId = context.locals.siteId;
       await requireAdmin(context);
       const db = context.locals.db;
 
       const allRoles = await db.query.roles.findMany({
-        where: eq(roles.siteId, SITE_ID),
+        where: eq(roles.siteId, siteId),
         with: { permissions: { with: { contentType: true } } },
       });
 
       const allContentTypes = await db.query.contentTypes.findMany({
-        where: eq(contentTypes.siteId, SITE_ID),
+        where: eq(contentTypes.siteId, siteId),
       });
 
       return { roles: allRoles, contentTypes: allContentTypes };

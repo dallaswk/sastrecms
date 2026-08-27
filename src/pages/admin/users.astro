@@ -4,10 +4,11 @@ import { eq } from "drizzle-orm";
 import { users, userRoles, roles } from "@db/schema";
 export const prerender = false;
 
+const siteId = Astro.locals.siteId;
+
 // Admin-only: this page reads the permission matrix / user roles / the Resend key.
 if (!Astro.locals.isAdmin) return Astro.redirect("/admin");
 
-const SITE_ID = "site_default";
 const db = Astro.locals.db;
 
 const allUsers = await db.query.users.findMany({
@@ -15,7 +16,7 @@ const allUsers = await db.query.users.findMany({
 });
 
 const assignments = await db.query.userRoles.findMany({
-  where: eq(userRoles.siteId, SITE_ID),
+  where: eq(userRoles.siteId, siteId),
   with: { role: true },
 });
 
@@ -24,7 +25,7 @@ const roleByUser = Object.fromEntries(
 );
 
 const siteRoles = await db.query.roles.findMany({
-  where: eq(roles.siteId, SITE_ID),
+  where: eq(roles.siteId, siteId),
   orderBy: (r, { asc }) => [asc(r.key)],
 });
 

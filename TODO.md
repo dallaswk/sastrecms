@@ -52,6 +52,27 @@ Estado del proyecto a fecha 17 Ago 2026. Rama activa: `dev`.
 
 ### Funcionalidad
 
+- [x] **`SITE_ID` centralizado (preparación para multi-tenant)** ✅ *(27 Ago 2026)*
+  Estaba hardcodeado como `const SITE_ID = "site_default"` en catorce ficheros, más dos
+  literales sueltos. Ahora el sitio se resuelve una vez por petición y viaja en `locals`.
+
+  - `src/lib/site.ts` — `DEFAULT_SITE_ID` y `resolveSiteId(db, host)`. **Este es el único
+    punto que hay que tocar en la fase SaaS**: buscar el host contra una columna
+    `sites.host` (o el control plane) y devolver ese id. Es `async` a propósito, para que
+    la firma no cambie cuando necesite E/S.
+  - `middleware.ts` resuelve el id y lo publica en `locals.siteId`. Todo lo que atiende
+    peticiones lee de ahí; sólo el bootstrap (seed, wizard, `ensureBootstrap`) nombra la
+    constante directamente.
+  - `locals.site` — la fila del sitio (`defaultLocale`, `locales`), cargada **sólo en
+    `/admin` y las APIs**, que son las que la necesitan. Eso elimina de paso seis
+    consultas: tres en `nodes.ts` (una por mutación), dos en `mcp.ts` y una en
+    `/admin/content`. Las páginas públicas no la cargan y siguen igual de baratas.
+
+  Cuidado al tocar esto: si `locals.site` dejara de llegar a las actions,
+  `computePath` recibiría `defaultLocale: undefined` y **el prefijo de idioma
+  desaparecería sin dar error**. Verificado explícitamente que crear en `en` sigue dando
+  `/en/…` tanto por action como por MCP.
+
 - [x] **Tests unitarios (Vitest)** ✅ *(27 Ago 2026)*
   74 tests sobre la lógica pura, que hasta ahora sólo estaba verificada a mano.
   `npm test` / `npm run test:watch`.

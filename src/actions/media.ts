@@ -4,8 +4,6 @@ import { eq, and, isNull } from "drizzle-orm";
 import { media, mediaFolders } from "@db/schema";
 import { generateId } from "@lib/id";
 
-const SITE_ID = "site_default";
-
 const ACCEPTED_TYPES: Record<string, "image" | "video" | "pdf" | "doc"> = {
   "image/jpeg": "image",
   "image/png": "image",
@@ -27,10 +25,11 @@ export const mediaActions = {
       folderId: z.string().nullable().optional(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
-      const conditions = [eq(media.siteId, SITE_ID)];
+      const conditions = [eq(media.siteId, siteId)];
       if (input.folderId !== undefined) {
         if (input.folderId === null) {
           conditions.push(isNull(media.folderId));
@@ -46,7 +45,7 @@ export const mediaActions = {
         }),
         db.query.mediaFolders.findMany({
           where: and(
-            eq(mediaFolders.siteId, SITE_ID),
+            eq(mediaFolders.siteId, siteId),
             input.folderId
               ? eq(mediaFolders.parentId, input.folderId)
               : isNull(mediaFolders.parentId)
@@ -67,6 +66,7 @@ export const mediaActions = {
       altText: z.string().optional(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
@@ -99,7 +99,7 @@ export const mediaActions = {
       // One id for both the row and the storage key, so a file in the bucket can always
       // be traced back to its media record.
       const id = generateId("media");
-      const storageKey = `${SITE_ID}/${id}.${ext}`;
+      const storageKey = `${siteId}/${id}.${ext}`;
 
       const arrayBuffer = await file.arrayBuffer();
       await r2.put(storageKey, arrayBuffer, {
@@ -110,7 +110,7 @@ export const mediaActions = {
 
       await db.insert(media).values({
         id,
-        siteId: SITE_ID,
+        siteId,
         type: mediaType,
         storageKey,
         url,
@@ -128,11 +128,12 @@ export const mediaActions = {
   delete: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const file = await db.query.media.findFirst({
-        where: and(eq(media.id, input.id), eq(media.siteId, SITE_ID)),
+        where: and(eq(media.id, input.id), eq(media.siteId, siteId)),
       });
       if (!file) throw new Error("Media not found");
 
@@ -152,13 +153,14 @@ export const mediaActions = {
       parentId: z.string().nullable().optional(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const id = generateId("folder");
       await db.insert(mediaFolders).values({
         id,
-        siteId: SITE_ID,
+        siteId,
         name: input.name,
         parentId: input.parentId ?? null,
         createdAt: new Date(),
@@ -170,16 +172,17 @@ export const mediaActions = {
   deleteFolder: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const hasFiles = await db.query.media.findFirst({
-        where: and(eq(media.folderId, input.id), eq(media.siteId, SITE_ID)),
+        where: and(eq(media.folderId, input.id), eq(media.siteId, siteId)),
       });
       if (hasFiles) throw new Error("Cannot delete a folder that contains files");
 
       const hasSubfolders = await db.query.mediaFolders.findFirst({
-        where: and(eq(mediaFolders.parentId, input.id), eq(mediaFolders.siteId, SITE_ID)),
+        where: and(eq(mediaFolders.parentId, input.id), eq(mediaFolders.siteId, siteId)),
       });
       if (hasSubfolders) throw new Error("Cannot delete a folder that contains subfolders");
 

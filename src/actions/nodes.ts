@@ -1,11 +1,9 @@
 import { defineAction } from "astro:actions";
 import { z } from "astro:schema";
 import { eq, and, desc, isNotNull, inArray } from "drizzle-orm";
-import { nodes, contentTypes, sites } from "@db/schema";
+import { nodes, contentTypes } from "@db/schema";
 import { generateId, slugify, computePath } from "@lib/id";
 import { requirePermission } from "@lib/permissions";
-
-const SITE_ID = "site_default";
 
 const NodeSeoSchema = z.object({
   metaTitle: z.string().optional(),
@@ -22,10 +20,11 @@ export const nodeActions = {
       status: z.enum(["draft", "published", "scheduled"]).optional(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
-      const conditions = [eq(nodes.siteId, SITE_ID)];
+      const conditions = [eq(nodes.siteId, siteId)];
       if (input.contentTypeId) {
         conditions.push(eq(nodes.contentTypeId, input.contentTypeId));
       }
@@ -44,11 +43,12 @@ export const nodeActions = {
   get: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
-        where: and(eq(nodes.id, input.id), eq(nodes.siteId, SITE_ID)),
+        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
         with: { contentType: true },
       });
 
@@ -68,9 +68,10 @@ export const nodeActions = {
       seo: NodeSeoSchema.optional(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
-      await requirePermission(db, context.locals.user.id, SITE_ID, input.contentTypeId, "create");
+      await requirePermission(db, context.locals.user.id, siteId, input.contentTypeId, "create");
 
       const ct = await db.query.contentTypes.findFirst({
         where: eq(contentTypes.id, input.contentTypeId),
@@ -88,11 +89,12 @@ export const nodeActions = {
         parentPath = parent.path;
       }
 
-      const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
-      const path = computePath(parentPath, slug, input.locale, site?.defaultLocale);
+      const path = computePath(
+        parentPath, slug, input.locale, context.locals.site?.defaultLocale
+      );
 
       const existing = await db.query.nodes.findFirst({
-        where: and(eq(nodes.siteId, SITE_ID), eq(nodes.path, path)),
+        where: and(eq(nodes.siteId, siteId), eq(nodes.path, path)),
       });
       if (existing) throw new Error(`Path "${path}" already exists`);
 
@@ -101,7 +103,7 @@ export const nodeActions = {
 
       await db.insert(nodes).values({
         id,
-        siteId: SITE_ID,
+        siteId,
         contentTypeId: input.contentTypeId,
         parentId: input.parentId ?? null,
         locale: input.locale,
@@ -132,19 +134,20 @@ export const nodeActions = {
       status: z.enum(["draft", "published", "scheduled"]).optional(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
-        where: and(eq(nodes.id, input.id), eq(nodes.siteId, SITE_ID)),
+        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
       });
       if (!node) throw new Error("Node not found");
-      await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "edit");
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "edit");
 
       // Writing `status` through update was a way around the publish permission that
       // nodes.publish enforces. Any status transition — including unpublishing — needs it.
       if (input.status && input.status !== node.status) {
-        await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "publish");
+        await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "publish");
       }
 
       const updates: Partial<typeof node> = { updatedAt: new Date() };
@@ -159,11 +162,12 @@ export const nodeActions = {
         // For a nested node this is the parent path, prefix included; for a root-level
         // one it is null and the locale prefix gets reapplied from scratch.
         const parentPath = node.path.substring(0, node.path.lastIndexOf("/")) || null;
-        const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
-        const newPath = computePath(parentPath, newSlug, node.locale, site?.defaultLocale);
+        const newPath = computePath(
+          parentPath, newSlug, node.locale, context.locals.site?.defaultLocale
+        );
 
         const existing = await db.query.nodes.findFirst({
-          where: and(eq(nodes.siteId, SITE_ID), eq(nodes.path, newPath)),
+          where: and(eq(nodes.siteId, siteId), eq(nodes.path, newPath)),
         });
         if (existing && existing.id !== input.id) {
           throw new Error(`Path "${newPath}" already exists`);
@@ -181,14 +185,15 @@ export const nodeActions = {
   publish: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
-        where: and(eq(nodes.id, input.id), eq(nodes.siteId, SITE_ID)),
+        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
       });
       if (!node) throw new Error("Node not found");
-      await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "publish");
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "publish");
 
       const now = new Date();
       await db
@@ -203,6 +208,7 @@ export const nodeActions = {
   delete: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
@@ -214,14 +220,14 @@ export const nodeActions = {
       }
 
       const node = await db.query.nodes.findFirst({
-        where: and(eq(nodes.id, input.id), eq(nodes.siteId, SITE_ID)),
+        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
       });
       if (!node) throw new Error("Node not found");
-      await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "delete");
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "delete");
 
       await db
         .delete(nodes)
-        .where(and(eq(nodes.id, input.id), eq(nodes.siteId, SITE_ID)));
+        .where(and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)));
 
       return { id: input.id };
     },
@@ -233,14 +239,15 @@ export const nodeActions = {
       targetId: z.string(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       if (input.nodeId === input.targetId) throw new Error("Un nodo no puede vincularse consigo mismo");
 
       const [nodeA, nodeB] = await Promise.all([
-        db.query.nodes.findFirst({ where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, SITE_ID)) }),
-        db.query.nodes.findFirst({ where: and(eq(nodes.id, input.targetId), eq(nodes.siteId, SITE_ID)) }),
+        db.query.nodes.findFirst({ where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId)) }),
+        db.query.nodes.findFirst({ where: and(eq(nodes.id, input.targetId), eq(nodes.siteId, siteId)) }),
       ]);
       if (!nodeA || !nodeB) throw new Error("Nodo no encontrado");
 
@@ -260,11 +267,12 @@ export const nodeActions = {
   unlinkTranslation: defineAction({
     input: z.object({ nodeId: z.string() }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
-        where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, SITE_ID)),
+        where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId)),
       });
       if (!node) throw new Error("Nodo no encontrado");
 
@@ -299,19 +307,19 @@ export const nodeActions = {
       })),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const affectedIds = input.items.map((i) => i.id);
       const allAffected = await db.query.nodes.findMany({
-        where: and(eq(nodes.siteId, SITE_ID), inArray(nodes.id, affectedIds)),
+        where: and(eq(nodes.siteId, siteId), inArray(nodes.id, affectedIds)),
       });
 
       const allNodes = await db.query.nodes.findMany({
-        where: eq(nodes.siteId, SITE_ID),
+        where: eq(nodes.siteId, siteId),
       });
-      const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
-      const defaultLocale = site?.defaultLocale;
+      const defaultLocale = context.locals.site?.defaultLocale;
       const nodeById = Object.fromEntries(allNodes.map((n) => [n.id, n]));
       const pathById = Object.fromEntries(allNodes.map((n) => [n.id, n.path]));
 
@@ -384,13 +392,13 @@ export const nodeActions = {
       for (const item of input.items) {
         const node = nodeById[item.id];
         if (!node) continue;
-        await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "edit");
+        await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "edit");
       }
 
       // Check path uniqueness for the moved nodes (excluding unchanged descendants)
       for (const [id, { newPath }] of Object.entries(pathUpdates)) {
         const existing = allNodes.find(
-          (n) => n.siteId === SITE_ID && n.path === newPath && n.id !== id
+          (n) => n.siteId === siteId && n.path === newPath && n.id !== id
         );
         if (existing) throw new Error(`Path "${newPath}" already exists`);
       }
@@ -406,7 +414,7 @@ export const nodeActions = {
             ...(parentId !== undefined ? { parentId } : {}),
             ...(pathUpdate ? { path: pathUpdate.newPath } : {}),
           };
-          return db.update(nodes).set(set).where(and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)));
+          return db.update(nodes).set(set).where(and(eq(nodes.id, id), eq(nodes.siteId, siteId)));
         })
       );
 
@@ -418,7 +426,7 @@ export const nodeActions = {
             db
               .update(nodes)
               .set({ path: newPath, updatedAt: now })
-              .where(and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)))
+              .where(and(eq(nodes.id, id), eq(nodes.siteId, siteId)))
           )
       );
 
@@ -432,11 +440,12 @@ export const nodeActions = {
       locale: z.string().optional(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       const db = context.locals.db;
 
       const all = await db.query.nodes.findMany({
-        where: eq(nodes.siteId, SITE_ID),
+        where: eq(nodes.siteId, siteId),
         orderBy: (n, { asc }) => [asc(n.path)],
       });
 

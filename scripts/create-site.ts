@@ -21,7 +21,7 @@ import * as schema from "../src/db/schema";
 
 const execAsync = promisify(exec);
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SITE_ID = "site_default";
+import { DEFAULT_SITE_ID as SITE_ID } from "../src/lib/site";
 
 const C = {
   reset: "\x1b[0m",

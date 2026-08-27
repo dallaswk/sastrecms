@@ -5,8 +5,6 @@ import { settings } from "@db/schema";
 import { requireAdmin } from "@lib/permissions";
 import { ANALYTICS_ID_SHAPES } from "@lib/analytics";
 
-const SITE_ID = "site_default";
-
 /**
  * The shapes live in @lib/analytics because the layout enforces the same rule at render
  * time. The empty string stays allowed so a field can be cleared from the UI.
@@ -48,12 +46,13 @@ const SocialLinksSchema = z.object({
 export const settingsActions = {
   get: defineAction({
     handler: async (_input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
       // `integrations` carries the Resend API key in clear, and redirects/analytics
       // affect every public page — admin only, not merely authenticated.
-      await requireAdmin(context.locals.db, context.locals.user.id, SITE_ID);
+      await requireAdmin(context.locals.db, context.locals.user.id, siteId);
       const row = await context.locals.db.query.settings.findFirst({
-        where: eq(settings.siteId, SITE_ID),
+        where: eq(settings.siteId, siteId),
       });
       return row ?? null;
     },
@@ -77,12 +76,13 @@ export const settingsActions = {
       }).optional(),
     }),
     handler: async (input, context) => {
+      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
-      await requireAdmin(context.locals.db, context.locals.user.id, SITE_ID);
+      await requireAdmin(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
 
       const existing = await db.query.settings.findFirst({
-        where: eq(settings.siteId, SITE_ID),
+        where: eq(settings.siteId, siteId),
       });
 
       const updates: Record<string, unknown> = {};
@@ -97,9 +97,9 @@ export const settingsActions = {
       if (input.integrations !== undefined) updates.integrations = input.integrations;
 
       if (existing) {
-        await db.update(settings).set(updates).where(eq(settings.siteId, SITE_ID));
+        await db.update(settings).set(updates).where(eq(settings.siteId, siteId));
       } else {
-        await db.insert(settings).values({ siteId: SITE_ID, siteName: "My Site", ...updates });
+        await db.insert(settings).values({ siteId, siteName: "My Site", ...updates });
       }
 
       return { ok: true };

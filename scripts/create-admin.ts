@@ -14,7 +14,7 @@ const C = {
   magenta: "\x1b[35m",
 };
 
-const SITE_ID = "site_default";
+import { DEFAULT_SITE_ID as SITE_ID } from "../src/lib/site";
 
 async function main() {
   const [email, password] = process.argv.slice(2);
