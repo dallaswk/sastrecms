@@ -22,6 +22,10 @@
       Campo tipo "{{ field.type }}" — sin editor
     </p>
 
+    <!-- The editor's own explanation of the field. Rendered here so every type gets it,
+         except the ones that draw their own header and place it themselves. -->
+    <p v-if="field.help && !ownsHelp" class="text-xs text-base-content/50 mt-1">{{ field.help }}</p>
+
     <p v-if="error" class="text-error text-xs mt-1">{{ error }}</p>
   </div>
 </template>
@@ -65,6 +69,7 @@ defineEmits<{ "update:modelValue": [value: unknown] }>();
 const RepeaterField = defineAsyncComponent(() => import("./RepeaterField.vue"));
 const RelationField = defineAsyncComponent(() => import("./RelationField.vue"));
 const SectionsField = defineAsyncComponent(() => import("./SectionsField.vue"));
+const FormFieldsField = defineAsyncComponent(() => import("./FormFieldsField.vue"));
 
 const COMPONENTS: Record<FieldType, Component | null> = {
   text: TextField,
@@ -78,8 +83,11 @@ const COMPONENTS: Record<FieldType, Component | null> = {
   relation: RelationField,
   repeater: RepeaterField,
   sections: SectionsField,
+  formfields: FormFieldsField,
 };
 
 const component = computed(() => COMPONENTS[props.field.type] ?? null);
+/** Types whose editor prints `help` itself, above its own controls. */
+const ownsHelp = computed(() => props.field.type === "formfields");
 const error = computed(() => props.errors?.[props.path]);
 </script>

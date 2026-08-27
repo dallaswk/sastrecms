@@ -1,6 +1,6 @@
 ---
 import { parseFormFields } from "@lib/forms/validate";
-import { HONEYPOT_FIELD } from "@lib/forms/types";
+import { FIELD_PATTERNS, HONEYPOT_FIELD } from "@lib/forms/types";
 
 interface Props {
   id: string;
@@ -26,6 +26,30 @@ const fields = parseFormFields(data.fields);
 
 const integrations = (Astro.locals.settings?.integrations as Record<string, string> | null) ?? {};
 const turnstileSiteKey = integrations.turnstileSiteKey ?? "";
+
+/** Browser autofill, which is the difference between a form that takes 10 seconds and 40. */
+const AUTOCOMPLETE: Partial<Record<string, string>> = {
+  email: "email",
+  tel: "tel",
+  url: "url",
+};
+
+/** The example for a named format, used as the placeholder when the editor set none. */
+function patternHint(field: { validation?: { pattern?: keyof typeof FIELD_PATTERNS } }) {
+  const name = field.validation?.pattern;
+  return name ? FIELD_PATTERNS[name].placeholder || undefined : undefined;
+}
+
+/**
+ * Ties the help text and the error message to the input for a screen reader. Both ids are
+ * always listed: the error element exists from the start, empty, so it can be filled in
+ * without changing the attribute.
+ */
+function describedBy(field: { key: string; help?: string }) {
+  return [field.help ? `${id}-${field.key}-help` : null, `${id}-${field.key}-error`]
+    .filter(Boolean)
+    .join(" ");
+}
 ---
 
 <section id={anchor ?? id} class="bg-base-100">
@@ -41,13 +65,13 @@ const turnstileSiteKey = integrations.turnstileSiteKey ?? "";
       )
     ) : (
       <form
-        class="contact-form flex flex-col gap-4"
+        class="contact-form grid gap-4 sm:grid-cols-2"
         data-form-id={id}
         data-node-id={nodeId}
         novalidate
       >
         {fields.map((field) => (
-          <div class="form-control">
+          <div class:list={["form-control", field.width === "half" && "sm:col-span-1", field.width !== "half" && "sm:col-span-2"]}>
             {field.type !== "checkbox" && (
               <label class="label" for={`${id}-${field.key}`}>
                 <span class="label-text">
@@ -65,6 +89,9 @@ const turnstileSiteKey = integrations.turnstileSiteKey ?? "";
                 class="textarea textarea-bordered"
                 placeholder={field.placeholder}
                 required={field.required}
+                minlength={field.validation?.minLength}
+                maxlength={field.validation?.maxLength}
+                aria-describedby={describedBy(field)}
               />
             ) : field.type === "select" ? (
               <select
@@ -72,10 +99,30 @@ const turnstileSiteKey = integrations.turnstileSiteKey ?? "";
                 name={field.key}
                 class="select select-bordered"
                 required={field.required}
+                aria-describedby={describedBy(field)}
               >
                 <option value="">— elige una opción —</option>
                 {field.options?.map((option) => <option value={option}>{option}</option>)}
               </select>
+            ) : field.type === "radio" ? (
+              /* A fieldset, not a bare group of inputs: without it a screen reader reads
+                 each option with no idea what question it answers. */
+              <fieldset class="flex flex-col gap-1" aria-describedby={describedBy(field)}>
+                <legend class="sr-only">{field.label}</legend>
+                {field.options?.map((option, optionIndex) => (
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input
+                      id={optionIndex === 0 ? `${id}-${field.key}` : undefined}
+                      type="radio"
+                      name={field.key}
+                      value={option}
+                      class="radio radio-sm"
+                      required={field.required}
+                    />
+                    <span class="text-sm">{option}</span>
+                  </label>
+                ))}
+              </fieldset>
             ) : field.type === "checkbox" ? (
               <label class="flex items-start gap-2 cursor-pointer">
                 <input
@@ -84,6 +131,7 @@ const turnstileSiteKey = integrations.turnstileSiteKey ?? "";
                   type="checkbox"
                   class="checkbox checkbox-sm mt-0.5"
                   required={field.required}
+                  aria-describedby={describedBy(field)}
                 />
                 <span class="text-sm">
                   {field.label}
@@ -94,15 +142,24 @@ const turnstileSiteKey = integrations.turnstileSiteKey ?? "";
               <input
                 id={`${id}-${field.key}`}
                 name={field.key}
-                type={field.type}
+                type={field.type === "url" ? "url" : field.type}
                 class="input input-bordered"
-                placeholder={field.placeholder}
+                placeholder={field.placeholder ?? patternHint(field)}
                 required={field.required}
-                autocomplete={field.type === "email" ? "email" : field.type === "tel" ? "tel" : undefined}
+                minlength={field.validation?.minLength}
+                maxlength={field.validation?.maxLength}
+                min={field.validation?.min}
+                max={field.validation?.max}
+                inputmode={field.type === "number" ? "numeric" : undefined}
+                autocomplete={AUTOCOMPLETE[field.type]}
+                aria-describedby={describedBy(field)}
               />
             )}
 
-            <p class="field-error text-sm text-error mt-1 hidden" data-for={field.key}></p>
+            {field.help && (
+              <p id={`${id}-${field.key}-help`} class="text-xs text-base-content/50 mt-1">{field.help}</p>
+            )}
+            <p class="field-error text-sm text-error mt-1 hidden" data-for={field.key} id={`${id}-${field.key}-error`}></p>
           </div>
         ))}
 
@@ -120,7 +177,7 @@ const turnstileSiteKey = integrations.turnstileSiteKey ?? "";
         </div>
 
         {consentText && (
-          <label class="flex items-start gap-2 cursor-pointer">
+          <label class="sm:col-span-2 flex items-start gap-2 cursor-pointer">
             <input name="__consent" type="checkbox" class="checkbox checkbox-sm mt-0.5" required />
             <span class="text-sm text-base-content/70">{consentText}</span>
           </label>
@@ -128,13 +185,13 @@ const turnstileSiteKey = integrations.turnstileSiteKey ?? "";
 
         {turnstileSiteKey && (
           <div
-            class="cf-turnstile"
+            class="cf-turnstile sm:col-span-2"
             data-sitekey={turnstileSiteKey}
             data-theme="auto"
           />
         )}
 
-        <div class="flex items-center gap-3 flex-wrap">
+        <div class="sm:col-span-2 flex items-center gap-3 flex-wrap">
           <button type="submit" class="btn btn-primary">{submitLabel}</button>
           <span class="form-status text-sm" role="status" aria-live="polite"></span>
         </div>

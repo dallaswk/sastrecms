@@ -20,6 +20,7 @@ export const FIELD_TYPES = [
   "relation",
   "repeater",
   "sections",
+  "formfields",
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -37,6 +38,7 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   relation: "Relación",
   repeater: "Repetidor",
   sections: "Secciones (constructor de páginas)",
+  formfields: "Campos de formulario",
 };
 
 export type FieldDefinition = {
@@ -52,6 +54,8 @@ export type FieldDefinition = {
   subfields?: FieldDefinition[];
   /** For `sections`: which section types this field accepts. Empty means all. */
   allowedSections?: string[];
+  /** Shown under the input in the editor. Where to say *why* a field matters. */
+  help?: string;
 };
 
 /**
@@ -67,6 +71,7 @@ export function emptyValueFor(field: FieldDefinition): unknown {
     case "gallery":
     case "repeater":
     case "sections":
+    case "formfields":
       return [];
     case "number":
       return null;

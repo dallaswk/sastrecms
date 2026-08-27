@@ -21,11 +21,27 @@ const base = {
   pageTitle: "Contacto",
   pageUrl: "https://reformas.test/contacto",
   to: "avisos@reformas.test",
+  date: "27 de agosto de 2026, 14:30",
 };
 
 describe("buildNotification", () => {
   it("pone el nombre en el asunto, que es lo que se ve en el móvil", () => {
     expect(buildNotification(base).subject).toBe("Nuevo mensaje desde Reformas Ruiz: Ana Ruiz");
+  });
+
+  it("no repite el nombre si el asunto propio ya lo incluye", () => {
+    const payload = buildNotification({ ...base, subjectTemplate: "Consulta de {{nombre}}" });
+    expect(payload.subject).toBe("Consulta de Ana Ruiz");
+  });
+
+  it("usa el asunto y el cuerpo que escribe el dueño del sitio", () => {
+    const payload = buildNotification({
+      ...base,
+      subjectTemplate: "[web] {{nombre}} pregunta",
+      bodyTemplate: "Teléfono: {{telefono}}\n\n{{_respuestas}}",
+    });
+    expect(payload.subject).toBe("[web] Ana Ruiz pregunta");
+    expect(payload.html).toContain("Teléfono:");
   });
 
   it("responder al correo escribe a quien lo envió", () => {

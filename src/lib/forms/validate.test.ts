@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFormFields, validateSubmission, identifySender, summarise } from "./validate";
+import { parseFormFields, validateSubmission, identifySender, summarise, isValidNif } from "./validate";
 import { HONEYPOT_FIELD, MAX_FIELDS, MAX_FIELD_LENGTH } from "./types";
 
 const fields = parseFormFields([
@@ -175,5 +175,136 @@ describe("summarise", () => {
       { key: "empresa", label: "Empresa", type: "text" },
     ]);
     expect(summarise(withCheck, { acepto: "sí", empresa: "ACME" })).toBe("ACME");
+  });
+});
+
+describe("isValidNif", () => {
+  it("acepta DNI, NIE y CIF reales", () => {
+    // Dígitos de control calculados con el algoritmo oficial.
+    expect(isValidNif("12345678Z")).toBe(true);
+    expect(isValidNif("X1234567L")).toBe(true);
+    expect(isValidNif("B12345674")).toBe(true);
+  });
+
+  it("caza la errata que un regex de forma no ve", () => {
+    expect(isValidNif("12345678A")).toBe(false);
+    expect(isValidNif("X1234567A")).toBe(false);
+  });
+
+  it("tolera espacios, guiones y minúsculas", () => {
+    expect(isValidNif(" 12345678-z ")).toBe(true);
+  });
+
+  it("rechaza lo que no tiene forma de identificador", () => {
+    for (const value of ["", "1234", "AAAAAAAAA", "123456789"]) {
+      expect(isValidNif(value), value).toBe(false);
+    }
+  });
+});
+
+describe("validaciones configuradas", () => {
+  const withRules = (extra: Record<string, unknown>) =>
+    parseFormFields([{ key: "campo", label: "Campo", type: "text", ...extra }]);
+
+  it("longitud mínima y máxima", () => {
+    const fields = withRules({ minLength: "5", maxLength: "10" });
+    expect(validateSubmission(fields, { campo: "abc" }).ok).toBe(false);
+    expect(validateSubmission(fields, { campo: "abcdef" }).ok).toBe(true);
+    expect(validateSubmission(fields, { campo: "a".repeat(11) }).ok).toBe(false);
+  });
+
+  it("descarta un par de límites invertido en vez de rechazarlo todo", () => {
+    const [field] = withRules({ minLength: "10", maxLength: "5" });
+    expect(field.validation?.minLength).toBeUndefined();
+    expect(field.validation?.maxLength).toBeUndefined();
+  });
+
+  it("no guarda reglas que el tipo no puede aplicar", () => {
+    const [date] = parseFormFields([
+      { key: "f", label: "F", type: "date", minLength: "5", min: "2026-01-01" },
+    ]);
+    expect(date.validation?.minLength).toBeUndefined();
+    expect(date.validation?.min).toBe("2026-01-01");
+
+    const [text] = parseFormFields([{ key: "t", label: "T", type: "text", min: "3" }]);
+    expect(text.validation?.min).toBeUndefined();
+  });
+
+  it("rango numérico", () => {
+    const fields = parseFormFields([
+      { key: "m2", label: "Metros", type: "number", min: "10", max: "500" },
+    ]);
+    expect(validateSubmission(fields, { m2: "5" }).ok).toBe(false);
+    expect(validateSubmission(fields, { m2: "120" }).ok).toBe(true);
+    expect(validateSubmission(fields, { m2: "600" }).ok).toBe(false);
+    expect(validateSubmission(fields, { m2: "muchos" }).ok).toBe(false);
+  });
+
+  it("rango de fechas, comparado como texto ISO para que no lo mueva un huso", () => {
+    const fields = parseFormFields([
+      { key: "cita", label: "Cita", type: "date", min: "2026-09-01", max: "2026-09-30" },
+    ]);
+    expect(validateSubmission(fields, { cita: "2026-08-31" }).ok).toBe(false);
+    expect(validateSubmission(fields, { cita: "2026-09-15" }).ok).toBe(true);
+    expect(validateSubmission(fields, { cita: "2026-10-01" }).ok).toBe(false);
+    expect(validateSubmission(fields, { cita: "15/09/2026" }).ok).toBe(false);
+  });
+
+  it("formato con nombre, y el dígito de control cuando lo hay", () => {
+    const fields = withRules({ pattern: "nif" });
+    expect(validateSubmission(fields, { campo: "12345678Z" }).ok).toBe(true);
+    // Forma correcta, control incorrecto: sólo lo caza isValidNif.
+    const bad = validateSubmission(fields, { campo: "12345678A" });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.issues[0].message).toContain("no es válido");
+  });
+
+  it("código postal y matrícula", () => {
+    const cp = withRules({ pattern: "codigo_postal" });
+    expect(validateSubmission(cp, { campo: "28001" }).ok).toBe(true);
+    expect(validateSubmission(cp, { campo: "99999" }).ok).toBe(false);
+    expect(validateSubmission(cp, { campo: "2800" }).ok).toBe(false);
+
+    const mat = withRules({ pattern: "matricula" });
+    expect(validateSubmission(mat, { campo: "1234 BCD" }).ok).toBe(true);
+    expect(validateSubmission(mat, { campo: "M-1234-AB" }).ok).toBe(true);
+  });
+
+  it("ignora un formato inventado en vez de rechazar el campo", () => {
+    const [field] = withRules({ pattern: "dni_marciano" });
+    expect(field.validation?.pattern).toBeUndefined();
+  });
+
+  it("el mensaje propio sustituye a todos los del campo", () => {
+    const fields = withRules({ required: "sí", minLength: "5", message: "Pon tu referencia completa" });
+    for (const input of [{}, { campo: "ab" }]) {
+      const result = validateSubmission(fields, input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.issues[0].message).toBe("Pon tu referencia completa");
+    }
+  });
+});
+
+describe("tipos nuevos", () => {
+  it("radio se valida contra sus opciones, como el desplegable", () => {
+    const fields = parseFormFields([
+      { key: "via", label: "Vía", type: "radio", options: "Teléfono\nCorreo", required: "sí" },
+    ]);
+    expect(validateSubmission(fields, { via: "Teléfono" }).ok).toBe(true);
+    expect(validateSubmission(fields, { via: "Paloma" }).ok).toBe(false);
+  });
+
+  it("url exige http o https, no un javascript:", () => {
+    const fields = parseFormFields([{ key: "web", label: "Web", type: "url" }]);
+    expect(validateSubmission(fields, { web: "https://ejemplo.es" }).ok).toBe(true);
+    expect(validateSubmission(fields, { web: "ejemplo.es" }).ok).toBe(false);
+    expect(validateSubmission(fields, { web: "javascript:alert(1)" }).ok).toBe(false);
+  });
+
+  it("las opciones repetidas se colapsan", () => {
+    const [field] = parseFormFields([
+      { key: "o", label: "O", type: "select", options: "A\nB\nA" },
+    ]);
+    expect(field.options).toEqual(["A", "B"]);
   });
 });

@@ -8,10 +8,42 @@ import { parseSections } from "@lib/sections/validate";
 import { parseFormFields, validateSubmission, identifySender } from "@lib/forms/validate";
 import { clientIp, hashIp, honeypotTripped, rateVerdict, rateWindows, verifyTurnstile } from "@lib/forms/guards";
 import { sendEmail } from "@lib/email";
-import { buildNotification } from "@lib/forms/notify";
+import { buildAutoReply, buildNotification } from "@lib/forms/notify";
 import { getSection } from "@lib/sections/registry";
 import type { SectionInstance } from "@lib/sections/types";
 import type { Database } from "@db/client";
+
+/** The editor stores booleans as a "no"/"sí" select. */
+function truthy(raw: unknown): boolean {
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw !== "string") return false;
+  const value = raw.trim().toLowerCase();
+  return value === "sí" || value === "si" || value === "true" || value === "1";
+}
+
+/**
+ * The notification's recipients.
+ *
+ * Comma-separated, because a pyme's enquiries usually need to reach two people. Capped at
+ * five and shape-checked so a stray value in the section cannot turn the form into a way to
+ * mail an arbitrary list.
+ */
+function recipients(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((address) => address.trim())
+    .filter((address) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(address))
+    .slice(0, 5);
+}
+
+/** Spanish format, so the owner reads a date they recognise. */
+function formatDate(date: Date): string {
+  return date.toLocaleString("es-ES", {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: "Europe/Madrid",
+  });
+}
 
 /** Where the form's own definition lives, found by walking the node's sections fields. */
 async function findForm(db: Database, siteId: string, nodeId: string, formId: string) {
@@ -144,34 +176,64 @@ export const formActions = {
         createdAt: now,
       });
 
-      // ---- notification, after the row is safe. A mail failure is recorded, never raised:
-      // the visitor's message is already stored and telling them it failed would be a lie.
-      const notify =
-        (form.section.data.notify_email as string)?.trim() ||
-        context.locals.settings?.contactEmail?.trim() ||
-        "";
+      // ---- notifications, after the row is safe. A mail failure is recorded, never
+      // raised: the visitor's message is already stored and telling them it failed
+      // would be a lie.
+      const notifyList = recipients(
+        (form.section.data.notify_email as string) || context.locals.settings?.contactEmail || ""
+      );
 
-      if (notify) {
+      const templateBase = {
+        fields,
+        values: result.values,
+        sender,
+        siteName: context.locals.settings?.siteName ?? "el sitio",
+        pageTitle: form.node.title,
+        pageUrl: new URL(form.node.path, context.request.url).toString(),
+        date: formatDate(now),
+        ...(consentText ? { consentText } : {}),
+      };
+
+      const mailConfig = { apiKey: integrations.resendApiKey, from: integrations.resendFrom };
+      const failures: string[] = [];
+
+      if (notifyList.length) {
         const email = await sendEmail(
-          { apiKey: integrations.resendApiKey, from: integrations.resendFrom },
+          mailConfig,
           buildNotification({
-            fields,
-            values: result.values,
-            sender,
-            to: notify,
-            siteName: context.locals.settings?.siteName ?? "el sitio",
-            pageTitle: form.node.title,
-            pageUrl: new URL(form.node.path, context.request.url).toString(),
-            ...(consentText ? { consentText } : {}),
+            ...templateBase,
+            to: notifyList,
+            subjectTemplate: form.section.data.notify_subject as string,
+            bodyTemplate: form.section.data.notify_body as string,
           })
         );
+        if (!email.sent) failures.push(email.reason);
+      }
 
+      // The acknowledgement goes only to an address the visitor typed into an `email` field
+      // of this form, so it cannot be used to mail a stranger of the sender's choosing.
+      const wantsAutoReply = truthy(form.section.data.autoreply);
+      if (wantsAutoReply && sender.email) {
+        const email = await sendEmail(
+          mailConfig,
+          buildAutoReply({
+            ...templateBase,
+            to: sender.email,
+            subjectTemplate: form.section.data.autoreply_subject as string,
+            bodyTemplate: form.section.data.autoreply_body as string,
+            ...(notifyList[0] ? { replyToOwner: notifyList[0] } : {}),
+          })
+        );
+        if (!email.sent) failures.push(`Acuse de recibo: ${email.reason}`);
+      }
+
+      if (notifyList.length || wantsAutoReply) {
         await db
           .update(formSubmissions)
           .set(
-            email.sent
-              ? { notifiedAt: new Date(), notifyError: null }
-              : { notifyError: email.reason.slice(0, 500) }
+            failures.length
+              ? { notifyError: failures.join(" · ").slice(0, 500) }
+              : { notifiedAt: new Date(), notifyError: null }
           )
           .where(eq(formSubmissions.id, id));
       }
