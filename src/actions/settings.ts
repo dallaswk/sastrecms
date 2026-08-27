@@ -99,6 +99,11 @@ export const settingsActions = {
         resendFrom: z.string().optional(),
         turnstileSiteKey: z.string().optional(),
         turnstileSecretKey: z.string().optional(),
+        // OpenAI-compatible, so the base URL is a setting rather than a constant. Free text:
+        // it may be a self-hosted vLLM on any host, and the key format differs per provider.
+        aiBaseUrl: z.string().optional(),
+        aiApiKey: z.string().optional(),
+        aiModel: z.string().optional(),
       }).optional(),
     }),
     handler: async (input, context) => {

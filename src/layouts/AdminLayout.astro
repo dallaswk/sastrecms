@@ -102,5 +102,20 @@ const unread = user
         </nav>
       </aside>
     </div>
+
+    {/*
+      Toasts. Mounted once here so a Vue island and a plain <script> in a page share the same
+      stack — the backoffice has both, and two notification systems is what happens otherwise.
+
+      pointer-events-none on the container and auto on each toast: the empty area between them
+      must not swallow clicks on the page underneath.
+    */}
+    <div
+      id="sastre-toasts"
+      class="fixed bottom-4 right-4 z-[70] flex flex-col-reverse gap-2 pointer-events-none"
+    ></div>
+    <script>
+      import "@/scripts/toast";
+    </script>
   </body>
 </html>

@@ -92,10 +92,7 @@
       <button type="button" class="btn btn-primary" :disabled="saving" @click="save">
         {{ saving ? "Guardando…" : "Guardar menús" }}
       </button>
-      <span v-if="message" class="text-sm" :class="failed ? 'text-error' : 'text-success'">
-        {{ message }}
-      </span>
-      <span v-else-if="dirty" class="text-sm text-base-content/50">Cambios sin guardar</span>
+      <span v-if="dirty" class="text-sm text-base-content/50">Cambios sin guardar</span>
     </div>
   </div>
 </template>
@@ -104,6 +101,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { VueDraggable } from "vue-draggable-plus";
 import { actions } from "astro:actions";
+import { notify } from "@/scripts/notify";
 import { MENU_KEYS, MENU_LABELS, readMenu } from "@lib/menus";
 import type { MenuItem, MenuKey } from "@lib/menus";
 import { addItem, removeItem, withLocalIds, stripLocalIds } from "./fields/itemList";
@@ -159,8 +157,6 @@ const items = reactive(
 );
 
 const saving = ref(false);
-const message = ref("");
-const failed = ref(false);
 const dirty = ref(false);
 
 const payload = computed(() =>
@@ -182,7 +178,6 @@ watch(
   items,
   () => {
     dirty.value = true;
-    message.value = "";
   },
   { deep: true }
 );
@@ -204,15 +199,13 @@ function remove(key: MenuKey, index: number) {
 
 async function save() {
   saving.value = true;
-  message.value = "";
   const { error } = await actions.menus.update({ menus: payload.value });
   saving.value = false;
-  failed.value = !!error;
   if (error) {
-    message.value = error.message;
+    notify.fromError(error, "No se han podido guardar los menús.");
     return;
   }
   dirty.value = false;
-  message.value = "Menús guardados.";
+  notify.success("Menús guardados.");
 }
 </script>

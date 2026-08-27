@@ -33,8 +33,6 @@
         </button>
       </div>
 
-      <p v-if="message" class="text-sm" :class="failed ? 'text-error' : 'text-success'">{{ message }}</p>
-
       <div
         v-for="row in rows"
         :key="row.id"
@@ -107,6 +105,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { actions } from "astro:actions";
+import { notify } from "@/scripts/notify";
 
 type Submission = {
   id: string;
@@ -134,8 +133,6 @@ const pages = JSON.parse(props.pages) as Record<string, { title: string; path: s
 const selected = ref(new Set<string>());
 const expanded = ref<string | null>(null);
 const busy = ref(false);
-const message = ref("");
-const failed = ref(false);
 
 const allSelected = computed(() => rows.value.length > 0 && selected.value.size === rows.value.length);
 
@@ -178,14 +175,13 @@ async function setStatus(status: "new" | "read" | "spam") {
   busy.value = true;
   const { error } = await actions.forms.setStatus({ ids, status });
   busy.value = false;
-  failed.value = !!error;
   if (error) {
-    message.value = error.message;
+    notify.fromError(error, "No se han podido actualizar.");
     return;
   }
   for (const row of rows.value) if (selected.value.has(row.id)) row.status = status;
   selected.value = new Set();
-  message.value = `${ids.length} mensaje(s) actualizados.`;
+  notify.success(`${ids.length} mensaje(s) actualizados.`);
 }
 
 async function remove() {
@@ -195,14 +191,13 @@ async function remove() {
   busy.value = true;
   const { error } = await actions.forms.remove({ ids });
   busy.value = false;
-  failed.value = !!error;
   if (error) {
-    message.value = error.message;
+    notify.fromError(error, "No se han podido borrar.");
     return;
   }
   rows.value = rows.value.filter((row) => !selected.value.has(row.id));
   selected.value = new Set();
-  message.value = `${ids.length} mensaje(s) borrados.`;
+  notify.success(`${ids.length} mensaje(s) borrados.`);
 }
 
 /**

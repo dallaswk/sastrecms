@@ -4,6 +4,7 @@ import MediaField from "@components/admin/MediaField.vue";
 // The same list Tailwind compiles from, so the selector cannot offer a theme that does not
 // exist. It used to list all 32 while the config generated 2.
 import { BUSINESS_FIELDS, missingBusinessFields } from "@lib/legal";
+import { AI_PROVIDERS, DEFAULT_AI_BASE_URL, isConfigured, missingAiFields } from "@lib/ai";
 import {
   SITE_THEMES,
   THEME_LABELS,
@@ -33,13 +34,20 @@ const redirects = (siteSettings?.redirects as { from: string; to: string; perman
 const analyticsIds = (siteSettings?.analyticsIds as Record<string, string>) ?? {};
 const integrations = (siteSettings?.integrations as Record<string, string>) ?? {};
 const business = (siteSettings?.business as Record<string, string>) ?? {};
+const ai = {
+  baseUrl: integrations.aiBaseUrl ?? "",
+  apiKey: integrations.aiApiKey ?? "",
+  model: integrations.aiModel ?? "",
+};
+const aiReady = isConfigured(ai);
+const aiMissing = missingAiFields(ai);
 const missingBusiness = missingBusinessFields(business);
 
 
 ---
 
 <AdminLayout title="Ajustes">
-  <form id="settings-form" class="flex flex-col gap-6 max-w-4xl">
+  <form id="settings-form" class="flex flex-col gap-6">
 
     <!-- General -->
     <section class="card bg-base-100 border border-base-300">
@@ -409,6 +417,96 @@ const missingBusiness = missingBusinessFields(business);
       </div>
     </section>
 
+    <!-- Inteligencia artificial -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-4">
+        <div class="flex items-center gap-3 flex-wrap">
+          <h2 class="card-title text-base">Inteligencia artificial</h2>
+          {aiReady
+            ? <span class="badge badge-success badge-sm">configurada</span>
+            : <span class="badge badge-ghost badge-sm">sin configurar</span>}
+        </div>
+        <p class="text-sm text-base-content/60 -mt-1">
+          Cualquier proveedor compatible con la API de OpenAI: OpenAI, Groq, OpenRouter,
+          DeepSeek, Mistral o un modelo local con Ollama. La clave <strong>no sale nunca del
+          servidor</strong>: las peticiones se hacen desde aquí, no desde el navegador.
+        </p>
+
+        <div class="form-control">
+          <label class="label"><span class="label-text">Proveedor</span></label>
+          <select id="ai-preset" class="select select-bordered">
+            <option value="">— elegir para rellenar los campos —</option>
+            {AI_PROVIDERS.map((provider) => (
+              <option value={provider.key} data-base={provider.baseUrl} data-model={provider.model}>
+                {provider.label}
+              </option>
+            ))}
+          </select>
+          <label class="label">
+            <span class="label-text-alt text-base-content/40">
+              Sólo rellena los dos campos de abajo. Puedes escribir cualquier otra URL a mano.
+            </span>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="form-control">
+            <label class="label"><span class="label-text">URL base</span></label>
+            <input
+              name="aiBaseUrl"
+              type="text"
+              class="input input-bordered font-mono text-sm"
+              value={ai.baseUrl}
+              placeholder={DEFAULT_AI_BASE_URL}
+              autocomplete="off"
+            />
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text">Modelo</span></label>
+            <input
+              name="aiModel"
+              type="text"
+              class="input input-bordered font-mono text-sm"
+              value={ai.model}
+              placeholder="gpt-4o-mini"
+              autocomplete="off"
+            />
+          </div>
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Clave de API</span>
+            {ai.apiKey && <span class="label-text-alt text-success">guardada</span>}
+          </label>
+          <input
+            name="aiApiKey"
+            type="password"
+            class="input input-bordered font-mono"
+            value={ai.apiKey}
+            placeholder="sk-…"
+            autocomplete="off"
+          />
+          <label class="label">
+            <span class="label-text-alt text-base-content/40">
+              Un modelo local con Ollama no necesita clave. Cualquier proveedor alojado, sí.
+            </span>
+          </label>
+        </div>
+
+        <div class="flex items-center gap-3 flex-wrap">
+          <button type="button" id="ai-test" class="btn btn-sm btn-ghost border border-base-300">
+            Probar conexión
+          </button>
+          <span class="text-xs text-base-content/50">
+            {aiMissing.length > 0
+              ? `Falta ${aiMissing.join(" y ")}.`
+              : "Hace una llamada real al proveedor con lo que hay guardado."}
+          </span>
+        </div>
+      </div>
+    </section>
+
     <!-- Navigation moved out: it is edited by anyone with a role on the site, and this
          page is admin-only. Left as a pointer because that is where it used to live. -->
     <p class="text-sm text-base-content/60">
@@ -439,7 +537,7 @@ const missingBusiness = missingBusinessFields(business);
 
     <div class="flex gap-3 items-center">
       <button type="submit" class="btn btn-primary">Guardar ajustes</button>
-      <span id="settings-msg" class="text-sm"></span>
+
     </div>
   </form>
 </AdminLayout>
@@ -525,11 +623,51 @@ const missingBusiness = missingBusinessFields(business);
     }
   }
 
+  /*
+   * The preset only fills the two visible fields; it never stores a provider key of its own.
+   * Reading back which provider is selected would need the base URL to round-trip exactly,
+   * so the selector resets to its placeholder instead of pretending to remember.
+   */
+  document.getElementById("ai-preset")?.addEventListener("change", (event) => {
+    const option = (event.target as HTMLSelectElement).selectedOptions[0];
+    const base = option?.dataset.base;
+    const model = option?.dataset.model;
+    if (!base) return;
+    const baseInput = document.querySelector<HTMLInputElement>('[name="aiBaseUrl"]')!;
+    const modelInput = document.querySelector<HTMLInputElement>('[name="aiModel"]')!;
+    baseInput.value = base;
+    // The model is only filled in when empty: someone who typed a specific one should not
+    // lose it because they picked the provider afterwards.
+    if (!modelInput.value.trim() && model) modelInput.value = model;
+    window.sastreToast?.info("Rellenado. Añade la clave y guarda antes de probar.");
+  });
+
+  document.getElementById("ai-test")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget as HTMLButtonElement;
+    button.disabled = true;
+    const original = button.textContent;
+    button.textContent = "Probando…";
+
+    const { data, error } = await actions.ai.test({});
+
+    button.disabled = false;
+    button.textContent = original;
+
+    if (error) {
+      window.sastreToast?.error(error.message);
+      return;
+    }
+    if (data?.ok) {
+      window.sastreToast?.success(`Conexión correcta con ${data.model}. Ha contestado: «${data.reply}».`);
+    } else {
+      window.sastreToast?.error(data?.reason ?? "No se ha podido conectar.");
+    }
+  });
+
   document.getElementById("settings-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const data = new FormData(form);
-    const msg = document.getElementById("settings-msg")!;
 
     const redirectRows = document.querySelectorAll(".redirect-row");
     const redirects: { from: string; to: string; permanent: boolean }[] = [];
@@ -580,18 +718,22 @@ const missingBusiness = missingBusinessFields(business);
       integrations: {
         resendApiKey: (data.get("resendApiKey") as string)?.trim() || undefined,
         resendFrom: (data.get("resendFrom") as string)?.trim() || undefined,
+        turnstileSiteKey: (data.get("turnstileSiteKey") as string)?.trim() || undefined,
+        turnstileSecretKey: (data.get("turnstileSecretKey") as string)?.trim() || undefined,
+        aiBaseUrl: (data.get("aiBaseUrl") as string)?.trim() || undefined,
+        aiApiKey: (data.get("aiApiKey") as string)?.trim() || undefined,
+        aiModel: (data.get("aiModel") as string)?.trim() || undefined,
       },
     });
 
     if (error) {
-      msg.className = "text-sm text-error";
-      msg.textContent = describeError(error);
-      // Point at the offending input instead of making them decode a path.
+      // The toast says what is wrong; the highlight says where. Neither alone is enough:
+      // a message with no field is a puzzle, and a red border with no reason is worse.
+      window.sastreToast?.error(describeError(error));
       highlightInvalid(form, error);
     } else {
-      msg.className = "text-sm text-success";
-      msg.textContent = "Guardado correctamente";
-      setTimeout(() => window.location.reload(), 800);
+      window.sastreToast?.success("Ajustes guardados.");
+      setTimeout(() => window.location.reload(), 700);
     }
   });
 </script>
