@@ -121,6 +121,7 @@ const DAISY_THEMES = [
             <span class="label-text-alt text-base-content/40">Measurement ID (G-XXXXXXXXXX)</span>
           </label>
           <input name="analytics_ga4" type="text" class="input input-bordered font-mono" value={analyticsIds.ga4 ?? ""} placeholder="G-XXXXXXXXXX" />
+          <label class="label py-0"><span class="label-text-alt text-base-content/40">Empieza por G- (ej. G-ABC1234)</span></label>
         </div>
 
         <div class="form-control">
@@ -129,6 +130,7 @@ const DAISY_THEMES = [
             <span class="label-text-alt text-base-content/40">Container ID (GTM-XXXXXXX)</span>
           </label>
           <input name="analytics_gtm" type="text" class="input input-bordered font-mono" value={analyticsIds.gtm ?? ""} placeholder="GTM-XXXXXXX" />
+          <label class="label py-0"><span class="label-text-alt text-base-content/40">Empieza por GTM- (ej. GTM-ABC123)</span></label>
         </div>
 
         <div class="form-control">
@@ -137,6 +139,7 @@ const DAISY_THEMES = [
             <span class="label-text-alt text-base-content/40">Pixel ID</span>
           </label>
           <input name="analytics_metaPixel" type="text" class="input input-bordered font-mono" value={analyticsIds.metaPixel ?? ""} placeholder="123456789012345" />
+          <label class="label py-0"><span class="label-text-alt text-base-content/40">Sólo dígitos (ej. 1234567890123)</span></label>
         </div>
 
         <div class="form-control">
@@ -145,6 +148,7 @@ const DAISY_THEMES = [
             <span class="label-text-alt text-base-content/40">Pixel ID</span>
           </label>
           <input name="analytics_tiktokPixel" type="text" class="input input-bordered font-mono" value={analyticsIds.tiktokPixel ?? ""} placeholder="CXXXXXXXXXXXXXXXXX" />
+          <label class="label py-0"><span class="label-text-alt text-base-content/40">Letras y dígitos (ej. C4A1B2C3D4E5)</span></label>
         </div>
 
         <div class="form-control">
@@ -153,6 +157,7 @@ const DAISY_THEMES = [
             <span class="label-text-alt text-base-content/40">Site ID</span>
           </label>
           <input name="analytics_hotjar" type="text" class="input input-bordered font-mono" value={analyticsIds.hotjar ?? ""} placeholder="1234567" />
+          <label class="label py-0"><span class="label-text-alt text-base-content/40">Sólo el Site ID numérico (ej. 1234567), no el script entero</span></label>
         </div>
 
         <div class="form-control">
@@ -161,6 +166,7 @@ const DAISY_THEMES = [
             <span class="label-text-alt text-base-content/40">Meta tag verification content</span>
           </label>
           <input name="analytics_gscVerification" type="text" class="input input-bordered font-mono" value={analyticsIds.gscVerification ?? ""} placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+          <label class="label py-0"><span class="label-text-alt text-base-content/40">El token de la meta, no la etiqueta completa</span></label>
         </div>
       </div>
     </section>
@@ -277,6 +283,50 @@ const DAISY_THEMES = [
   }
   attachRemoveListeners();
 
+  /** Human names for the settings that carry a format rule. */
+  const FIELD_LABELS: Record<string, string> = {
+    ga4: "Google Analytics 4",
+    gtm: "Google Tag Manager",
+    metaPixel: "Meta Pixel",
+    tiktokPixel: "TikTok Pixel",
+    hotjar: "Hotjar",
+    gscVerification: "Search Console",
+    twitter: "Twitter", instagram: "Instagram", linkedin: "LinkedIn",
+    facebook: "Facebook", youtube: "YouTube", github: "GitHub",
+  };
+
+  type ActionIssue = { path?: (string | number)[]; message?: string };
+  type MaybeInputError = { message: string; issues?: ActionIssue[] };
+
+  /**
+   * Turns a validation failure into a sentence that names the field.
+   *
+   * `error.message` on an input error is zod's issue list serialised, so one malformed
+   * analytics id used to block the whole form and answer with a JSON dump.
+   */
+  function describeError(error: MaybeInputError): string {
+    const issues = error.issues ?? [];
+    if (!issues.length) return error.message;
+
+    const parts = issues.map((issue) => {
+      const key = String(issue.path?.[issue.path.length - 1] ?? "");
+      const label = FIELD_LABELS[key] ?? key;
+      return label ? `${label}: ${issue.message ?? "valor no válido"}` : (issue.message ?? "");
+    });
+    return `No se ha guardado nada. ${[...new Set(parts)].filter(Boolean).join(" · ")}`;
+  }
+
+  /** Marks the inputs that failed, so the message and the form agree. */
+  function highlightInvalid(form: HTMLFormElement, error: MaybeInputError) {
+    form.querySelectorAll(".input-error").forEach((el) => el.classList.remove("input-error"));
+    for (const issue of error.issues ?? []) {
+      const key = String(issue.path?.[issue.path.length - 1] ?? "");
+      const input =
+        form.querySelector(`[name="analytics_${key}"]`) ?? form.querySelector(`[name="${key}"]`);
+      input?.classList.add("input-error");
+    }
+  }
+
   document.getElementById("settings-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
@@ -329,7 +379,9 @@ const DAISY_THEMES = [
 
     if (error) {
       msg.className = "text-sm text-error";
-      msg.textContent = error.message;
+      msg.textContent = describeError(error);
+      // Point at the offending input instead of making them decode a path.
+      highlightInvalid(form, error);
     } else {
       msg.className = "text-sm text-success";
       msg.textContent = "Guardado correctamente";
