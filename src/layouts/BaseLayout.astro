@@ -1,6 +1,7 @@
 ---
 import "@styles/global.css";
 import { buildWebSiteSchema } from "@lib/jsonld";
+import { sanitizeAnalyticsIds } from "@lib/analytics";
 
 interface Props {
   title: string;
@@ -25,31 +26,9 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin)
 // trip to Turso on every public page.
 const siteSettings = Astro.locals.settings;
 
-type AnalyticsIds = {
-  ga4?: string; gtm?: string; metaPixel?: string;
-  tiktokPixel?: string; hotjar?: string; gscVerification?: string;
-};
-const rawAnalytics = (siteSettings?.analyticsIds as AnalyticsIds | null) ?? {};
-
-// Defence in depth. settings.update validates these ids now, but a value stored
-// before that validation existed would still land inside the inline <script> tags
-// below, where it is executable JavaScript rather than data. Anything that does not
-// match its known shape is dropped instead of rendered.
-const ID_SHAPES: Record<keyof AnalyticsIds, RegExp> = {
-  ga4: /^G-[A-Z0-9]{4,20}$/i,
-  gtm: /^GTM-[A-Z0-9]{4,20}$/i,
-  metaPixel: /^[0-9]{5,25}$/,
-  tiktokPixel: /^[A-Z0-9]{5,30}$/i,
-  hotjar: /^[0-9]{4,15}$/,
-  gscVerification: /^[A-Za-z0-9_-]{10,100}$/,
-};
-
-const analytics: AnalyticsIds = Object.fromEntries(
-  Object.entries(rawAnalytics).filter(
-    ([key, value]) =>
-      typeof value === "string" && ID_SHAPES[key as keyof AnalyticsIds]?.test(value)
-  )
-);
+// settings.update validates these on the way in; this drops anything stored before
+// that validation existed, which would otherwise be executable JS in the tags below.
+const analytics = sanitizeAnalyticsIds(siteSettings?.analyticsIds);
 
 const theme = (siteSettings?.theme as Record<string, string> | null) ?? {};
 

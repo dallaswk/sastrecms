@@ -52,6 +52,36 @@ Estado del proyecto a fecha 17 Ago 2026. Rama activa: `dev`.
 
 ### Funcionalidad
 
+- [x] **Tests unitarios (Vitest)** ✅ *(27 Ago 2026)*
+  74 tests sobre la lógica pura, que hasta ahora sólo estaba verificada a mano.
+  `npm test` / `npm run test:watch`.
+
+  - `src/lib/id.test.ts` — `computePath` con sus casos de locale, `slugify` con acentos
+    castellanos, `generateId` sin colisiones.
+  - `src/components/admin/nodeTreeContext.test.ts` — `parseNodes`, `flatten`,
+    `diffAgainst`, `reparentedIds`, `recomputePaths`. Incluye un bloque que comprueba que
+    **`recomputePaths` y `computePath` dan el mismo resultado**: el árbol pinta rutas que
+    el servidor nunca devuelve (`reorder` sólo contesta `{ ok: true }`), así que si las
+    dos implementaciones divergen el backoffice enseña rutas que no existen.
+  - `src/lib/analytics.test.ts` — las formas de los IDs contra ocho payloads de inyección
+    reales, no sólo valores válidos.
+  - `src/lib/permissions.test.ts` — contra una **base libSQL en memoria con las
+    migraciones aplicadas**, no un mock: parte del filtrado de `checkPermission` ocurre en
+    SQL (`or(contentTypeId = x, contentTypeId is null)`) y es justo la parte más fácil de
+    reimplementar mal en un doble de pruebas.
+
+  Dos cambios que salieron de escribirlos:
+
+  - **`checkPermission` ya no depende del orden de filas.** Cuando no había fila específica
+    cogía `perms[0]`, así que con dos comodines para el mismo rol el permiso efectivo lo
+    decidía el orden que devolviera SQLite. Nada lo impide: no hay índice único en
+    `(roleId, contentTypeId)` y `setPermission` hace buscar-y-luego-insertar. Ahora una fila
+    específica sigue ganando al comodín, y entre varios comodines se combinan de forma
+    aditiva. El test lo reprodujo antes del arreglo.
+  - **Las formas de los IDs de analytics viven en `src/lib/analytics.ts`.** Estaban
+    duplicadas en `settings.ts` y en `BaseLayout.astro`, que es exactamente la clase de
+    duplicación que se desincroniza. Una regla, dos puntos de aplicación, un test.
+
 - [x] **Auditoría de seguridad y permisos** ✅ *(27 Ago 2026)*
   Diez hallazgos de la auditoría de código, todos verificados contra el servidor en local.
 

@@ -3,14 +3,13 @@ import { z } from "astro:schema";
 import { eq } from "drizzle-orm";
 import { settings } from "@db/schema";
 import { requireAdmin } from "@lib/permissions";
+import { ANALYTICS_ID_SHAPES } from "@lib/analytics";
 
 const SITE_ID = "site_default";
 
 /**
- * Analytics ids end up interpolated into inline <script> tags in BaseLayout, so an
- * unvalidated value is arbitrary JavaScript on every public page. Each id has a known
- * shape; anything else is rejected here rather than escaped downstream. The empty
- * string stays allowed so a field can be cleared from the UI.
+ * The shapes live in @lib/analytics because the layout enforces the same rule at render
+ * time. The empty string stays allowed so a field can be cleared from the UI.
  */
 function analyticsId(pattern: RegExp) {
   return z
@@ -20,14 +19,11 @@ function analyticsId(pattern: RegExp) {
     .optional();
 }
 
-const AnalyticsSchema = z.object({
-  ga4: analyticsId(/^G-[A-Z0-9]{4,20}$/i),
-  gtm: analyticsId(/^GTM-[A-Z0-9]{4,20}$/i),
-  metaPixel: analyticsId(/^[0-9]{5,25}$/),
-  tiktokPixel: analyticsId(/^[A-Z0-9]{5,30}$/i),
-  hotjar: analyticsId(/^[0-9]{4,15}$/),
-  gscVerification: analyticsId(/^[A-Za-z0-9_-]{10,100}$/),
-});
+const AnalyticsSchema = z.object(
+  Object.fromEntries(
+    Object.entries(ANALYTICS_ID_SHAPES).map(([key, pattern]) => [key, analyticsId(pattern)])
+  ) as Record<keyof typeof ANALYTICS_ID_SHAPES, ReturnType<typeof analyticsId>>
+);
 
 const ThemeSchema = z.object({
   primaryColor: z.string().optional(),

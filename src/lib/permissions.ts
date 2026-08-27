@@ -37,15 +37,22 @@ export async function checkPermission(
 
   if (perms.length === 0) return false;
 
+  // A row for this exact content type overrides the wildcard entirely — that is how an
+  // admin narrows a broad grant for one type. Failing that, the wildcards apply.
+  //
+  // Nothing stops a role from having two wildcard rows: there is no unique index on
+  // (roleId, contentTypeId) and setPermission does find-then-insert. Reading only the
+  // first row the database returned made the answer depend on SQLite's row order, so
+  // the wildcards are combined additively instead: a grant in any of them grants.
   const specific = perms.find((p) => p.contentTypeId === contentTypeId);
-  const perm = specific ?? perms[0];
+  const applicable = specific ? [specific] : perms;
 
   switch (action) {
-    case "view":    return perm.canView;
-    case "create":  return perm.canCreate;
-    case "edit":    return perm.canEdit;
-    case "delete":  return perm.canDelete;
-    case "publish": return perm.canPublish;
+    case "view":    return applicable.some((p) => p.canView);
+    case "create":  return applicable.some((p) => p.canCreate);
+    case "edit":    return applicable.some((p) => p.canEdit);
+    case "delete":  return applicable.some((p) => p.canDelete);
+    case "publish": return applicable.some((p) => p.canPublish);
   }
 }
 
