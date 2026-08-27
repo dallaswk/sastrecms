@@ -30,97 +30,15 @@
     </div>
 
     <!-- Dynamic fields -->
-    <template v-for="field in fieldSchema" :key="field.key">
-      <div class="form-control">
-        <label class="label">
-          <span class="label-text font-medium">
-            {{ field.label }}
-            <span v-if="field.required" class="text-error ml-1">*</span>
-          </span>
-        </label>
-
-        <!-- text / number / date -->
-        <input
-          v-if="field.type === 'text' || field.type === 'number' || field.type === 'date'"
-          v-model="form.fields[field.key]"
-          :type="field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'"
-          class="input input-bordered"
-          :required="field.required"
-        />
-
-        <!-- textarea -->
-        <textarea
-          v-else-if="field.type === 'textarea'"
-          v-model="form.fields[field.key]"
-          class="textarea textarea-bordered"
-          rows="4"
-          :required="field.required"
-        />
-
-        <!-- select -->
-        <select
-          v-else-if="field.type === 'select'"
-          v-model="form.fields[field.key]"
-          class="select select-bordered"
-          :required="field.required"
-        >
-          <option value="">Seleccionar...</option>
-          <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
-        </select>
-
-        <!-- richtext — Tiptap -->
-        <RichTextEditor
-          v-else-if="field.type === 'richtext'"
-          v-model="form.fields[field.key] as string"
-        />
-
-        <!-- image — single media picker -->
-        <div v-else-if="field.type === 'image'" class="flex flex-col gap-2">
-          <div v-if="form.fields[field.key]" class="relative w-40 h-28 rounded-lg overflow-hidden border border-base-300 group">
-            <img :src="form.fields[field.key] as string" class="w-full h-full object-cover" alt="" />
-            <button
-              type="button"
-              class="absolute top-1 right-1 btn btn-xs btn-circle btn-error opacity-0 group-hover:opacity-100"
-              @click="form.fields[field.key] = ''"
-            >✕</button>
-          </div>
-          <button
-            type="button"
-            class="btn btn-sm btn-ghost border border-base-300 self-start"
-            @click="openPicker(field.key, false)"
-          >
-            {{ form.fields[field.key] ? "Cambiar imagen" : "Seleccionar imagen" }}
-          </button>
-        </div>
-
-        <!-- gallery — multiple media picker -->
-        <div v-else-if="field.type === 'gallery'" class="flex flex-col gap-2">
-          <div class="flex flex-wrap gap-2">
-            <div
-              v-for="(url, idx) in (form.fields[field.key] as string[] ?? [])"
-              :key="idx"
-              class="relative w-24 h-20 rounded-lg overflow-hidden border border-base-300 group"
-            >
-              <img :src="url" class="w-full h-full object-cover" alt="" />
-              <button
-                type="button"
-                class="absolute top-1 right-1 btn btn-xs btn-circle btn-error opacity-0 group-hover:opacity-100"
-                @click="removeGalleryItem(field.key, idx)"
-              >✕</button>
-            </div>
-          </div>
-          <button
-            type="button"
-            class="btn btn-sm btn-ghost border border-base-300 self-start"
-            @click="openPicker(field.key, true)"
-          >+ Añadir imágenes</button>
-        </div>
-
-        <p v-else class="text-sm text-base-content/40 italic">
-          Campo tipo "{{ field.type }}" — implementación pendiente
-        </p>
-      </div>
-    </template>
+    <FieldRenderer
+      v-for="field in fieldSchema"
+      :key="field.key"
+      :field="field"
+      :model-value="form.fields[field.key]"
+      :path="`fields.${field.key}`"
+      :disabled="editDisabled"
+      @update:model-value="form.fields[field.key] = $event"
+    />
 
     <!-- Translations accordion -->
     <div v-if="nodeId" class="collapse collapse-arrow border border-base-300 rounded-lg">
@@ -215,16 +133,19 @@
   <MediaPickerModal
     :open="pickerOpen"
     :multiple="pickerMultiple"
-    @close="pickerOpen = false"
-    @selected="onMediaSelected"
+    @close="settlePick([])"
+    @selected="settlePick"
   />
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, provide } from "vue";
 import { actions } from "astro:actions";
 import RichTextEditor from "./RichTextEditor.vue";
 import MediaPickerModal from "./MediaPickerModal.vue";
+import FieldRenderer from "./fields/FieldRenderer.vue";
+import { MEDIA_PICKER_KEY, type MediaPickerContext } from "./fields/useMediaPicker";
+import { initialValueFor } from "@lib/fields/types";
 
 interface FieldDefinition {
   key: string;
@@ -271,7 +192,6 @@ const slugTouched = ref(false);
 
 const pickerOpen = ref(false);
 const pickerMultiple = ref(false);
-const pickerTargetField = ref("");
 
 const availableLocales = props.availableLocales ?? ["es"];
 
@@ -336,11 +256,9 @@ const form = reactive({
   locale: props.initialData?.locale ?? availableLocales[0],
   fields: reactive<Record<string, unknown>>(
     Object.fromEntries(
-      props.fieldSchema.map((f) => {
-        const initial = props.initialData?.fields?.[f.key];
-        if (f.type === "gallery") return [f.key, Array.isArray(initial) ? initial : []];
-        return [f.key, initial ?? ""];
-      })
+      // The coercion rule lives in @lib/fields/types so the editor, the nested editors
+      // and the server all start a field from the same value.
+      props.fieldSchema.map((f) => [f.key, initialValueFor(f, props.initialData?.fields?.[f.key])])
     )
   ),
   seo: reactive({
@@ -364,29 +282,33 @@ function autoSlug() {
   if (!slugTouched.value) form.slug = slugify(form.title);
 }
 
-function openPicker(fieldKey: string, multiple: boolean) {
-  pickerTargetField.value = fieldKey;
-  pickerMultiple.value = multiple;
-  pickerOpen.value = true;
+/*
+ * One modal for the whole form, handed to the fields through provide/inject.
+ *
+ * Each field awaits its own selection, which replaces the previous `pickerTargetField`
+ * string — the form no longer has to remember whose turn it was, and nested editors
+ * (repeater items, sections) get the picker for free without mounting their own.
+ */
+let resolvePick: ((urls: string[]) => void) | null = null;
+
+function settlePick(urls: string[]) {
+  pickerOpen.value = false;
+  const resolve = resolvePick;
+  resolvePick = null;
+  resolve?.(urls);
 }
 
-function onMediaSelected(urls: string[]) {
-  const key = pickerTargetField.value;
-  const field = props.fieldSchema.find((f) => f.key === key);
-  if (!field) return;
-  if (field.type === "gallery") {
-    const current = (form.fields[key] as string[]) ?? [];
-    form.fields[key] = [...current, ...urls];
-  } else {
-    form.fields[key] = urls[0] ?? "";
-  }
-}
-
-function removeGalleryItem(fieldKey: string, idx: number) {
-  const arr = (form.fields[fieldKey] as string[]).slice();
-  arr.splice(idx, 1);
-  form.fields[fieldKey] = arr;
-}
+provide(MEDIA_PICKER_KEY, {
+  pick(multiple: boolean) {
+    // A picker already open is abandoned rather than left hanging on its promise.
+    resolvePick?.([]);
+    pickerMultiple.value = multiple;
+    pickerOpen.value = true;
+    return new Promise<string[]>((resolve) => {
+      resolvePick = resolve;
+    });
+  },
+} satisfies MediaPickerContext);
 
 async function handleSubmit() {
   saving.value = true;

@@ -78,3 +78,28 @@ export function emptyValueFor(field: FieldDefinition): unknown {
 export function emptyFieldsFor(schema: FieldDefinition[]): Record<string, unknown> {
   return Object.fromEntries(schema.map((f) => [f.key, emptyValueFor(f)]));
 }
+
+/**
+ * The value the editor starts a field at, given what is stored.
+ *
+ * Shared rather than inlined in NodeForm so it can be tested and so nested editors
+ * (repeater items, section blocks) coerce the same way.
+ *
+ * One deliberate change from the previous inline version: a number field with nothing
+ * stored starts as `null`, not `""`. Saving an empty string into a number is wrong, and
+ * TextField now emits `null` when the input is cleared, so both ends agree.
+ */
+export function initialValueFor(field: FieldDefinition, stored: unknown): unknown {
+  if (stored === undefined || stored === null) return emptyValueFor(field);
+
+  // A field that changed type — or was written by an agent — can hold the wrong shape.
+  // Coerce towards the shape the editor can render instead of handing it a string.
+  const empty = emptyValueFor(field);
+  if (Array.isArray(empty) && !Array.isArray(stored)) return empty;
+  if (field.type === "number" && typeof stored !== "number") {
+    const n = Number(stored);
+    return Number.isFinite(n) && stored !== "" ? n : null;
+  }
+
+  return stored;
+}

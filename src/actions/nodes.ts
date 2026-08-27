@@ -464,6 +464,8 @@ export const nodeActions = {
     input: z.object({
       excludeId: z.string().optional(),
       locale: z.string().optional(),
+      /** Restricts to one content type, for a relation field's `relatedContentType`. */
+      contentTypeKey: z.string().optional(),
     }),
     handler: async (input, context) => {
       if (!context.locals.user) throw new Error("Unauthorized");
@@ -473,6 +475,7 @@ export const nodeActions = {
       const all = await db.query.nodes.findMany({
         where: eq(nodes.siteId, siteId),
         orderBy: (n, { asc }) => [asc(n.path)],
+        with: { contentType: { columns: { key: true } } },
       });
 
       const viewable = await viewableContentTypeIds(db, context.locals.user.id, siteId);
@@ -481,7 +484,15 @@ export const nodeActions = {
         .filter((n) => viewable.has(n.contentTypeId))
         .filter((n) => n.id !== input.excludeId)
         .filter((n) => !input.locale || n.locale === input.locale)
-        .map((n) => ({ id: n.id, title: n.title, path: n.path, locale: n.locale }));
+        .filter((n) => !input.contentTypeKey || n.contentType?.key === input.contentTypeKey)
+        .map((n) => ({
+          id: n.id,
+          title: n.title,
+          path: n.path,
+          locale: n.locale,
+          // The relation field needs it to label options; the translation picker ignores it.
+          contentTypeKey: n.contentType?.key ?? null,
+        }));
     },
   }),
 };
