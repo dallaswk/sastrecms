@@ -64,6 +64,7 @@ defineEmits<{ "update:modelValue": [value: unknown] }>();
  */
 const RepeaterField = defineAsyncComponent(() => import("./RepeaterField.vue"));
 const RelationField = defineAsyncComponent(() => import("./RelationField.vue"));
+const SectionsField = defineAsyncComponent(() => import("./SectionsField.vue"));
 
 const COMPONENTS: Record<FieldType, Component | null> = {
   text: TextField,
@@ -76,8 +77,7 @@ const COMPONENTS: Record<FieldType, Component | null> = {
   gallery: GalleryField,
   relation: RelationField,
   repeater: RepeaterField,
-  // Wired in step B5, once there are sections to edit.
-  sections: null,
+  sections: SectionsField,
 };
 
 const component = computed(() => COMPONENTS[props.field.type] ?? null);

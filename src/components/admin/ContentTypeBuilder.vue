@@ -154,6 +154,27 @@
                   </div>
                 </div>
 
+                <!-- Sections: which blocks this content type accepts -->
+                <div v-if="field.type === 'sections'" class="col-span-2 form-control">
+                  <label class="label py-0">
+                    <span class="label-text text-xs">Secciones permitidas</span>
+                    <span class="label-text-alt text-base-content/40">Ninguna marcada = todas</span>
+                  </label>
+                  <div class="flex flex-wrap gap-3 border border-base-300 rounded-lg p-3">
+                    <label
+                      v-for="def in ALL_SECTIONS" :key="def.type"
+                      class="flex items-center gap-2 text-sm cursor-pointer"
+                    >
+                      <input
+                        type="checkbox" class="checkbox checkbox-sm"
+                        :checked="(field.allowedSections ?? []).includes(def.type)"
+                        @change="toggleSection(field, def.type)"
+                      />
+                      {{ def.icon }} {{ def.label }}
+                    </label>
+                  </div>
+                </div>
+
                 <!-- Select options -->
                 <div v-if="field.type === 'select'" class="col-span-2 form-control">
                   <label class="label py-0"><span class="label-text text-xs">Opciones (separadas por coma)</span></label>
@@ -192,6 +213,7 @@
 
 <script setup lang="ts">
 import { FIELD_TYPES, FIELD_TYPE_LABELS } from "@lib/fields/types";
+import { pickableSections } from "@lib/sections/registry";
 import type { FieldType, FieldDefinition } from "@lib/fields/types";
 import { ref, reactive, onMounted, computed } from "vue";
 import { actions } from "astro:actions";
@@ -270,6 +292,17 @@ const otherContentTypes = computed<{ key: string; label: string }[]>(() => {
     return [];
   }
 });
+
+const ALL_SECTIONS = pickableSections();
+
+function toggleSection(field: Field, type: string) {
+  const current = field.allowedSections ?? [];
+  const next = current.includes(type)
+    ? current.filter((t) => t !== type)
+    : [...current, type];
+  // An empty list means "all", so it is stored as absent rather than as [].
+  field.allowedSections = next.length ? next : undefined;
+}
 
 function addSubfield(field: Field) {
   if (!field.subfields) field.subfields = [];
