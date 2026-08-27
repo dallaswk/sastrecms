@@ -1,6 +1,6 @@
 # TODO — sASTRe
 
-Estado del proyecto a fecha 22 Jun 2026. Rama activa: `dev`.
+Estado del proyecto a fecha 17 Ago 2026. Rama activa: `dev`.
 
 ---
 
@@ -52,16 +52,99 @@ Estado del proyecto a fecha 22 Jun 2026. Rama activa: `dev`.
 
 ### Funcionalidad
 
-- [x] **Drag & drop entre niveles en el árbol de nodos** ✅
-  `NodeTree.vue` usa un `<VueDraggable>` por nivel con `data-parent-id` para detectar el contenedor destino.
-  Al soltar, envía `reorder` con el `parentId` correcto y la `position` en el nuevo nivel.
-  La acción `nodes.reorder` recalcula `path` del nodo movido y de todos sus descendientes, y verifica permisos de `edit`.
+- [x] **Drag & drop entre niveles en el árbol de nodos** ✅ *(rehecho el 17 Ago 2026)*
+  Los arreglos de hidratación de junio (`927c345`, `770ad33`) habían dejado el árbol sin drag & drop:
+  se sustituyó `<VueDraggable>` por un `v-for` plano y quedaron `buildUpdates`/`persistUpdates`
+  y el emit `reorder` sin ningún llamador. Reconstruido con esta estructura:
+
+  - `nodeTreeContext.ts` — lógica pura y testeable: `parseNodes`, `flatten`, `diffAgainst`,
+    `recomputePaths`, más el `InjectionKey` compartido.
+  - `NodeTree.vue` — raíz: única dueña del estado, hace `provide()` del contexto y persiste.
+  - `NodeTreeLevel.vue` — nivel recursivo con `<VueDraggable>` y `group: "sastre-nodes"`
+    compartido, que es lo que permite soltar en cualquier otro nivel.
+
+  Detalles que importan:
+  - Se envían **solo los nodos que cambiaron** de `parentId` o `position`. Mandar el árbol
+    entero haría que `reorder` exigiera `edit` sobre todos los tipos y un editor limitado a
+    Posts no podría reordenar nada.
+  - `force-fallback` mantiene a SortableJS fuera del drag nativo HTML5: las listas anidadas se
+    comportan mucho mejor (el dragover del hijo no pelea con el del padre).
+  - Movimiento optimista con revert: si el servidor rechaza (p. ej. `path` duplicado) el árbol
+    vuelve al último estado confirmado y se muestra el error.
+  - `recomputePaths` replica `computePath` en cliente porque `reorder` sólo devuelve `{ ok: true }`.
+  - Un nodo sin hijos se puede desplegar igualmente para exponer una zona de drop y anidar dentro.
+  - Handle de arrastre explícito (`⠿`), así los enlaces y botones de la fila siguen siendo clicables.
 
 - [x] **Ocultar pestaña Magic link si no hay Resend key** ✅
   `login.astro` lee `settings.integrations` en el servidor; la pestaña solo aparece si hay `resendApiKey` + `resendFrom` configurados.
 
 - [x] **Bootstrap automático en middleware** ✅
   `middleware.ts` crea `site_default` + roles básicos (admin, editor, colaborador) si no existen en la DB. Ya no hace falta correr el seed manualmente para que el sistema arranque.
+
+- [x] **Frontend público arreglado** ✅ *(17 Ago 2026)*
+  La web pública no se veía: todas las rutas devolvían 200 con el body vacío. Dos causas:
+
+  1. `src/pages/index.astro` era un placeholder de la Phase 4 que imprimía una frase literal
+     y nunca tocaba la DB. Al ser ruta más específica, tapaba a `[...slug].astro` en `/`.
+     Eliminado — el resolver ya contempla el caso raíz (`path = "/"`).
+  2. `BaseLayout.astro` hacía `new URL(Astro.url.pathname, Astro.site)` y `site` no está
+     definido en `astro.config.ts`, así que lanzaba `Invalid URL` en **todas** las páginas
+     públicas. Ahora cae a `Astro.url.origin`, igual que ya hacía `sitemap.xml.ts`.
+
+  `site` se deja sin definir a propósito: cada despliegue de cliente tiene su dominio y no se
+  conoce en build time. El origin de la request es el valor correcto detrás de Cloudflare.
+
+  Ojo con la convención de la home: el wizard la crea con `slug: "index"` y `path: "/"`.
+  Por eso `recomputePaths` sólo reescribe los subárboles que cambian de padre — un recálculo
+  general la mostraría como `/index` mientras la DB dice `/`.
+
+- [x] **Campo de contenido en los tipos base** ✅ *(17 Ago 2026)*
+  En el backoffice sólo se podían editar título, slug, traducciones y SEO: **ningún tipo del
+  sistema declaraba el campo que sus propios renderers pintan**. Los cuatro renderers de
+  `src/components/renderers/` usan `fields.body`, pero el seed creaba Página con
+  `field_schema: []` y Post/Portfolio sólo con sus campos secundarios.
+
+  - `seed.ts` — los tres tipos base ahora incluyen `{ key: "body", type: "richtext" }`.
+  - `drizzle/0004_add_body_field_to_system_types.sql` — migración de datos que añade el campo
+    a las bases ya creadas (el seed usa `onConflictDoNothing`, así que re-ejecutarlo no las
+    arregla). Conserva el orden y los valores de los campos existentes, y es idempotente.
+
+  Para arreglar una instalación existente basta `npm run db:migrate`. El formulario ya sabía
+  pintar `richtext` con Tiptap; sólo le faltaba el campo en el esquema.
+
+- [x] **Versiones de Tiptap alineadas** ✅ *(17 Ago 2026)*
+  `@tiptap/extension-link` y `@tiptap/pm` estaban en `^3.27.1` mientras `core`, `vue-3` y
+  `starter-kit` iban en `^2.11.0`. `extension-link@3` declara peer `@tiptap/core: 3.27.1`,
+  así que era un peer incumplido que funcionaba de milagro. Bajados a `^2.11.0`.
+  Ojo: `npm install` en este repo necesita `--legacy-peer-deps` por el conflicto
+  preexistente de `@astrojs/node@9` (pide astro ^5) con Astro 6.
+
+- [x] **Árbol de contenido reactivo a permisos** ✅
+  `/admin/content` calcula `edit` y `delete` por tipo de contenido y se los pasa al árbol.
+  Un editor limitado a Posts ve el handle de arrastre bloqueado en las Páginas (con tooltip
+  explicando por qué) y sin botones de Editar/Borrar. El botón de borrar también sale
+  deshabilitado en nodos con hijos, porque la acción `nodes.delete` los rechaza.
+
+### Entorno local de pruebas
+
+Para levantar el CMS en local contra un SQLite de fichero, sin tocar Turso:
+
+```bash
+cat > .env <<'EOF'
+TURSO_DATABASE_URL=file:./local.db
+BETTER_AUTH_SECRET=<openssl rand -base64 32>
+BETTER_AUTH_URL=http://localhost:4321
+EOF
+
+# ⚠️ TURSO_AUTH_TOKEN debe estar AUSENTE, no vacío: drizzle-kit rechaza la cadena vacía
+env -u TURSO_AUTH_TOKEN npm run db:migrate
+env -u TURSO_AUTH_TOKEN npm run db:seed
+env -u TURSO_AUTH_TOKEN npm run create-admin -- admin@local.test <password>
+env -u TURSO_AUTH_TOKEN npm run dev
+```
+
+En dev el adaptador es Node y las vars se leen del `.env` vía dotenv; en `build` se usa
+Cloudflare y salen de `cloudflare:workers`. Lo resuelve `loadEnv()` en `middleware.ts`.
 
 ### Nice-to-have
 

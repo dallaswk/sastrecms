@@ -16,6 +16,11 @@ dist/
 # cloudflare
 .wrangler/
 
+# local sqlite databases (create-site / local dev)
+*.db
+*.sqlite
+*.sqlite3
+
 # drizzle migrations (commit the SQL, not the journal metadata if not needed)
 # drizzle/meta/
 

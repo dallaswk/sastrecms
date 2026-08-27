@@ -16,7 +16,10 @@ interface Props {
 
 const { title, description, ogImage, noindex = false, jsonLd, jsonLdList, hreflangLinks } = Astro.props;
 const schemas = jsonLdList ?? (jsonLd ? [jsonLd] : []);
-const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+// `site` is deliberately not set in astro.config.ts: each client deployment has its own
+// domain and it isn't known at build time. Fall back to the request origin, same as
+// sitemap.xml.ts — without this every public page throws "Invalid URL".
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
 
 const siteSettings = Astro.locals.db
   ? await Astro.locals.db.query.settings.findFirst({

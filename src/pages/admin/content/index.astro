@@ -1,6 +1,7 @@
 ---
 import AdminLayout from "@layouts/AdminLayout.astro";
 import NodeTree from "@components/admin/NodeTree.vue";
+import type { TreeNode } from "@components/admin/nodeTreeContext";
 import { eq, and } from "drizzle-orm";
 import { nodes, contentTypes, userRoles } from "@db/schema";
 import { checkPermission } from "@lib/permissions";
@@ -27,22 +28,28 @@ const assignment = await db.query.userRoles.findFirst({
 const isAdmin = assignment?.role.key === "admin";
 
 const canCreatePerType: Record<string, boolean> = {};
+const editableTypeIds: string[] = [];
+const deletableTypeIds: string[] = [];
 for (const ct of allContentTypes) {
   canCreatePerType[ct.id] = await checkPermission(db, userId, SITE_ID, ct.id, "create");
+  if (await checkPermission(db, userId, SITE_ID, ct.id, "edit")) editableTypeIds.push(ct.id);
+  if (await checkPermission(db, userId, SITE_ID, ct.id, "delete")) deletableTypeIds.push(ct.id);
 }
 
 type RawNode = typeof allNodes[number] & { contentType: typeof allContentTypes[number] | null };
 
-function buildTree(flat: RawNode[], parentId: string | null = null): import("../../../components/admin/NodeTree.vue").TreeNode[] {
+function buildTree(flat: RawNode[], parentId: string | null = null): TreeNode[] {
   return flat
     .filter((n) => (n.parentId ?? null) === parentId)
     .map((n) => ({
       id: n.id,
       title: n.title,
+      slug: n.slug,
       path: n.path,
       status: n.status,
       position: n.position,
       parentId: n.parentId ?? null,
+      contentTypeId: n.contentTypeId,
       contentType: n.contentType
         ? { key: n.contentType.key, label: n.contentType.label, icon: n.contentType.icon ?? undefined }
         : undefined,
@@ -85,6 +92,8 @@ const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
         <NodeTree
           client:only="vue"
           nodes={JSON.stringify(treeData)}
+          editableTypes={isAdmin ? null : JSON.stringify(editableTypeIds)}
+          deletableTypes={isAdmin ? null : JSON.stringify(deletableTypeIds)}
         />
       </div>
     </div>

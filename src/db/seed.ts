@@ -28,6 +28,16 @@ async function seed() {
   console.log("  ✓ site");
 
   // 2. System content types
+  //
+  // Every renderer under src/components/renderers/ paints `fields.body`, so each base type
+  // must declare it — otherwise the editor offers nothing but title/slug/SEO and the page
+  // renders empty. Custom types add their own fields from the content type builder.
+  const bodyField = {
+    key: "body",
+    label: "Contenido",
+    type: "richtext" as const,
+  };
+
   const systemTypes = [
     {
       id: "ct_page",
@@ -39,7 +49,7 @@ async function seed() {
       supportsChildren: true,
       translatable: true,
       isSystem: true,
-      fieldSchema: [] as schema.FieldDefinition[],
+      fieldSchema: [bodyField] as schema.FieldDefinition[],
     },
     {
       id: "ct_post",
@@ -54,6 +64,7 @@ async function seed() {
       fieldSchema: [
         { key: "excerpt", label: "Extracto", type: "textarea" as const },
         { key: "cover_image", label: "Imagen de portada", type: "image" as const },
+        bodyField,
       ] as schema.FieldDefinition[],
     },
     {
@@ -71,6 +82,7 @@ async function seed() {
         { key: "year", label: "Año", type: "number" as const },
         { key: "gallery", label: "Galería", type: "gallery" as const },
         { key: "url", label: "URL del proyecto", type: "text" as const },
+        bodyField,
       ] as schema.FieldDefinition[],
     },
   ];

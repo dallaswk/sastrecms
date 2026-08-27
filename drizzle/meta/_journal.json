@@ -29,6 +29,13 @@
       "when": 1781873281140,
       "tag": "0003_tricky_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786956932953,
+      "tag": "0004_add_body_field_to_system_types",
+      "breakpoints": true
     }
   ]
 }
