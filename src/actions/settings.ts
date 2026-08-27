@@ -34,6 +34,12 @@ const ThemeSchema = z.object({
   daisyuiTheme: z.string().optional(),
 });
 
+const MenuItemSchema = z.object({
+  label: z.string().min(1),
+  nodeId: z.string().optional(),
+  url: z.string().optional(),
+});
+
 const SocialLinksSchema = z.object({
   twitter: z.string().url().optional().or(z.literal("")),
   instagram: z.string().url().optional().or(z.literal("")),
@@ -67,17 +73,14 @@ export const settingsActions = {
       theme: ThemeSchema.optional(),
       socialLinks: SocialLinksSchema.optional(),
       analyticsIds: AnalyticsSchema.optional(),
+      // z.object().partial(), not z.record() with an enum key: in zod 4 an enum key makes
+      // every key required, so saving a site whose footer menu is empty was rejected.
       menus: z
-        .record(
-          z.enum(["main", "footer", "legal"]),
-          z.array(
-            z.object({
-              label: z.string().min(1),
-              nodeId: z.string().optional(),
-              url: z.string().optional(),
-            })
-          )
-        )
+        .object({
+          main: z.array(MenuItemSchema).optional(),
+          footer: z.array(MenuItemSchema).optional(),
+          legal: z.array(MenuItemSchema).optional(),
+        })
         .optional(),
       redirects: z
         .array(z.object({ from: z.string(), to: z.string(), permanent: z.boolean() }))

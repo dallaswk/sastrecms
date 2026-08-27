@@ -5,6 +5,7 @@ import { settingsActions } from "./settings";
 import { tokenActions } from "./tokens";
 import { userActions } from "./users";
 import { permissionActions } from "./permissions";
+import { presetActions } from "./presets";
 
 export const server = {
   nodes: nodeActions,
@@ -14,4 +15,5 @@ export const server = {
   tokens: tokenActions,
   users: userActions,
   permissions: permissionActions,
+  presets: presetActions,
 };

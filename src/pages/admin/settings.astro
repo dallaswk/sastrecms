@@ -18,6 +18,22 @@ const redirects = (siteSettings?.redirects as { from: string; to: string; perman
 const analyticsIds = (siteSettings?.analyticsIds as Record<string, string>) ?? {};
 const integrations = (siteSettings?.integrations as Record<string, string>) ?? {};
 
+const menus = (siteSettings?.menus as Record<string, { label: string; nodeId?: string; url?: string }[]> | null) ?? {};
+
+// Only published pages are offered: a menu entry pointing at a draft is a link to a 404
+// on every page of the site.
+const linkables = await db.query.nodes.findMany({
+  where: and(eq(nodes.siteId, Astro.locals.siteId), eq(nodes.status, "published")),
+  columns: { id: true, title: true, path: true },
+  orderBy: (n, { asc }) => [asc(n.path)],
+});
+
+const MENU_SECTIONS = [
+  { key: "main", label: "Menú principal", hint: "Cabecera del sitio" },
+  { key: "footer", label: "Enlaces del pie", hint: "Columna del pie" },
+  { key: "legal", label: "Enlaces legales", hint: "Línea inferior del pie" },
+] as const;
+
 const DAISY_THEMES = [
   "light","dark","cupcake","bumblebee","emerald","corporate","synthwave",
   "retro","cyberpunk","valentine","halloween","garden","forest","aqua",
