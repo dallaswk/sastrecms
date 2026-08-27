@@ -44,3 +44,22 @@ export function computePath(
 
   return `${prefix}/${slug}`;
 }
+
+/**
+ * "index" names the root of a locale, so it only means anything at root level.
+ *
+ * Nested it used to be a plain segment: a node called index under /blog produced
+ * /blog/index, a real but useless page — someone reaching for "the blog's front page"
+ * gets a URL nobody visits while /blog, the archive, carries on ignoring it. The
+ * asymmetry was documented but it was still a trap, so the slug is reserved instead.
+ *
+ * Returns null when the slug is fine, or the reason it isn't.
+ */
+export function reservedSlugError(slug: string, hasParent: boolean): string | null {
+  if (slug !== "index" || !hasParent) return null;
+  return (
+    'El slug "index" está reservado para la portada de cada idioma y sólo funciona en la ' +
+    "raíz. Dentro de otra página crearía una ruta como /blog/index, que no es la portada " +
+    "de esa sección. Usa otro slug, o edita la propia página contenedora."
+  );
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computePath, slugify, generateId } from "./id";
+import { computePath, slugify, generateId, reservedSlugError } from "./id";
 
 describe("slugify", () => {
   it("strips Spanish accents instead of dropping the letters", () => {
@@ -58,8 +58,9 @@ describe("computePath", () => {
     });
 
     it("is only special at root level", () => {
-      // Nested, "index" is just a path segment: a node called index under /blog is
-      // /blog/index, not /blog. Only the root of each locale has a home page.
+      // computePath itself treats a nested "index" as a plain segment. That route is
+      // never reached in practice because reservedSlugError rejects the slug before we
+      // get here — see below — but the function stays honest about what it computes.
       expect(computePath("/blog", "index", "es", ES)).toBe("/blog/index");
     });
   });
@@ -101,6 +102,27 @@ describe("computePath", () => {
     ];
     for (const [parent, slug, locale] of cases) {
       expect(computePath(parent, slug, locale, ES)).not.toMatch(/\/\//);
+    }
+  });
+});
+
+describe("reservedSlugError", () => {
+  it("allows \"index\" at root level, where it means the locale home", () => {
+    expect(reservedSlugError("index", false)).toBeNull();
+  });
+
+  it("rejects \"index\" under a parent", () => {
+    // /blog/index is a real URL but not the blog's front page, so reaching for it is
+    // always a mistake. The message has to say that, not just refuse.
+    const error = reservedSlugError("index", true);
+    expect(error).toContain("reservado");
+    expect(error).toContain("/blog/index");
+  });
+
+  it("leaves every other slug alone, nested or not", () => {
+    for (const slug of ["contacto", "indexado", "my-index", "index-2"]) {
+      expect(reservedSlugError(slug, true)).toBeNull();
+      expect(reservedSlugError(slug, false)).toBeNull();
     }
   });
 });

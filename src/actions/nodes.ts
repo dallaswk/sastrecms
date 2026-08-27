@@ -2,7 +2,7 @@ import { defineAction } from "astro:actions";
 import { z } from "astro:schema";
 import { eq, and, desc, isNotNull, inArray } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
-import { generateId, slugify, computePath } from "@lib/id";
+import { generateId, slugify, computePath, reservedSlugError } from "@lib/id";
 import { requirePermission, viewableContentTypeIds } from "@lib/permissions";
 
 const NodeSeoSchema = z.object({
@@ -87,6 +87,10 @@ export const nodeActions = {
       if (!ct) throw new Error("Content type not found");
 
       const slug = input.slug ?? slugify(input.title);
+
+      const reserved = reservedSlugError(slug, Boolean(input.parentId));
+      if (reserved) throw new Error(reserved);
+
       let parentPath: string | null = null;
 
       if (input.parentId) {
@@ -177,6 +181,10 @@ export const nodeActions = {
 
       if (input.slug && input.slug !== node.slug) {
         const newSlug = slugify(input.slug);
+
+        const reserved = reservedSlugError(newSlug, Boolean(node.parentId));
+        if (reserved) throw new Error(reserved);
+
         // For a nested node this is the parent path, prefix included; for a root-level
         // one it is null and the locale prefix gets reapplied from scratch.
         const parentPath = node.path.substring(0, node.path.lastIndexOf("/")) || null;

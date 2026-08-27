@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { eq, and } from "drizzle-orm";
 import { nodes, contentTypes, media, settings } from "@db/schema";
 import { validateApiToken } from "@lib/api-token";
-import { generateId, slugify, computePath } from "@lib/id";
+import { generateId, slugify, computePath, reservedSlugError } from "@lib/id";
 import {
   requirePermission,
   isAdmin,
@@ -96,6 +96,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
         await requirePermission(db, userId, siteId, contentTypeId, "create");
 
         const slug = rawSlug ? slugify(rawSlug) : slugify(title);
+
+        const reserved = reservedSlugError(slug, Boolean(parentId));
+        if (reserved) return mcpError(reserved);
+
         let parentPath: string | null = null;
         if (parentId) {
           const parent = await db.query.nodes.findFirst({ where: eq(nodes.id, parentId) });
@@ -147,6 +151,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         if (updates.status) patch.status = updates.status;
         if (updates.slug && updates.slug !== node.slug) {
           const newSlug = slugify(updates.slug as string);
+          const reserved = reservedSlugError(newSlug, Boolean(node.parentId));
+          if (reserved) return mcpError(reserved);
           const parentPath = node.path.substring(0, node.path.lastIndexOf("/")) || null;
           patch.slug = newSlug;
           patch.path = computePath(

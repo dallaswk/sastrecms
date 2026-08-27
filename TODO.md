@@ -129,8 +129,13 @@ Estado del proyecto a fecha 27 Ago 2026. Rama activa: `dev`. Astro 7.2.8.
     segundo nodo raíz con slug `index` antes caía en `/index` y ahora choca con la portada,
     diciendo `Path "/" already exists` — que no tiene sentido para quien escribió `index`.
     La action y la herramienta MCP ahora lo explican.
-  - `index` anidado sigue siendo un segmento normal (`/blog/index`, no `/blog`): sólo la
-    raíz de cada idioma tiene portada. La asimetría queda fijada por un test.
+  - `index` anidado **está reservado** *(cerrado el 27 Ago 2026)*. Antes era un segmento
+    normal y producía `/blog/index`: una URL real pero inútil, porque quien buscaba "la
+    portada del blog" acababa con una página que nadie visita mientras `/blog`, que es el
+    archivo, seguía ignorándola. `reservedSlugError()` en `@lib/id` lo rechaza en `create`
+    y al renombrar, tanto por action como por MCP, con un mensaje que explica el porqué.
+    Sigue permitido crear la portada de un idioma que aún no la tiene (probado con
+    `locale: "en"` → `/en`), y duplicarla da el mensaje de portada existente.
 
 - [x] **Permiso de lectura en los endpoints que faltaban** ✅ *(27 Ago 2026)*
   Tras la auditoría, el MCP filtraba por `view` pero la web no: la misma cuenta recibía
