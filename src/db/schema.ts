@@ -60,27 +60,13 @@ export const contentTypes = sqliteTable(
   (t) => [uniqueIndex("content_types_site_key_idx").on(t.siteId, t.key)]
 );
 
-export type FieldType =
-  | "text"
-  | "textarea"
-  | "richtext"
-  | "image"
-  | "gallery"
-  | "date"
-  | "number"
-  | "select"
-  | "relation"
-  | "repeater";
-
-export type FieldDefinition = {
-  key: string;
-  label: string;
-  type: FieldType;
-  required?: boolean;
-  options?: string[];
-  relatedContentType?: string;
-  subfields?: FieldDefinition[];
-};
+// The field vocabulary lives in @lib/fields/types, which is plain TypeScript so the Vue
+// islands and the tests can import it too. Re-exported here because this module is what
+// the rest of the codebase already imports these names from.
+export { FIELD_TYPES, FIELD_TYPE_LABELS } from "../lib/fields/types";
+export type { FieldType, FieldDefinition } from "../lib/fields/types";
+// Also imported, not just re-exported: the table definition below uses it as a type.
+import type { FieldDefinition } from "../lib/fields/types";
 
 // ---------------------------------------------------------------------------
 // nodes — the unified content tree

@@ -71,16 +71,9 @@
                 <div class="form-control">
                   <label class="label py-0"><span class="label-text text-xs">Tipo</span></label>
                   <select v-model="field.type" class="select select-bordered select-sm">
-                    <option value="text">Texto</option>
-                    <option value="textarea">Texto largo</option>
-                    <option value="richtext">Richtext</option>
-                    <option value="image">Imagen</option>
-                    <option value="gallery">Galería</option>
-                    <option value="date">Fecha</option>
-                    <option value="number">Número</option>
-                    <option value="select">Select</option>
-                    <option value="relation">Relación</option>
-                    <option value="repeater">Repeater</option>
+                    <option v-for="type in FIELD_TYPES" :key="type" :value="type">
+                      {{ FIELD_TYPE_LABELS[type] }}
+                    </option>
                   </select>
                 </div>
 
@@ -147,18 +140,23 @@
 </template>
 
 <script setup lang="ts">
+import { FIELD_TYPES, FIELD_TYPE_LABELS } from "@lib/fields/types";
+import type { FieldType, FieldDefinition } from "@lib/fields/types";
 import { ref, reactive, onMounted } from "vue";
 import { actions } from "astro:actions";
 import Sortable from "sortablejs";
 
 interface Field {
+  /** Local only, for :key during drag. Stripped before saving. */
   _id: string;
   key: string;
   label: string;
-  type: string;
+  type: FieldType;
   required: boolean;
   options?: string[];
   relatedContentType?: string;
+  subfields?: FieldDefinition[];
+  allowedSections?: string[];
 }
 
 const props = defineProps<{
