@@ -1,0 +1,113 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import SubmissionInbox from "@components/admin/SubmissionInbox.vue";
+import { and, desc, eq } from "drizzle-orm";
+import { formSubmissions, nodes, settings } from "@db/schema";
+import { hasSiteRole } from "@lib/permissions";
+export const prerender = false;
+
+const db = Astro.locals.db;
+const siteId = Astro.locals.siteId;
+
+// Any role: answering an enquiry is not an admin task. Deleting one is — the action says so.
+if (!(await hasSiteRole(db, Astro.locals.user!.id, siteId))) {
+  return Astro.redirect("/admin");
+}
+
+const status = (Astro.url.searchParams.get("estado") ?? "todos") as
+  | "todos"
+  | "new"
+  | "read"
+  | "spam";
+
+const where =
+  status === "todos"
+    ? eq(formSubmissions.siteId, siteId)
+    : and(eq(formSubmissions.siteId, siteId), eq(formSubmissions.status, status));
+
+const submissions = await db.query.formSubmissions.findMany({
+  where,
+  orderBy: [desc(formSubmissions.createdAt)],
+  limit: 200,
+});
+
+// The page each came from, for a link back. One query rather than one per row.
+const nodeIds = [...new Set(submissions.map((s) => s.nodeId).filter((id): id is string => !!id))];
+const pages = nodeIds.length
+  ? await db.query.nodes.findMany({
+      where: and(eq(nodes.siteId, siteId)),
+      columns: { id: true, title: true, path: true },
+    })
+  : [];
+const pathById = Object.fromEntries(pages.map((p) => [p.id, { title: p.title, path: p.path }]));
+
+const siteSettings = await db.query.settings.findFirst({
+  where: eq(settings.siteId, siteId),
+  columns: { contactEmail: true, integrations: true },
+});
+const integrations = (siteSettings?.integrations as Record<string, string> | null) ?? {};
+
+const counts = {
+  total: submissions.length,
+  failed: submissions.filter((s) => s.notifyError).length,
+};
+
+const FILTERS = [
+  { key: "todos", label: "Todos" },
+  { key: "new", label: "Sin leer" },
+  { key: "read", label: "Leídos" },
+  { key: "spam", label: "Spam" },
+] as const;
+---
+
+<AdminLayout title="Mensajes">
+  <div class="flex flex-col gap-4">
+    {!siteSettings?.contactEmail && (
+      <div class="alert alert-warning">
+        <span>
+          No hay <strong>correo de contacto</strong> configurado, así que los mensajes se
+          guardan aquí pero nadie recibe aviso.
+          <a href="/admin/settings" class="link">Configúralo en Ajustes</a>.
+        </span>
+      </div>
+    )}
+
+    {!integrations.turnstileSecretKey && (
+      <div class="alert">
+        <span>
+          Turnstile no está configurado. Los formularios siguen protegidos por el honeypot y
+          por el límite de envíos, pero sin verificación de Cloudflare.
+          <a href="/admin/settings" class="link">Añadir claves</a>.
+        </span>
+      </div>
+    )}
+
+    {counts.failed > 0 && (
+      <div class="alert alert-error">
+        <span>
+          {counts.failed} mensaje(s) se guardaron pero su aviso por correo falló. Abre uno
+          para ver el motivo — normalmente el dominio de envío no está verificado en Resend.
+        </span>
+      </div>
+    )}
+
+    <div class="flex gap-1">
+      {FILTERS.map((filter) => (
+        <a
+          href={filter.key === "todos" ? "/admin/forms" : `/admin/forms?estado=${filter.key}`}
+          class:list={[
+            "btn btn-sm",
+            status === filter.key ? "btn-primary" : "btn-ghost border border-base-300",
+          ]}
+        >{filter.label}</a>
+      ))}
+    </div>
+
+    <SubmissionInbox
+      client:load
+      submissions={JSON.stringify(submissions)}
+      pages={JSON.stringify(pathById)}
+      canDelete={Astro.locals.isAdmin}
+    />
+  </div>
+</AdminLayout>

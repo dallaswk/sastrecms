@@ -3,6 +3,7 @@ import { PRESETS, listPresets, getPreset } from "./registry";
 import { SECTIONS } from "@lib/sections/registry";
 import { parseSections } from "@lib/sections/validate";
 import { FIELD_TYPES } from "@lib/fields/types";
+import { parseFormFields } from "@lib/forms/validate";
 import { MENU_KEYS } from "@lib/menus";
 
 /**
@@ -88,6 +89,36 @@ describe("invariantes de los presets", () => {
   it.each(presets.map((p) => [p.key, p] as const))("%s: tiene portada", (_key, preset) => {
     expect(preset.pages.map((p) => p.slug)).toContain("index");
   });
+
+  it.each(presets.map((p) => [p.key, p] as const))(
+    "%s: trae un formulario de contacto que se puede rellenar y contestar",
+    (_key, preset) => {
+      const forms = preset.pages.flatMap((page) =>
+        (page.sections ?? []).filter((section) => section.type === "contact")
+      );
+      // Un sitio sin formulario no se entrega, así que los tres presets deben traerlo.
+      expect(forms.length, "el preset no trae formulario de contacto").toBeGreaterThan(0);
+
+      for (const form of forms) {
+        const fields = parseFormFields(form.data.fields);
+        // Lo que el editor guarda y lo que el servidor acepta no son lo mismo: un tipo mal
+        // escrito o un desplegable sin opciones desaparece aquí en silencio.
+        expect(fields.length, "el formulario no tiene campos válidos").toBeGreaterThan(0);
+        expect(
+          (form.data.fields as unknown[]).length,
+          "algún campo del formulario no sobrevive a parseFormFields"
+        ).toBe(fields.length);
+
+        // Sin campo de correo el aviso no lleva Reply-To y el cliente no puede contestar.
+        expect(
+          fields.some((f) => f.type === "email"),
+          "el formulario no pide un correo al que responder"
+        ).toBe(true);
+
+        expect(form.data.consent_text, "falta el texto de consentimiento").toBeTruthy();
+      }
+    }
+  );
 });
 
 describe("getPreset", () => {

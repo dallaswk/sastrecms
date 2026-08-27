@@ -42,6 +42,19 @@ export const basico: SitePreset = {
     ] },
     { slug: "contacto", title: "Contacto", publish: true, sections: [
       { type: "prose", data: { title: "Contacto", width: "estrecho", body: "<p>Teléfono, correo, dirección y horario.</p>" } },
+      { type: "contact", data: {
+        title: "Escríbenos",
+        text: "Rellena el formulario y te contestamos en menos de 24 horas.",
+        submit_label: "Enviar mensaje",
+        consent_text: "He leído y acepto la política de privacidad y el tratamiento de mis datos para responder a esta consulta.",
+        success_message: "Gracias, hemos recibido tu mensaje. Te respondemos en menos de 24 horas.",
+        fields: [
+          { key: "nombre", label: "Nombre", type: "text", required: "sí" },
+          { key: "email", label: "Correo electrónico", type: "email", required: "sí" },
+          { key: "telefono", label: "Teléfono", type: "tel" },
+          { key: "mensaje", label: "Cuéntanos qué necesitas", type: "textarea", required: "sí" },
+        ],
+      } },
     ] },
     { slug: "aviso-legal", title: "Aviso legal", publish: true },
     { slug: "politica-de-privacidad", title: "Política de privacidad", publish: true },

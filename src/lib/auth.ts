@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
 import type { Database } from "@db/client";
 import * as schema from "@db/schema";
+import { sendEmail } from "./email";
 
 /**
  * `secret` and `baseURL` are passed in rather than left to Better Auth's process.env
@@ -53,19 +54,14 @@ export function createAuth(
       ? [
           magicLink({
             sendMagicLink: async ({ email, url }) => {
-              await fetch("https://api.resend.com/emails", {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${key}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  from,
+              await sendEmail(
+                { apiKey: key, from },
+                {
                   to: email,
                   subject: "Accede a sASTRe",
                   html: `<p>Haz clic en el enlace para acceder al panel:<br/><a href="${url}">${url}</a></p><p>El enlace expira en 10 minutos.</p>`,
-                }),
-              });
+                }
+              );
             },
           }),
         ]

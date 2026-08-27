@@ -125,7 +125,7 @@ const sectionErrors = parsed.errors;
   lang={node.locale}
 >
   {renderer === "sections" ? (
-    <SectionList sections={sections} errors={sectionErrors} />
+    <SectionList sections={sections} errors={sectionErrors} nodeId={node.id} />
   ) : renderer === "archive" ? (
     <ArchiveRenderer node={node} contentType={ct} children={children} fields={fields} />
   ) : renderer === "post" ? (

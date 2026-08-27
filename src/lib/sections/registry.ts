@@ -14,6 +14,7 @@ import { team } from "./defs/team";
 import { notice } from "./defs/notice";
 import { collection } from "./defs/collection";
 import { cta } from "./defs/cta";
+import { contact } from "./defs/contact";
 
 /**
  * Every section type, keyed by `type`.
@@ -27,7 +28,7 @@ import { cta } from "./defs/cta";
 export const SECTIONS: Record<string, SectionDefinition> = Object.fromEntries(
   [
     hero, notice, prose, split, features, steps, collection,
-    gallery, logos, stats, quotes, team, faq, pricing, cta,
+    gallery, logos, stats, quotes, team, faq, pricing, cta, contact,
   ].map((def) => [def.type, def])
 );
 

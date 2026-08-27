@@ -64,6 +64,7 @@ export const settingsActions = {
     input: z.object({
       siteName: z.string().min(1).optional(),
       tagline: z.string().optional(),
+      contactEmail: z.string().email().or(z.literal("")).optional(),
       logoUrl: z.string().optional(),
       faviconUrl: z.string().optional(),
       theme: ThemeSchema.optional(),
@@ -77,6 +78,8 @@ export const settingsActions = {
       integrations: z.object({
         resendApiKey: z.string().optional(),
         resendFrom: z.string().optional(),
+        turnstileSiteKey: z.string().optional(),
+        turnstileSecretKey: z.string().optional(),
       }).optional(),
     }),
     handler: async (input, context) => {
@@ -92,6 +95,7 @@ export const settingsActions = {
       const updates: Record<string, unknown> = {};
       if (input.siteName !== undefined) updates.siteName = input.siteName;
       if (input.tagline !== undefined) updates.tagline = input.tagline;
+      if (input.contactEmail !== undefined) updates.contactEmail = input.contactEmail;
       if (input.logoUrl !== undefined) updates.logoUrl = input.logoUrl;
       if (input.faviconUrl !== undefined) updates.faviconUrl = input.faviconUrl;
       if (input.theme !== undefined) updates.theme = input.theme;

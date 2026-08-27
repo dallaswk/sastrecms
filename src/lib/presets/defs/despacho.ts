@@ -63,7 +63,22 @@ export const despacho: SitePreset = {
     ] },
     { slug: "contacto", title: "Contacto", publish: true, sections: [
       { type: "prose", data: { title: "Contacto", width: "estrecho",
-        body: "<p>Teléfono, dirección y horario. Añade el formulario cuando esté disponible.</p>" } },
+        body: "<p>Teléfono, dirección y horario de atención.</p>" } },
+      { type: "contact", data: {
+        title: "Solicita una primera consulta",
+        text: "Cuéntanos tu caso sin compromiso. Todo lo que nos escribas queda amparado por el secreto profesional.",
+        submit_label: "Solicitar consulta",
+        consent_text: "He leído y acepto la política de privacidad y el tratamiento de mis datos para atender mi solicitud.",
+        success_message: "Hemos recibido tu solicitud. Te llamamos en el próximo día laborable.",
+        fields: [
+          { key: "nombre", label: "Nombre y apellidos", type: "text", required: "sí" },
+          { key: "email", label: "Correo electrónico", type: "email", required: "sí" },
+          { key: "telefono", label: "Teléfono", type: "tel", required: "sí" },
+          { key: "area", label: "Área", type: "select", required: "sí",
+            options: "Civil\nLaboral\nFiscal\nMercantil\nOtra" },
+          { key: "mensaje", label: "Resume tu caso", type: "textarea", required: "sí" },
+        ],
+      } },
     ] },
     { slug: "aviso-legal", title: "Aviso legal", publish: true },
     { slug: "politica-de-privacidad", title: "Política de privacidad", publish: true },

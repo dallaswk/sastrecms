@@ -65,6 +65,20 @@ export const oficio: SitePreset = {
     ] },
     { slug: "contacto", title: "Contacto", publish: true, sections: [
       { type: "prose", data: { title: "Pide presupuesto", width: "estrecho", body: "<p>Teléfono, WhatsApp y zona de actuación.</p>" } },
+      { type: "contact", data: {
+        title: "Pide presupuesto sin compromiso",
+        text: "Dinos qué necesitas y dónde, y te damos precio.",
+        submit_label: "Pedir presupuesto",
+        consent_text: "He leído y acepto la política de privacidad y el tratamiento de mis datos para prepararme un presupuesto.",
+        success_message: "Recibido. Te llamamos hoy mismo para concretar el presupuesto.",
+        fields: [
+          { key: "nombre", label: "Nombre", type: "text", required: "sí" },
+          { key: "telefono", label: "Teléfono", type: "tel", required: "sí" },
+          { key: "email", label: "Correo electrónico", type: "email" },
+          { key: "localidad", label: "Localidad", type: "text", required: "sí" },
+          { key: "trabajo", label: "Qué necesitas", type: "textarea", required: "sí" },
+        ],
+      } },
     ] },
     { slug: "aviso-legal", title: "Aviso legal", publish: true },
     { slug: "politica-de-privacidad", title: "Política de privacidad", publish: true },

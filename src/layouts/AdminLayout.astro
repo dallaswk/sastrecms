@@ -1,5 +1,7 @@
 ---
 import "@styles/global.css";
+import { and, count, eq } from "drizzle-orm";
+import { formSubmissions } from "@db/schema";
 
 interface Props {
   title: string;
@@ -8,6 +10,28 @@ interface Props {
 const { title } = Astro.props;
 const user = Astro.locals.user;
 const isAdmin = Astro.locals.isAdmin;
+
+/**
+ * Unread enquiries, as a badge in the sidebar.
+ *
+ * One indexed COUNT on every admin page, which is worth paying: an inbox nobody is told
+ * about is an inbox where a client's lead sits for a week.
+ */
+const unread = user
+  ? Number(
+      (
+        await Astro.locals.db
+          .select({ n: count() })
+          .from(formSubmissions)
+          .where(
+            and(
+              eq(formSubmissions.siteId, Astro.locals.siteId),
+              eq(formSubmissions.status, "new")
+            )
+          )
+      )[0]?.n ?? 0
+    )
+  : 0;
 ---
 
 <!doctype html>
@@ -50,6 +74,12 @@ const isAdmin = Astro.locals.isAdmin;
           <li><a href="/admin/content">Contenido</a></li>
           <li><a href="/admin/media">Medios</a></li>
           <li><a href="/admin/menus">Menús</a></li>
+          <li>
+            <a href="/admin/forms">
+              Mensajes
+              {unread > 0 && <span class="badge badge-primary badge-sm">{unread}</span>}
+            </a>
+          </li>
           <li class="menu-title mt-4">Configuración</li>
           <li><a href="/admin/content-types">Tipos de contenido</a></li>
           {isAdmin && (

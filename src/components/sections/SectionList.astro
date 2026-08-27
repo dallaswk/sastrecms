@@ -7,8 +7,11 @@ interface Props {
   sections: SectionInstance[];
   /** Blocks parseSections refused. Shown in dev only. */
   errors?: SectionError[];
+  /** The node being rendered. Only the contact form needs it — a form has to tell the
+   *  endpoint which page it is on so the server can read its real field list. */
+  nodeId?: string;
 }
-const { sections, errors = [] } = Astro.props;
+const { sections, errors = [], nodeId } = Astro.props;
 ---
 
 {import.meta.env.DEV && errors.length > 0 && (
@@ -37,6 +40,7 @@ const { sections, errors = [] } = Astro.props;
       anchor={section.anchor}
       data={section.data}
       index={index}
+      nodeId={nodeId}
     />
   );
 })}

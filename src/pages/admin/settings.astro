@@ -43,6 +43,19 @@ const DAISY_THEMES = [
           <input name="tagline" type="text" class="input input-bordered" value={siteSettings?.tagline ?? ""} />
         </div>
         <div class="form-control">
+          <label class="label">
+            <span class="label-text">Correo de contacto</span>
+            <span class="label-text-alt text-base-content/40">Avisos de los formularios</span>
+          </label>
+          <input name="contactEmail" type="email" class="input input-bordered" value={siteSettings?.contactEmail ?? ""} placeholder="hola@tudominio.com" />
+          <label class="label">
+            <span class="label-text-alt text-base-content/40">
+              Adónde llegan los mensajes del formulario de contacto, salvo que una sección
+              indique otro. Los mensajes se guardan en <a href="/admin/forms" class="link">Mensajes</a> aunque el correo falle.
+            </span>
+          </label>
+        </div>
+        <div class="form-control">
           <label class="label"><span class="label-text">Logo</span></label>
           <MediaField
             client:load
@@ -230,6 +243,49 @@ const DAISY_THEMES = [
             </span>
           </label>
         </div>
+
+        <div class="divider my-0"></div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Turnstile · clave del sitio</span>
+            <span class="label-text-alt text-base-content/40">Anti-spam de los formularios</span>
+          </label>
+          <input
+            name="turnstileSiteKey"
+            type="text"
+            class="input input-bordered font-mono"
+            value={integrations.turnstileSiteKey ?? ""}
+            placeholder="0x4AAAAAAA…"
+            autocomplete="off"
+          />
+          <label class="label">
+            <span class="label-text-alt text-base-content/40">
+              Pública: se imprime en el HTML del formulario. Créala en
+              <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" class="link">Cloudflare Turnstile</a>.
+            </span>
+          </label>
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Turnstile · clave secreta</span>
+          </label>
+          <input
+            name="turnstileSecretKey"
+            type="password"
+            class="input input-bordered font-mono"
+            value={integrations.turnstileSecretKey ?? ""}
+            placeholder="0x4AAAAAAA…"
+            autocomplete="off"
+          />
+          <label class="label">
+            <span class="label-text-alt text-base-content/40">
+              Sin ella los formularios siguen funcionando con el honeypot y el límite de
+              envíos, pero sin verificación de Cloudflare.
+            </span>
+          </label>
+        </div>
       </div>
     </section>
 
@@ -363,6 +419,7 @@ const DAISY_THEMES = [
     const { error } = await actions.settings.update({
       siteName: data.get("siteName") as string,
       tagline: data.get("tagline") as string,
+      contactEmail: data.get("contactEmail") as string,
       logoUrl: data.get("logoUrl") as string,
       faviconUrl: data.get("faviconUrl") as string,
       theme: {

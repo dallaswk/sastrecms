@@ -13,6 +13,7 @@ import Stats from "./Stats.astro";
 import Team from "./Team.astro";
 import Pricing from "./Pricing.astro";
 import Cta from "./Cta.astro";
+import Contact from "./Contact.astro";
 
 /**
  * The one unavoidable duplication in the sections design: a .astro component cannot be
@@ -36,4 +37,5 @@ export const SECTION_COMPONENTS = {
   team: Team,
   pricing: Pricing,
   cta: Cta,
+  contact: Contact,
 } as const;

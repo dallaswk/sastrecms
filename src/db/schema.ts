@@ -436,3 +436,60 @@ export const apiTokensRelations = relations(apiTokens, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+/**
+ * What a visitor sent through a contact form.
+ *
+ * The values are stored as JSON rather than columns because the fields are declared per
+ * form, in the section's own configuration: a gestoría asks for a tax id, a taller asks
+ * for a licence plate. The columns that exist are the ones the inbox lists and searches on.
+ */
+export const formSubmissions = sqliteTable(
+  "form_submissions",
+  {
+    id: text("id").primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    /** The page it was sent from. Nulled rather than cascaded: deleting a page must not
+     *  delete the leads that came through it. */
+    nodeId: text("node_id").references(() => nodes.id, { onDelete: "set null" }),
+    /** Section instance id, so several forms on one site stay apart in the inbox. */
+    formId: text("form_id").notNull(),
+    /** Human label for the form, copied at submission time — the section may be renamed. */
+    formLabel: text("form_label"),
+    values: text("values", { mode: "json" })
+      .$type<Record<string, string>>()
+      .notNull()
+      .default(sql`'{}'`),
+    /** Pulled out of `values` for the inbox list and for the reply-to on the notification. */
+    fromName: text("from_name"),
+    fromEmail: text("from_email"),
+    status: text("status", { enum: ["new", "read", "spam"] })
+      .notNull()
+      .default("new"),
+    /**
+     * SHA-256 of the IP with the app secret as salt, never the IP itself.
+     *
+     * It is all the rate limiter needs — the same address always hashes the same — and it
+     * keeps the table from becoming a log of personal data that has to be justified,
+     * disclosed and expired under the GDPR.
+     */
+    ipHash: text("ip_hash"),
+    userAgent: text("user_agent"),
+    /** The consent text as it read on screen, so what was agreed to can be shown later. */
+    consentText: text("consent_text"),
+    /** Whether the notification email went out, and why it did not. */
+    notifiedAt: integer("notified_at", { mode: "timestamp" }),
+    notifyError: text("notify_error"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => [
+    index("form_submissions_site_created_idx").on(t.siteId, t.createdAt),
+    index("form_submissions_status_idx").on(t.siteId, t.status),
+    // The rate limiter's query: count by hash within a window.
+    index("form_submissions_rate_idx").on(t.ipHash, t.createdAt),
+  ]
+);

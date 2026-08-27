@@ -1,0 +1,255 @@
+---
+import { parseFormFields } from "@lib/forms/validate";
+import { HONEYPOT_FIELD } from "@lib/forms/types";
+
+interface Props {
+  id: string;
+  anchor?: string;
+  data: Record<string, unknown>;
+  index: number;
+  /** The page this form is on. The endpoint reads the form's real definition from it, so
+   *  a visitor cannot describe their own fields. */
+  nodeId?: string;
+}
+const { id, anchor, data, nodeId = "" } = Astro.props;
+
+const title = (data.title as string) ?? "";
+const text = (data.text as string) ?? "";
+const submitLabel = (data.submit_label as string) || "Enviar";
+const consentText = (data.consent_text as string) ?? "";
+const successMessage =
+  (data.success_message as string) || "Gracias, hemos recibido tu mensaje.";
+
+// The same function the server uses to decide what it accepts, so the form can never offer
+// a field the endpoint would drop.
+const fields = parseFormFields(data.fields);
+
+const integrations = (Astro.locals.settings?.integrations as Record<string, string> | null) ?? {};
+const turnstileSiteKey = integrations.turnstileSiteKey ?? "";
+---
+
+<section id={anchor ?? id} class="bg-base-100">
+  <div class="max-w-2xl mx-auto px-4 py-16 flex flex-col gap-6">
+    {title && <h2 class="text-3xl font-bold">{title}</h2>}
+    {text && <p class="text-base-content/70">{text}</p>}
+
+    {fields.length === 0 ? (
+      import.meta.env.DEV && (
+        <div class="alert alert-warning">
+          <span>Este formulario no tiene campos configurados todavía.</span>
+        </div>
+      )
+    ) : (
+      <form
+        class="contact-form flex flex-col gap-4"
+        data-form-id={id}
+        data-node-id={nodeId}
+        novalidate
+      >
+        {fields.map((field) => (
+          <div class="form-control">
+            {field.type !== "checkbox" && (
+              <label class="label" for={`${id}-${field.key}`}>
+                <span class="label-text">
+                  {field.label}
+                  {field.required && <span class="text-error" aria-hidden="true"> *</span>}
+                </span>
+              </label>
+            )}
+
+            {field.type === "textarea" ? (
+              <textarea
+                id={`${id}-${field.key}`}
+                name={field.key}
+                rows="5"
+                class="textarea textarea-bordered"
+                placeholder={field.placeholder}
+                required={field.required}
+              />
+            ) : field.type === "select" ? (
+              <select
+                id={`${id}-${field.key}`}
+                name={field.key}
+                class="select select-bordered"
+                required={field.required}
+              >
+                <option value="">— elige una opción —</option>
+                {field.options?.map((option) => <option value={option}>{option}</option>)}
+              </select>
+            ) : field.type === "checkbox" ? (
+              <label class="flex items-start gap-2 cursor-pointer">
+                <input
+                  id={`${id}-${field.key}`}
+                  name={field.key}
+                  type="checkbox"
+                  class="checkbox checkbox-sm mt-0.5"
+                  required={field.required}
+                />
+                <span class="text-sm">
+                  {field.label}
+                  {field.required && <span class="text-error" aria-hidden="true"> *</span>}
+                </span>
+              </label>
+            ) : (
+              <input
+                id={`${id}-${field.key}`}
+                name={field.key}
+                type={field.type}
+                class="input input-bordered"
+                placeholder={field.placeholder}
+                required={field.required}
+                autocomplete={field.type === "email" ? "email" : field.type === "tel" ? "tel" : undefined}
+              />
+            )}
+
+            <p class="field-error text-sm text-error mt-1 hidden" data-for={field.key}></p>
+          </div>
+        ))}
+
+        {/* Honeypot. Hidden from sight, from the tab order and from screen readers, so the
+            only thing that fills it is something reading the HTML. */}
+        <div class="absolute w-px h-px overflow-hidden -left-96" aria-hidden="true">
+          <label for={`${id}-${HONEYPOT_FIELD}`}>No rellenar</label>
+          <input
+            id={`${id}-${HONEYPOT_FIELD}`}
+            name={HONEYPOT_FIELD}
+            type="text"
+            tabindex="-1"
+            autocomplete="off"
+          />
+        </div>
+
+        {consentText && (
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input name="__consent" type="checkbox" class="checkbox checkbox-sm mt-0.5" required />
+            <span class="text-sm text-base-content/70">{consentText}</span>
+          </label>
+        )}
+
+        {turnstileSiteKey && (
+          <div
+            class="cf-turnstile"
+            data-sitekey={turnstileSiteKey}
+            data-theme="auto"
+          />
+        )}
+
+        <div class="flex items-center gap-3 flex-wrap">
+          <button type="submit" class="btn btn-primary">{submitLabel}</button>
+          <span class="form-status text-sm" role="status" aria-live="polite"></span>
+        </div>
+
+        <template class="success-template">
+          <div class="alert alert-success" role="status">
+            <span>{successMessage}</span>
+          </div>
+        </template>
+      </form>
+    )}
+  </div>
+</section>
+
+{turnstileSiteKey && (
+  <script is:inline async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
+)}
+
+<script>
+  import { actions } from "astro:actions";
+
+  /**
+   * Submitted with fetch rather than as a real form POST.
+   *
+   * An Astro action form POST round-trips the result through a cookie, and public HTML in
+   * this project has to stay cacheable — a Set-Cookie on a public response is silently
+   * dropped by Workers Cache. The cost is that the form needs JS, which Turnstile already
+   * requires anyway.
+   */
+  for (const form of document.querySelectorAll<HTMLFormElement>(".contact-form")) {
+    const status = form.querySelector<HTMLElement>(".form-status")!;
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      form.querySelectorAll<HTMLElement>(".field-error").forEach((el) => {
+        el.textContent = "";
+        el.classList.add("hidden");
+      });
+      form.querySelectorAll(".input-error, .textarea-error, .select-error").forEach((el) => {
+        el.classList.remove("input-error", "textarea-error", "select-error");
+      });
+
+      const data = new FormData(form);
+      const values: Record<string, string> = {};
+      for (const [key, value] of data.entries()) {
+        if (typeof value === "string") values[key] = value;
+      }
+
+      // The consent checkbox is browser-enforced, but a missing one must not reach the
+      // server as an ordinary field either.
+      const consentInput = form.querySelector<HTMLInputElement>('input[name="__consent"]');
+      if (consentInput && !consentInput.checked) {
+        status.textContent = "Debes aceptar el tratamiento de tus datos.";
+        status.className = "form-status text-sm text-error";
+        return;
+      }
+      delete values.__consent;
+
+      const turnstileToken = values["cf-turnstile-response"] ?? "";
+      delete values["cf-turnstile-response"];
+
+      button.disabled = true;
+      status.textContent = "Enviando…";
+      status.className = "form-status text-sm text-base-content/60";
+
+      const { data: result, error } = await actions.forms.submit({
+        nodeId: form.dataset.nodeId!,
+        formId: form.dataset.formId!,
+        values,
+        turnstileToken,
+        consented: true,
+      });
+
+      button.disabled = false;
+
+      if (error) {
+        status.textContent = error.message;
+        status.className = "form-status text-sm text-error";
+        return;
+      }
+
+      if (result && !result.ok) {
+        status.textContent = result.message ?? "No hemos podido enviar el mensaje.";
+        status.className = "form-status text-sm text-error";
+        for (const issue of result.issues ?? []) {
+          const message = form.querySelector<HTMLElement>(`.field-error[data-for="${issue.key}"]`);
+          if (message) {
+            message.textContent = issue.message;
+            message.classList.remove("hidden");
+          }
+          const input = form.querySelector<HTMLElement>(`[name="${issue.key}"]`);
+          input?.classList.add(
+            input.tagName === "TEXTAREA"
+              ? "textarea-error"
+              : input.tagName === "SELECT"
+                ? "select-error"
+                : "input-error"
+          );
+        }
+        return;
+      }
+
+      // Replaced rather than reset: leaving the filled-in form on screen next to a success
+      // message invites a second identical submission.
+      const template = form.querySelector<HTMLTemplateElement>(".success-template");
+      const success = template?.content.cloneNode(true);
+      if (success) {
+        form.replaceWith(success);
+      } else {
+        form.reset();
+        status.textContent = "Mensaje enviado.";
+        status.className = "form-status text-sm text-success";
+      }
+    });
+  }
+</script>
