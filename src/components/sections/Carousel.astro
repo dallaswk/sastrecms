@@ -1,0 +1,79 @@
+---
+/**
+ * Arrows and optional auto-advance for any scroll-snap track on the page.
+ *
+ * Dropped inside a `<div class="relative" data-carousel>` that contains a
+ * `[data-carousel-track]`. Add `data-carousel-autoplay="4000"` to the wrapper to advance
+ * on its own.
+ *
+ * The track scrolls with a swipe or a trackpad on its own, so everything here is an
+ * enhancement: with no JavaScript the arrows never appear and the strip still works.
+ * Astro dedupes this script, so ten carousels on a page ship it once.
+ */
+---
+
+<button type="button" data-carousel-prev hidden
+  class="absolute left-1 top-1/2 -translate-y-1/2 btn btn-sm btn-circle shadow z-10"
+  aria-label="Anterior">‹</button>
+<button type="button" data-carousel-next hidden
+  class="absolute right-1 top-1/2 -translate-y-1/2 btn btn-sm btn-circle shadow z-10"
+  aria-label="Siguiente">›</button>
+
+<script>
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  for (const root of document.querySelectorAll<HTMLElement>("[data-carousel]")) {
+    const track = root.querySelector<HTMLElement>("[data-carousel-track]");
+    const prev = root.querySelector<HTMLButtonElement>("[data-carousel-prev]");
+    const next = root.querySelector<HTMLButtonElement>("[data-carousel-next]");
+    if (!track || !prev || !next) continue;
+
+    // Nothing to scroll: leave the plain strip alone rather than showing dead arrows.
+    if (track.scrollWidth <= track.clientWidth + 4) continue;
+
+    prev.hidden = false;
+    next.hidden = false;
+
+    const step = () => track.clientWidth * 0.8;
+    const atEnd = () => track.scrollLeft + track.clientWidth >= track.scrollWidth - 4;
+
+    const go = (direction: 1 | -1) => {
+      // Wrap at the end so an auto-advancing carousel does not just stop against the wall.
+      if (direction === 1 && atEnd()) track.scrollTo({ left: 0, behavior: "smooth" });
+      else track.scrollBy({ left: direction * step(), behavior: "smooth" });
+    };
+
+    let timer: number | undefined;
+    const interval = Number(root.dataset.carouselAutoplay);
+
+    const stop = () => {
+      if (timer) window.clearInterval(timer);
+      timer = undefined;
+    };
+
+    const start = () => {
+      // No auto-advance under reduced motion: movement nobody asked for is exactly what
+      // that setting is about.
+      if (!interval || reduced || timer) return;
+      timer = window.setInterval(() => go(1), Math.max(2000, interval));
+    };
+
+    prev.addEventListener("click", () => {
+      stop(); // A manual move means they are driving; stop taking the wheel back.
+      go(-1);
+    });
+    next.addEventListener("click", () => {
+      stop();
+      go(1);
+    });
+
+    // Pause while it is being read or interacted with, and while the tab is hidden.
+    root.addEventListener("mouseenter", stop);
+    root.addEventListener("focusin", stop);
+    root.addEventListener("mouseleave", start);
+    track.addEventListener("touchstart", stop, { passive: true });
+    document.addEventListener("visibilitychange", () => (document.hidden ? stop() : start()));
+
+    start();
+  }
+</script>

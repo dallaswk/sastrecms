@@ -1,30 +1,63 @@
 ---
+import Carousel from "./Carousel.astro";
+
 interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data } = Astro.props;
+
 const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
 const single = items.length === 1;
+const carousel = ((data.layout as string) ?? "rejilla") === "carrusel" && items.length > 1;
+const autoplay = ((data.autoplay as string) ?? "no") === "sí";
 ---
+
 <section id={anchor ?? id} class="bg-base-100">
   <div class="max-w-5xl mx-auto px-4 py-16 flex flex-col gap-8">
     {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
-    <div class={single ? "" : "grid gap-6 md:grid-cols-2"}>
-      {items.map((item) => (
-        <figure class={`flex flex-col gap-4 ${single ? "max-w-3xl" : ""}`}>
-          <blockquote class={single ? "text-2xl leading-snug" : "text-base-content/80"}>
-            “{item.quote}”
-          </blockquote>
-          <figcaption class="flex items-center gap-3">
-            {item.photo && (
-              <img src={item.photo as string} alt="" width="40" height="40"
-                   class="w-10 h-10 rounded-full object-cover" loading="lazy" decoding="async" />
-            )}
-            <span class="text-sm">
-              <span class="font-medium">{item.author}</span>
-              {item.role && <span class="text-base-content/50"> · {item.role}</span>}
-            </span>
-          </figcaption>
-        </figure>
-      ))}
-    </div>
+
+    {carousel ? (
+      <div class="relative" data-carousel data-carousel-autoplay={autoplay ? "5000" : null}>
+        <div
+          class="flex gap-5 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 -mx-1 px-1"
+          data-carousel-track
+        >
+          {items.map((item) => (
+            <figure class="snap-start shrink-0 w-[85%] sm:w-[60%] md:w-[46%] flex flex-col gap-4 bg-base-200 rounded-xl p-6">
+              <blockquote class="text-base-content/80 leading-relaxed">“{item.quote}”</blockquote>
+              <figcaption class="flex items-center gap-3 mt-auto">
+                {item.photo && (
+                  <img src={item.photo as string} alt="" width="40" height="40"
+                       class="w-10 h-10 rounded-full object-cover" loading="lazy" decoding="async" />
+                )}
+                <span class="text-sm">
+                  <span class="font-medium">{item.author}</span>
+                  {item.role && <span class="text-base-content/50"> · {item.role}</span>}
+                </span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+        <Carousel />
+      </div>
+    ) : (
+      <div class={single ? "" : "grid gap-6 md:grid-cols-2"}>
+        {items.map((item) => (
+          <figure class={`flex flex-col gap-4 ${single ? "max-w-3xl" : ""}`}>
+            <blockquote class={single ? "text-2xl leading-snug" : "text-base-content/80"}>
+              “{item.quote}”
+            </blockquote>
+            <figcaption class="flex items-center gap-3">
+              {item.photo && (
+                <img src={item.photo as string} alt="" width="40" height="40"
+                     class="w-10 h-10 rounded-full object-cover" loading="lazy" decoding="async" />
+              )}
+              <span class="text-sm">
+                <span class="font-medium">{item.author}</span>
+                {item.role && <span class="text-base-content/50"> · {item.role}</span>}
+              </span>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    )}
   </div>
 </section>

@@ -4,11 +4,11 @@ export const quotes: SectionDefinition = {
   type: "quotes",
   label: "Testimonios",
   description:
-    "Citas de clientes con nombre, cargo y foto opcional. Una sola cita se pinta grande; " +
-    "varias, en rejilla.",
+    "Citas de clientes con nombre, cargo y foto. En rejilla se leen todas de golpe; en " +
+    "carrusel ocupan menos y pueden pasar solas. Una sola cita se pinta grande.",
   group: "prueba-social",
   icon: "❝",
-  version: 1,
+  version: 2,
   fields: [
     { key: "title", label: "Titular de la sección", type: "text" },
     {
@@ -22,5 +22,9 @@ export const quotes: SectionDefinition = {
         { key: "photo", label: "Foto", type: "image" },
       ],
     },
+    { key: "layout", label: "Disposición", type: "select", options: ["rejilla", "carrusel"] },
+    { key: "autoplay", label: "Pasar solas (carrusel)", type: "select", options: ["no", "sí"] },
   ],
+  defaults: { layout: "rejilla", autoplay: "no" },
+  migrate: (data) => ({ ...data }),
 };

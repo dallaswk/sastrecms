@@ -2,17 +2,100 @@
 interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data } = Astro.props;
 const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
+
+/**
+ * Splits "1.200 €" into prefix, number and suffix so the count-up animates only the
+ * digits and keeps the units. The final value is what the server renders: with no
+ * JavaScript, or with reduced motion, the figure is simply correct from the start.
+ */
+function parts(raw: string) {
+  const match = raw.match(/^(\D*?)([\d.,]+)(.*)$/s);
+  if (!match) return null;
+  const [, prefix, digits, suffix] = match;
+  // Spanish notation: dot groups thousands, comma is the decimal separator.
+  const value = Number(digits.replace(/\./g, "").replace(",", "."));
+  if (!Number.isFinite(value)) return null;
+  return { prefix, digits, suffix, value, decimals: (digits.split(",")[1] ?? "").length };
+}
 ---
+
 <section id={anchor ?? id} class="bg-base-200">
   <div class="max-w-5xl mx-auto px-4 py-14 flex flex-col gap-8">
     {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
     <div class="grid gap-8 sm:grid-cols-2 md:grid-cols-4">
-      {items.map((item) => (
-        <div class="flex flex-col gap-1">
-          <span class="text-4xl font-bold text-primary tabular-nums">{item.value}</span>
-          <span class="text-sm text-base-content/60">{item.label}</span>
-        </div>
-      ))}
+      {items.map((item) => {
+        const raw = String(item.value ?? "");
+        const p = parts(raw);
+        return (
+          <div class="flex flex-col gap-1">
+            <span class="text-4xl font-bold text-primary tabular-nums">
+              {p ? (
+                <>
+                  {p.prefix}<span
+                    data-countup={p.value}
+                    data-countup-decimals={p.decimals}
+                  >{p.digits}</span>{p.suffix}
+                </>
+              ) : raw}
+            </span>
+            <span class="text-sm text-base-content/60">{item.label}</span>
+          </div>
+        );
+      })}
     </div>
   </div>
 </section>
+
+<script>
+  const targets = document.querySelectorAll<HTMLElement>("[data-countup]");
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Reduced motion, or no IntersectionObserver: the server already rendered the final
+  // figure, so there is nothing to do.
+  if (targets.length && !reduced && "IntersectionObserver" in window) {
+    const format = (value: number, decimals: number) =>
+      value.toLocaleString("es-ES", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      });
+
+    const run = (el: HTMLElement) => {
+      const target = Number(el.dataset.countup);
+      const decimals = Number(el.dataset.countupDecimals ?? 0);
+      if (!Number.isFinite(target)) return;
+
+      const duration = 900;
+      const start = performance.now();
+
+      const tick = (now: number) => {
+        const t = Math.min((now - start) / duration, 1);
+        // Ease-out: fast first, settling at the end, so the number reads as arriving
+        // rather than as a slot machine.
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = format(target * eased, decimals);
+        if (t < 1) requestAnimationFrame(tick);
+        else el.textContent = format(target, decimals);
+      };
+
+      requestAnimationFrame(tick);
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          observer.unobserve(entry.target);
+          run(entry.target as HTMLElement);
+        }
+      },
+      { threshold: 0.4 }
+    );
+
+    for (const el of targets) {
+      // Only blank it once we know the animation will actually run: setting it to 0 up
+      // front would leave a permanent zero if anything below threw.
+      el.textContent = format(0, Number(el.dataset.countupDecimals ?? 0));
+      observer.observe(el);
+    }
+  }
+</script>

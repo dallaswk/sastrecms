@@ -1,17 +1,81 @@
 ---
+import Lightbox from "./Lightbox.astro";
+import Carousel from "./Carousel.astro";
+
 interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data } = Astro.props;
+
 const images = Array.isArray(data.images) ? (data.images as string[]) : [];
-const COLS = { "2": "sm:grid-cols-2", "3": "sm:grid-cols-2 md:grid-cols-3", "4": "sm:grid-cols-2 lg:grid-cols-4" } as const;
+const layout = (data.layout as string) ?? "rejilla";
+const lightbox = ((data.lightbox as string) ?? "sí") === "sí";
+
+// Literal lookups: Tailwind reads these files as text and never sees an interpolated class.
+const COLS = {
+  "2": "sm:grid-cols-2",
+  "3": "sm:grid-cols-2 md:grid-cols-3",
+  "4": "sm:grid-cols-2 lg:grid-cols-4",
+} as const;
 const cols = COLS[(data.columns as keyof typeof COLS) ?? "3"] ?? COLS["3"];
+
+/**
+ * Mosaic gives every third image a taller cell. A real masonry needs measurement, which
+ * means layout-shifting JavaScript; a repeating pattern gets most of the effect from CSS
+ * alone and cannot shift.
+ */
+const MOSAIC_SPAN = ["row-span-2", "", ""];
 ---
+
 <section id={anchor ?? id} class="bg-base-100">
   <div class="max-w-5xl mx-auto px-4 py-16 flex flex-col gap-6">
     {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
-    <div class={`grid gap-3 ${cols}`}>
-      {images.map((src) => (
-        <img src={src} alt="" class="rounded-lg w-full aspect-[4/3] object-cover" loading="lazy" decoding="async" />
-      ))}
-    </div>
+
+    {layout === "carrusel" ? (
+      <div class="relative" data-carousel>
+        {/* Scroll-snap: swipe and trackpad work with no JavaScript at all. */}
+        <div
+          class="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 -mx-1 px-1"
+          data-carousel-track
+          data-lightbox={lightbox ? "" : null}
+        >
+          {images.map((src) => (
+            <img
+              src={src}
+              alt=""
+              class:list={["snap-start shrink-0 w-[85%] sm:w-[48%] md:w-[32%] aspect-[4/3] object-cover rounded-lg", lightbox && "cursor-zoom-in"]}
+              loading="lazy"
+              decoding="async"
+            />
+          ))}
+        </div>
+
+        <Carousel />
+
+      </div>
+    ) : (
+      <div
+        class:list={[
+          "grid gap-3",
+          cols,
+          layout === "mosaico" && "auto-rows-[11rem] grid-flow-dense",
+        ]}
+        data-lightbox={lightbox ? "" : null}
+      >
+        {images.map((src, i) => (
+          <img
+            src={src}
+            alt=""
+            class:list={[
+              "w-full h-full object-cover rounded-lg",
+              layout === "mosaico" ? MOSAIC_SPAN[i % 3] : "aspect-[4/3]",
+              lightbox && "cursor-zoom-in",
+            ]}
+            loading="lazy"
+            decoding="async"
+          />
+        ))}
+      </div>
+    )}
   </div>
 </section>
+
+{lightbox && images.length > 0 && <Lightbox />}

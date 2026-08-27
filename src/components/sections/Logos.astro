@@ -2,14 +2,36 @@
 interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data } = Astro.props;
 const images = Array.isArray(data.images) ? (data.images as string[]) : [];
+
+/**
+ * Muted by default so a wall of brand colours does not out-shout the page, but only
+ * mildly: the first version used h-7 at 50% opacity in greyscale, which turned a row of
+ * logos into indistinguishable smudges. Colour returns on hover, and "a color" turns the
+ * treatment off entirely for a client whose logos are the point.
+ */
+const muted = ((data.tone as string) ?? "apagado") === "apagado";
 ---
-<section id={anchor ?? id} class="bg-base-100 border-y border-base-200">
-  <div class="max-w-5xl mx-auto px-4 py-10 flex flex-col items-center gap-5">
-    {data.title && <p class="text-xs uppercase tracking-widest text-base-content/40 font-semibold">{data.title}</p>}
-    <div class="flex flex-wrap justify-center items-center gap-x-10 gap-y-6">
+
+<section id={anchor ?? id} class="bg-base-200 border-y border-base-300">
+  <div class="max-w-5xl mx-auto px-4 py-12 flex flex-col items-center gap-7">
+    {data.title && (
+      <p class="text-sm font-medium text-base-content/60 text-center">{data.title}</p>
+    )}
+    <ul class="flex flex-wrap justify-center items-center gap-x-12 gap-y-8">
       {images.map((src) => (
-        <img src={src} alt="" class="h-7 w-auto opacity-50 grayscale" loading="lazy" decoding="async" />
+        <li>
+          <img
+            src={src}
+            alt=""
+            class:list={[
+              "h-10 w-auto max-w-[10rem] object-contain transition duration-200",
+              muted && "opacity-70 grayscale hover:opacity-100 hover:grayscale-0",
+            ]}
+            loading="lazy"
+            decoding="async"
+          />
+        </li>
       ))}
-    </div>
+    </ul>
   </div>
 </section>
