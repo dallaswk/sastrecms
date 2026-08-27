@@ -52,6 +52,32 @@ Estado del proyecto a fecha 27 Ago 2026. Rama activa: `dev`. Astro 7.2.8.
 
 ### Funcionalidad
 
+- [x] **Aviso antes de borrar un medio enlazado** ✅ *(27 Ago 2026)*
+  Borrar un archivo se llevaba el objeto de R2 y la fila, sin papelera y sin comprobar
+  nada. Como los campos `image`/`gallery` guardan la **URL** y no el id, la página seguía
+  respondiendo 200 con la imagen rota: **no fallaba nada en voz alta**.
+
+  - `src/lib/media-usage.ts` — lógica pura: recorre el JSON buscando la URL y distingue
+    `exact` (un campo que apunta al archivo) de `embedded` (la URL dentro de un richtext,
+    normalmente un `<img>` colado por MCP, porque la barra de Tiptap no inserta imágenes).
+  - Acción `media.usage` — devuelve qué contenidos lo enlazan, **con título, ruta, estado
+    y el campo exacto**, para poder ir a comprobarlo. También detecta el logo y el favicon
+    del sitio.
+  - `media.delete` gana `force`: sin él, si hay referencias **se niega** y nombra dónde.
+    El guard está en el servidor, no sólo en la UI.
+  - `MediaManager.vue` — modal con la lista enlazada a cada contenido en pestaña nueva,
+    el campo donde aparece, y el badge de publicado. El botón de continuar dice
+    «Borrar de todos modos».
+
+  La consulta primero acota con un `LIKE` sobre el JSON y luego confirma exactamente sobre
+  el valor parseado, así que una URL que sólo comparte prefijo con otra no genera un aviso
+  falso — hay test para ese caso.
+
+  Detalle de redacción que costó un test: el resumen contaba sólo nodos, así que un
+  archivo que era el logo del sitio salía como «No está enlazado en ningún contenido»
+  encima de una lista que contenía el logo. Esa contradicción es lo que enseña a la gente
+  a ignorar los avisos.
+
 - [x] **Fase A del plan: dos fallos vivos y un desbloqueo** ✅ *(27 Ago 2026)*
 
   🔴 **Subir y borrar medios estaba roto en producción.** `media.ts` leía
