@@ -85,3 +85,32 @@ export function isCurrent(href: string, pathname: string): boolean {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
+
+/**
+ * The stored shape of whatever an editor submitted.
+ *
+ * Shared by the menus action and `settings.update`, which both write this column. An empty
+ * menu is stored as absent rather than as `[]`, so "no footer menu" and "a footer menu with
+ * nothing in it" cannot drift apart in the renderer; and an item with a page wins over one
+ * that also carries a URL, because storing both leaves which one is used ambiguous.
+ */
+export function normalizeMenus(input: unknown): SiteMenus {
+  const out: SiteMenus = {};
+
+  for (const key of MENU_KEYS) {
+    const items: MenuItem[] = [];
+
+    for (const item of readMenu(input, key)) {
+      const label = item.label.trim();
+      if (!label) continue;
+      const nodeId = item.nodeId?.trim();
+      const url = item.url?.trim();
+      if (nodeId) items.push({ label, nodeId });
+      else if (url) items.push({ label, url });
+    }
+
+    if (items.length) out[key] = items;
+  }
+
+  return out;
+}

@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { settings } from "@db/schema";
 import { requireAdmin } from "@lib/permissions";
 import { ANALYTICS_ID_SHAPES } from "@lib/analytics";
+import { normalizeMenus } from "@lib/menus";
+import { MenusSchema } from "./menus";
 
 /**
  * The shapes live in @lib/analytics because the layout enforces the same rule at render
@@ -32,12 +34,6 @@ const ThemeSchema = z.object({
   fontHeading: z.string().optional(),
   fontBody: z.string().optional(),
   daisyuiTheme: z.string().optional(),
-});
-
-const MenuItemSchema = z.object({
-  label: z.string().min(1),
-  nodeId: z.string().optional(),
-  url: z.string().optional(),
 });
 
 const SocialLinksSchema = z.object({
@@ -73,15 +69,8 @@ export const settingsActions = {
       theme: ThemeSchema.optional(),
       socialLinks: SocialLinksSchema.optional(),
       analyticsIds: AnalyticsSchema.optional(),
-      // z.object().partial(), not z.record() with an enum key: in zod 4 an enum key makes
-      // every key required, so saving a site whose footer menu is empty was rejected.
-      menus: z
-        .object({
-          main: z.array(MenuItemSchema).optional(),
-          footer: z.array(MenuItemSchema).optional(),
-          legal: z.array(MenuItemSchema).optional(),
-        })
-        .optional(),
+      // Kept alongside the dedicated menus action so one call can write a whole site.
+      menus: MenusSchema.optional(),
       redirects: z
         .array(z.object({ from: z.string(), to: z.string(), permanent: z.boolean() }))
         .optional(),
@@ -108,7 +97,7 @@ export const settingsActions = {
       if (input.theme !== undefined) updates.theme = input.theme;
       if (input.socialLinks !== undefined) updates.socialLinks = input.socialLinks;
       if (input.analyticsIds !== undefined) updates.analyticsIds = input.analyticsIds;
-      if (input.menus !== undefined) updates.menus = input.menus;
+      if (input.menus !== undefined) updates.menus = normalizeMenus(input.menus);
       if (input.redirects !== undefined) updates.redirects = input.redirects;
       if (input.integrations !== undefined) updates.integrations = input.integrations;
 

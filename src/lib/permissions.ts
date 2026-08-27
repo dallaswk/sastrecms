@@ -126,15 +126,29 @@ export async function viewableContentTypeIds(
  * it. The rule that does apply: you need a role on this site. Being merely authenticated
  * was enough before, which let any account with a login read the whole media library.
  */
+/**
+ * Whether the user has any role at all on the site.
+ *
+ * Pages need the answer to decide what to render; actions need it to refuse. Same query
+ * either way, so it lives here once.
+ */
+export async function hasSiteRole(
+  db: Database,
+  userId: string,
+  siteId: string
+): Promise<boolean> {
+  const assignment = await db.query.userRoles.findFirst({
+    where: and(eq(userRoles.userId, userId), eq(userRoles.siteId, siteId)),
+  });
+  return !!assignment;
+}
+
 export async function requireSiteRole(
   db: Database,
   userId: string,
   siteId: string
 ): Promise<void> {
-  const assignment = await db.query.userRoles.findFirst({
-    where: and(eq(userRoles.userId, userId), eq(userRoles.siteId, siteId)),
-  });
-  if (!assignment) {
+  if (!(await hasSiteRole(db, userId, siteId))) {
     throw new Error("Forbidden: no tienes ningún rol asignado en este sitio");
   }
 }

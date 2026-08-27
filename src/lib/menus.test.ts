@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { readMenu, referencedNodeIds, resolveMenu, isCurrent, type SiteMenus } from "./menus";
+import {
+  readMenu,
+  referencedNodeIds,
+  resolveMenu,
+  isCurrent,
+  normalizeMenus,
+  type SiteMenus,
+} from "./menus";
 
 const menus: SiteMenus = {
   main: [
@@ -86,5 +93,57 @@ describe("isCurrent", () => {
   it("nunca marca anclas ni enlaces externos", () => {
     expect(isCurrent("#precios", "/")).toBe(false);
     expect(isCurrent("https://x.test", "/")).toBe(false);
+  });
+});
+
+describe("normalizeMenus", () => {
+  it("guarda un menú vacío como ausente, no como []", () => {
+    const out = normalizeMenus({ main: [{ label: "Inicio", nodeId: "n_home" }], footer: [] });
+    expect(out.main).toHaveLength(1);
+    expect("footer" in out).toBe(false);
+    expect("legal" in out).toBe(false);
+  });
+
+  it("deja fuera las filas sin etiqueta y sin destino", () => {
+    const out = normalizeMenus({
+      main: [
+        { label: "  ", nodeId: "n_home" },
+        { label: "Vacío", url: "   " },
+        { label: " Contacto ", url: " /contacto " },
+      ],
+    });
+    expect(out.main).toEqual([{ label: "Contacto", url: "/contacto" }]);
+  });
+
+  it("la página gana a la URL, para que no quede ambiguo cuál se usa", () => {
+    const out = normalizeMenus({ main: [{ label: "Blog", nodeId: "n_blog", url: "https://otro.test" }] });
+    expect(out.main).toEqual([{ label: "Blog", nodeId: "n_blog" }]);
+  });
+
+  it("sobrevive a lo que no es un menú sin lanzar", () => {
+    expect(normalizeMenus(null)).toEqual({});
+    expect(normalizeMenus({ main: "no soy una lista" })).toEqual({});
+    expect(normalizeMenus({ main: [null, 7, { label: "Ok", url: "/ok" }] })).toEqual({
+      main: [{ label: "Ok", url: "/ok" }],
+    });
+  });
+
+  it("es idempotente: normalizar lo ya guardado no lo cambia", () => {
+    const once = normalizeMenus(menus);
+    expect(normalizeMenus(once)).toEqual(once);
+  });
+
+  it("lo que normalizeMenus guarda es exactamente lo que resolveMenu sabe leer", () => {
+    const out = normalizeMenus({
+      main: [
+        { label: "Inicio", nodeId: "n_home" },
+        { label: "Fuera", url: "https://ejemplo.test" },
+      ],
+    });
+    const resolved = resolveMenu(out, "main", new Map([["n_home", "/"]]));
+    expect(resolved).toEqual([
+      { label: "Inicio", href: "/", external: false },
+      { label: "Fuera", href: "https://ejemplo.test", external: true },
+    ]);
   });
 });

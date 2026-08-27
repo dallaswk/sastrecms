@@ -1,0 +1,54 @@
+---
+import AdminLayout from "@layouts/AdminLayout.astro";
+import MenuEditor from "@components/admin/MenuEditor.vue";
+import { eq, and } from "drizzle-orm";
+import { settings, nodes } from "@db/schema";
+import { hasSiteRole } from "@lib/permissions";
+export const prerender = false;
+
+const db = Astro.locals.db;
+
+// Any role, not isAdmin as in settings: a menu is site furniture, not a secret, and whoever
+// writes the content is who notices a link is missing. But *some* role is required — the
+// page lists every published page's title and path, and offers a form that could not save.
+if (!(await hasSiteRole(db, Astro.locals.user!.id, Astro.locals.siteId))) {
+  return Astro.redirect("/admin");
+}
+
+const siteSettings = await db.query.settings.findFirst({
+  where: eq(settings.siteId, Astro.locals.siteId),
+  columns: { menus: true },
+});
+
+// Only published pages are offered: an entry pointing at a draft is a link to a 404 on
+// every page of the site.
+const linkables = await db.query.nodes.findMany({
+  where: and(eq(nodes.siteId, Astro.locals.siteId), eq(nodes.status, "published")),
+  columns: { id: true, title: true, path: true },
+  orderBy: (n, { asc }) => [asc(n.path)],
+});
+---
+
+<AdminLayout title="Menús">
+  <div class="flex flex-col gap-4 max-w-2xl">
+    <p class="text-sm text-base-content/60">
+      Se guarda la página, no su dirección, así que renombrar un slug no rompe el menú.
+      Sólo aparecen las páginas publicadas. Arrastra para reordenar.
+    </p>
+
+    <MenuEditor
+      client:only="vue"
+      menus={JSON.stringify(siteSettings?.menus ?? {})}
+      linkables={JSON.stringify(linkables)}
+    />
+
+    {linkables.length === 0 && (
+      <div class="alert alert-warning">
+        <span>
+          No hay ninguna página publicada todavía, así que sólo puedes añadir enlaces
+          externos. Publica primero en <a href="/admin/content" class="link">Contenido</a>.
+        </span>
+      </div>
+    )}
+  </div>
+</AdminLayout>
