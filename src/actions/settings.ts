@@ -46,8 +46,8 @@ const SocialLinksSchema = z.object({
 export const settingsActions = {
   get: defineAction({
     handler: async (_input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       // `integrations` carries the Resend API key in clear, and redirects/analytics
       // affect every public page — admin only, not merely authenticated.
       await requireAdmin(context.locals.db, context.locals.user.id, siteId);
@@ -76,8 +76,8 @@ export const settingsActions = {
       }).optional(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       await requireAdmin(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
 

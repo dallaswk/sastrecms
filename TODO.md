@@ -52,6 +52,29 @@ Estado del proyecto a fecha 17 Ago 2026. Rama activa: `dev`.
 
 ### Funcionalidad
 
+- [x] **Permiso de lectura en los endpoints que faltaban** ✅ *(27 Ago 2026)*
+  Tras la auditoría, el MCP filtraba por `view` pero la web no: la misma cuenta recibía
+  inventarios distintos según por qué puerta entrase.
+
+  - `viewableContentTypeIds()` vive ahora en `@lib/permissions` y la usan las dos
+    superficies. Antes era una función privada de `mcp.ts`.
+  - `nodes.list` y `nodes.listForPicker` filtran por `view`; `nodes.get` lo exige.
+  - `media.*` — los medios no tienen tipo de contenido, así que la matriz rol × tipo no
+    dice nada de ellos. La regla que sí aplica es `requireSiteRole()`: hace falta tener
+    un rol en el sitio. Antes bastaba con estar autenticado, así que cualquier cuenta con
+    login leía la mediateca entera.
+  - El árbol de `/admin/content` filtra igual. Un nodo cuyo tipo no puedes ver se oculta
+    **pero sus hijos suben a ocupar su sitio**: esconder la rama entera dejaría
+    inalcanzable contenido que sí puedes ver. Un editor con permiso sólo sobre Posts ve
+    los dos posts en la raíz, aunque cuelguen de una página que no ve.
+
+  Verificado con tres perfiles (admin, editor limitado a Posts, y autenticado sin rol)
+  que web y MCP dan exactamente la misma respuesta a la misma cuenta.
+
+  **Sigue abierto:** `media.delete` y `media.deleteFolder` sólo comprueban que tengas rol,
+  así que un colaborador puede borrar archivos subidos por otro. Restringirlo a admin o
+  a quien lo subió es un cambio de comportamiento que conviene decidir aparte.
+
 - [x] **`SITE_ID` centralizado (preparación para multi-tenant)** ✅ *(27 Ago 2026)*
   Estaba hardcodeado como `const SITE_ID = "site_default"` en catorce ficheros, más dos
   literales sueltos. Ahora el sitio se resuelve una vez por petición y viaja en `locals`.

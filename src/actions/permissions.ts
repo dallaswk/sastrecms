@@ -20,8 +20,8 @@ async function requireAdmin(context: {
 export const permissionActions = {
   listRolesWithPermissions: defineAction({
     handler: async (_input, context) => {
-      const siteId = context.locals.siteId;
       await requireAdmin(context);
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const allRoles = await db.query.roles.findMany({

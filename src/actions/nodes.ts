@@ -3,7 +3,7 @@ import { z } from "astro:schema";
 import { eq, and, desc, isNotNull, inArray } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
 import { generateId, slugify, computePath } from "@lib/id";
-import { requirePermission } from "@lib/permissions";
+import { requirePermission, viewableContentTypeIds } from "@lib/permissions";
 
 const NodeSeoSchema = z.object({
   metaTitle: z.string().optional(),
@@ -20,8 +20,8 @@ export const nodeActions = {
       status: z.enum(["draft", "published", "scheduled"]).optional(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const conditions = [eq(nodes.siteId, siteId)];
@@ -32,19 +32,26 @@ export const nodeActions = {
         conditions.push(eq(nodes.status, input.status));
       }
 
-      return db.query.nodes.findMany({
-        where: and(...conditions),
-        orderBy: desc(nodes.updatedAt),
-        with: { contentType: true },
-      });
+      const [rows, viewable] = await Promise.all([
+        db.query.nodes.findMany({
+          where: and(...conditions),
+          orderBy: desc(nodes.updatedAt),
+          with: { contentType: true },
+        }),
+        viewableContentTypeIds(db, context.locals.user.id, siteId),
+      ]);
+
+      // Same rule the MCP listing applies, so the two surfaces cannot disagree about
+      // what a given account is allowed to see.
+      return rows.filter((n) => viewable.has(n.contentTypeId));
     },
   }),
 
   get: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
@@ -53,6 +60,7 @@ export const nodeActions = {
       });
 
       if (!node) throw new Error("Node not found");
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "view");
       return node;
     },
   }),
@@ -68,8 +76,8 @@ export const nodeActions = {
       seo: NodeSeoSchema.optional(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
       await requirePermission(db, context.locals.user.id, siteId, input.contentTypeId, "create");
 
@@ -134,8 +142,8 @@ export const nodeActions = {
       status: z.enum(["draft", "published", "scheduled"]).optional(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
@@ -185,8 +193,8 @@ export const nodeActions = {
   publish: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
@@ -208,8 +216,8 @@ export const nodeActions = {
   delete: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const children = await db.query.nodes.findMany({
@@ -239,8 +247,8 @@ export const nodeActions = {
       targetId: z.string(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       if (input.nodeId === input.targetId) throw new Error("Un nodo no puede vincularse consigo mismo");
@@ -267,8 +275,8 @@ export const nodeActions = {
   unlinkTranslation: defineAction({
     input: z.object({ nodeId: z.string() }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
@@ -307,8 +315,8 @@ export const nodeActions = {
       })),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const affectedIds = input.items.map((i) => i.id);
@@ -440,8 +448,8 @@ export const nodeActions = {
       locale: z.string().optional(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const all = await db.query.nodes.findMany({
@@ -449,7 +457,10 @@ export const nodeActions = {
         orderBy: (n, { asc }) => [asc(n.path)],
       });
 
+      const viewable = await viewableContentTypeIds(db, context.locals.user.id, siteId);
+
       return all
+        .filter((n) => viewable.has(n.contentTypeId))
         .filter((n) => n.id !== input.excludeId)
         .filter((n) => !input.locale || n.locale === input.locale)
         .map((n) => ({ id: n.id, title: n.title, path: n.path, locale: n.locale }));

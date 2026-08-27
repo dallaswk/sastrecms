@@ -3,7 +3,14 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createDb, type Database } from "@db/client";
 import { sites, contentTypes, roles, roleContentPermissions, userRoles, users } from "@db/schema";
-import { checkPermission, isAdmin, requireAdmin, requirePermission } from "./permissions";
+import {
+  checkPermission,
+  isAdmin,
+  requireAdmin,
+  requirePermission,
+  requireSiteRole,
+  viewableContentTypeIds,
+} from "./permissions";
 
 const SITE = "site_test";
 
@@ -169,5 +176,67 @@ describe("isAdmin / requireAdmin", () => {
 
   it("is scoped to the site", async () => {
     expect(await isAdmin(db, "u_admin", "site_other")).toBe(false);
+  });
+});
+
+describe("viewableContentTypeIds", () => {
+  it("is empty for a user with no role", async () => {
+    expect([...(await viewableContentTypeIds(db, "u_nobody", SITE))]).toEqual([]);
+  });
+
+  it("is every type for an admin, with no permission rows", async () => {
+    expect([...(await viewableContentTypeIds(db, "u_admin", SITE))].sort()).toEqual([
+      "ct_page",
+      "ct_post",
+    ]);
+  });
+
+  it("is empty for a role with no rows, rather than everything", async () => {
+    expect([...(await viewableContentTypeIds(db, "u_editor", SITE))]).toEqual([]);
+  });
+
+  it("returns only the types actually granted", async () => {
+    await db.insert(roleContentPermissions).values(
+      perm({ contentTypeId: "ct_post", canView: true })
+    );
+    expect([...(await viewableContentTypeIds(db, "u_editor", SITE))]).toEqual(["ct_post"]);
+  });
+
+  it("does not count a row that grants edit but not view", async () => {
+    await db.insert(roleContentPermissions).values(
+      perm({ contentTypeId: "ct_post", canView: false, canEdit: true })
+    );
+    expect([...(await viewableContentTypeIds(db, "u_editor", SITE))]).toEqual([]);
+  });
+
+  it("agrees with checkPermission for every type", async () => {
+    // The listings filter with this set while the single-item endpoints call
+    // checkPermission directly. If they ever disagree, a node is listed but not
+    // openable, or the other way round.
+    await db.insert(roleContentPermissions).values([
+      perm({ contentTypeId: "ct_post", canView: true }),
+      perm({ contentTypeId: "ct_page", canView: false }),
+    ]);
+    const set = await viewableContentTypeIds(db, "u_editor", SITE);
+    for (const id of ["ct_page", "ct_post"]) {
+      expect(set.has(id)).toBe(await checkPermission(db, "u_editor", SITE, id, "view"));
+    }
+  });
+});
+
+describe("requireSiteRole", () => {
+  it("passes for any role on the site", async () => {
+    await expect(requireSiteRole(db, "u_editor", SITE)).resolves.toBeUndefined();
+    await expect(requireSiteRole(db, "u_admin", SITE)).resolves.toBeUndefined();
+  });
+
+  it("rejects an authenticated user with no role", async () => {
+    // Media has no content type, so this is the only check that applies to it. Being
+    // signed in used to be enough to read the whole library.
+    await expect(requireSiteRole(db, "u_nobody", SITE)).rejects.toThrow(/rol/);
+  });
+
+  it("is scoped to the site", async () => {
+    await expect(requireSiteRole(db, "u_editor", "site_other")).rejects.toThrow();
   });
 });

@@ -1,6 +1,6 @@
 import { eq, and, or, isNull } from "drizzle-orm";
 import type { Database } from "@db/client";
-import { userRoles, roleContentPermissions } from "@db/schema";
+import { userRoles, roleContentPermissions, contentTypes } from "@db/schema";
 
 export type Action = "view" | "create" | "edit" | "delete" | "publish";
 
@@ -97,5 +97,44 @@ export async function requireAdmin(
 ): Promise<void> {
   if (!(await isAdmin(db, userId, siteId))) {
     throw new Error("Forbidden: se requiere rol de administrador");
+  }
+}
+
+/**
+ * The content types this user may see, as a set for cheap filtering.
+ *
+ * Listing endpoints use this instead of asking per row: the web UI and the MCP surface
+ * must answer the same question the same way, or the same account gets a different
+ * inventory depending on which door it came through.
+ */
+export async function viewableContentTypeIds(
+  db: Database,
+  userId: string,
+  siteId: string
+): Promise<Set<string>> {
+  const types = await db.query.contentTypes.findMany({
+    where: eq(contentTypes.siteId, siteId),
+  });
+  const allowed = await Promise.all(
+    types.map((ct) => checkPermission(db, userId, siteId, ct.id, "view"))
+  );
+  return new Set(types.filter((_, i) => allowed[i]).map((ct) => ct.id));
+}
+
+/**
+ * Media is not typed, so the permission matrix (role x content type) says nothing about
+ * it. The rule that does apply: you need a role on this site. Being merely authenticated
+ * was enough before, which let any account with a login read the whole media library.
+ */
+export async function requireSiteRole(
+  db: Database,
+  userId: string,
+  siteId: string
+): Promise<void> {
+  const assignment = await db.query.userRoles.findFirst({
+    where: and(eq(userRoles.userId, userId), eq(userRoles.siteId, siteId)),
+  });
+  if (!assignment) {
+    throw new Error("Forbidden: no tienes ningún rol asignado en este sitio");
   }
 }

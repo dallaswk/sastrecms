@@ -31,17 +31,36 @@ const isAdmin = assignment?.role.key === "admin";
 const canCreatePerType: Record<string, boolean> = {};
 const editableTypeIds: string[] = [];
 const deletableTypeIds: string[] = [];
+const viewableTypeIds = new Set<string>();
 for (const ct of allContentTypes) {
   canCreatePerType[ct.id] = await checkPermission(db, userId, siteId, ct.id, "create");
+  if (await checkPermission(db, userId, siteId, ct.id, "view")) viewableTypeIds.add(ct.id);
   if (await checkPermission(db, userId, siteId, ct.id, "edit")) editableTypeIds.push(ct.id);
   if (await checkPermission(db, userId, siteId, ct.id, "delete")) deletableTypeIds.push(ct.id);
+}
+
+/*
+ * A node whose type the user cannot view is dropped, but its children are kept and
+ * lifted to where it stood. Hiding a whole branch because of its parent would make
+ * content the user *can* view unreachable, and reordering it impossible.
+ */
+const visibleNodes = allNodes.filter((n) => viewableTypeIds.has(n.contentTypeId));
+const visibleIds = new Set(visibleNodes.map((n) => n.id));
+const byId = new Map(allNodes.map((n) => [n.id, n]));
+
+function nearestVisibleParent(parentId: string | null): string | null {
+  let current = parentId;
+  while (current && !visibleIds.has(current)) {
+    current = byId.get(current)?.parentId ?? null;
+  }
+  return current;
 }
 
 type RawNode = typeof allNodes[number] & { contentType: typeof allContentTypes[number] | null };
 
 function buildTree(flat: RawNode[], parentId: string | null = null): TreeNode[] {
   return flat
-    .filter((n) => (n.parentId ?? null) === parentId)
+    .filter((n) => nearestVisibleParent(n.parentId ?? null) === parentId)
     .map((n) => ({
       id: n.id,
       title: n.title,
@@ -59,7 +78,7 @@ function buildTree(flat: RawNode[], parentId: string | null = null): TreeNode[] 
     }));
 }
 
-const treeData = buildTree(allNodes as RawNode[]);
+const treeData = buildTree(visibleNodes as RawNode[]);
 const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
 ---
 
@@ -67,7 +86,7 @@ const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
   <div class="flex justify-between items-center mb-6 gap-4 flex-wrap">
     <div class="flex items-center gap-2">
       <h1 class="font-semibold text-lg">Árbol de contenido</h1>
-      <span class="badge badge-ghost badge-sm">{allNodes.length} nodos</span>
+      <span class="badge badge-ghost badge-sm">{visibleNodes.length} nodos</span>
     </div>
     {creatableTypes.length > 0 && (
       <div class="dropdown dropdown-end">
@@ -81,7 +100,7 @@ const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
     )}
   </div>
 
-  {allNodes.length === 0 ? (
+  {visibleNodes.length === 0 ? (
     <div class="text-center py-20 text-base-content/40">
       <p class="text-lg">No hay contenido todavía.</p>
       {creatableTypes.length > 0 && (

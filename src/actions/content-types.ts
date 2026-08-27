@@ -20,8 +20,8 @@ const FieldSchema: z.ZodType<FieldDefinition> = z.lazy(() =>
 export const contentTypeActions = {
   list: defineAction({
     handler: async (_input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       return context.locals.db.query.contentTypes.findMany({
         where: eq(contentTypes.siteId, siteId),
         orderBy: (ct, { asc }) => [asc(ct.label)],
@@ -40,8 +40,8 @@ export const contentTypeActions = {
       fieldSchema: z.array(FieldSchema).default([]),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const existing = await db.query.contentTypes.findFirst({
@@ -81,8 +81,8 @@ export const contentTypeActions = {
       fieldSchema: z.array(FieldSchema).optional(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const ct = await db.query.contentTypes.findFirst({
@@ -106,8 +106,8 @@ export const contentTypeActions = {
   delete: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const ct = await db.query.contentTypes.findFirst({

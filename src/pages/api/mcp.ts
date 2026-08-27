@@ -3,29 +3,13 @@ import { eq, and } from "drizzle-orm";
 import { nodes, contentTypes, media, settings } from "@db/schema";
 import { validateApiToken } from "@lib/api-token";
 import { generateId, slugify, computePath } from "@lib/id";
-import { checkPermission, requirePermission, isAdmin } from "@lib/permissions";
-import type { Database } from "@db/client";
+import {
+  requirePermission,
+  isAdmin,
+  viewableContentTypeIds,
+} from "@lib/permissions";
 
 export const prerender = false;
-
-/**
- * A token carries exactly the permissions of the user who created it. Without this the
- * MCP surface was a way around the whole role system: any collaborator could mint a
- * token and get full CRUD plus settings.
- */
-async function viewableTypeIds(
-  db: Database,
-  userId: string,
-  siteId: string
-): Promise<Set<string>> {
-  const cts = await db.query.contentTypes.findMany({
-    where: eq(contentTypes.siteId, siteId),
-  });
-  const allowed = await Promise.all(
-    cts.map((ct) => checkPermission(db, userId, siteId, ct.id, "view"))
-  );
-  return new Set(cts.filter((_, i) => allowed[i]).map((ct) => ct.id));
-}
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -68,7 +52,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         const cts = await db.query.contentTypes.findMany({
           where: eq(contentTypes.siteId, siteId),
         });
-        const viewable = await viewableTypeIds(db, userId, siteId);
+        const viewable = await viewableContentTypeIds(db, userId, siteId);
         return json({ result: cts.filter((ct) => viewable.has(ct.id)) });
       }
 
@@ -82,7 +66,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           with: { contentType: true },
           orderBy: (n, { desc }) => [desc(n.updatedAt)],
         });
-        const viewable = await viewableTypeIds(db, userId, siteId);
+        const viewable = await viewableContentTypeIds(db, userId, siteId);
         return json({ result: list.filter((n) => viewable.has(n.contentTypeId)) });
       }
 
@@ -211,7 +195,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           with: { contentType: true },
         });
         const q = query.toLowerCase();
-        const viewable = await viewableTypeIds(db, userId, siteId);
+        const viewable = await viewableContentTypeIds(db, userId, siteId);
         const results = allNodes.filter(
           (n) =>
             viewable.has(n.contentTypeId) &&

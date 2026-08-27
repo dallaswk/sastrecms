@@ -3,6 +3,7 @@ import { z } from "astro:schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { media, mediaFolders } from "@db/schema";
 import { generateId } from "@lib/id";
+import { requireSiteRole } from "@lib/permissions";
 
 const ACCEPTED_TYPES: Record<string, "image" | "video" | "pdf" | "doc"> = {
   "image/jpeg": "image",
@@ -25,8 +26,9 @@ export const mediaActions = {
       folderId: z.string().nullable().optional(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
 
       const conditions = [eq(media.siteId, siteId)];
@@ -66,8 +68,9 @@ export const mediaActions = {
       altText: z.string().optional(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
 
       const { file } = input;
@@ -128,8 +131,9 @@ export const mediaActions = {
   delete: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
 
       const file = await db.query.media.findFirst({
@@ -153,8 +157,9 @@ export const mediaActions = {
       parentId: z.string().nullable().optional(),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
 
       const id = generateId("folder");
@@ -172,8 +177,9 @@ export const mediaActions = {
   deleteFolder: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       if (!context.locals.user) throw new Error("Unauthorized");
+      const siteId = context.locals.siteId;
+      await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
 
       const hasFiles = await db.query.media.findFirst({

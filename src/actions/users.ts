@@ -19,8 +19,8 @@ async function requireAdmin(context: {
 export const userActions = {
   list: defineAction({
     handler: async (_input, context) => {
-      const siteId = context.locals.siteId;
       await requireAdmin(context);
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const allUsers = await db.query.users.findMany({
@@ -46,8 +46,8 @@ export const userActions = {
       roleKey: z.enum(["admin", "editor", "collaborator"]),
     }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       await requireAdmin(context);
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const role = await db.query.roles.findFirst({
@@ -88,8 +88,8 @@ export const userActions = {
   removeRole: defineAction({
     input: z.object({ userId: z.string() }),
     handler: async (input, context) => {
-      const siteId = context.locals.siteId;
       await requireAdmin(context);
+      const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       await db
