@@ -30,9 +30,25 @@ export function sectionsFieldOf(ct: RenderableType | null | undefined): FieldDef
  * 2. A purpose-built renderer exists → archive, post, portfolio_item.
  * 3. Otherwise → generic, which walks the field schema and paints every field.
  */
+/**
+ * Where the node sits in the tree.
+ *
+ * Needed because `hasArchive` is a property of the *type*, not of the node: a post type has
+ * an archive, but only one node of that type is the archive. Without this, every individual
+ * post was rendered by ArchiveRenderer — which lists a node's children — so a post leaf
+ * showed its title and «No hay entradas todavía» and its body never appeared at all.
+ */
+export type NodePosition = {
+  /** True when the node has children to list. */
+  hasChildren?: boolean;
+  /** True when the node is top level, which is where a listing lives. */
+  isRoot?: boolean;
+};
+
 export function resolveRenderer(
   ct: RenderableType | null | undefined,
-  fields?: Record<string, unknown> | null
+  fields?: Record<string, unknown> | null,
+  position?: NodePosition
 ): RendererKey {
   const sectionsField = sectionsFieldOf(ct);
   if (sectionsField) {
@@ -41,7 +57,12 @@ export function resolveRenderer(
   }
 
   if (!ct) return "generic";
-  if (ct.hasArchive) return "archive";
+
+  // A listing either has entries to list, or is the root that will have them. A leaf falls
+  // through to its own renderer. `isRoot` keeps an empty archive still showing as an archive
+  // instead of turning into a single post the moment its last entry is deleted.
+  if (ct.hasArchive && (position?.hasChildren || position?.isRoot)) return "archive";
+
   if (ct.key === "post" || ct.key === "portfolio_item") return ct.key;
   return "generic";
 }

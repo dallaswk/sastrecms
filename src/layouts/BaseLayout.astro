@@ -2,6 +2,7 @@
 import "@styles/global.css";
 import { buildWebSiteSchema } from "@lib/jsonld";
 import { sanitizeAnalyticsIds } from "@lib/analytics";
+import { buildMeta, buildHreflang } from "@lib/seo";
 import {
   DEFAULT_THEME,
   googleFontsHref,
@@ -19,6 +20,15 @@ interface Props {
   title: string;
   description?: string;
   ogImage?: string;
+  /** Alt text for the share card. Falls back to the title. */
+  ogImageAlt?: string;
+  /** `article` for a post, so crawlers read the dates. */
+  ogType?: "website" | "article";
+  /** Overrides the canonical, for a page that duplicates another. */
+  canonical?: string;
+  publishedAt?: string;
+  updatedAt?: string;
+  author?: string;
   noindex?: boolean;
   jsonLd?: Record<string, unknown>;
   jsonLdList?: Record<string, unknown>[];
@@ -27,7 +37,22 @@ interface Props {
   lang?: string;
 }
 
-const { title, description, ogImage, noindex = false, jsonLd, jsonLdList, hreflangLinks, lang } = Astro.props;
+const {
+  title,
+  description,
+  ogImage,
+  ogImageAlt,
+  ogType,
+  canonical,
+  publishedAt,
+  updatedAt,
+  author,
+  noindex = false,
+  jsonLd,
+  jsonLdList,
+  hreflangLinks,
+  lang,
+} = Astro.props;
 const schemas = jsonLdList ?? (jsonLd ? [jsonLd] : []);
 // `site` is deliberately not set in astro.config.ts: each client deployment has its own
 // domain and it isn't known at build time. Fall back to the request origin, same as
@@ -94,6 +119,30 @@ const siteTitle = siteSettings?.siteName ?? "sASTRe";
 // No suffix when the page is already the site: the home page of sASTRe was titled
 // "sASTRe — sASTRe", which is what building the real landing surfaced.
 const pageTitle = title === siteTitle ? title : `${title} — ${siteTitle}`;
+
+const rawSocial = (siteSettings?.socialLinks ?? {}) as Record<string, string>;
+
+const metaTags = buildMeta({
+  title,
+  ...(description ? { description } : {}),
+  url: canonicalUrl.toString(),
+  ...(canonical ? { canonical } : {}),
+  siteName: siteTitle,
+  ...(ogImage ? { image: ogImage } : {}),
+  ...(ogImageAlt ? { imageAlt: ogImageAlt } : {}),
+  locale: lang ?? Astro.currentLocale ?? "es",
+  type: ogType ?? "website",
+  noindex,
+  ...(publishedAt ? { publishedAt } : {}),
+  ...(updatedAt ? { updatedAt } : {}),
+  ...(author ? { author } : {}),
+  ...(rawSocial.twitter ? { twitterSite: rawSocial.twitter } : {}),
+});
+
+// x-default and the self-reference included: Google ignores a hreflang set where the page
+// does not point at itself, which is the commonest way a correct-looking block does nothing.
+const hreflangs = buildHreflang(hreflangLinks ?? [], Astro.url.origin, defaultLocale);
+
 ---
 
 <!doctype html>
@@ -104,16 +153,20 @@ const pageTitle = title === siteTitle ? title : `${title} — ${siteTitle}`;
     <link rel="icon" type="image/svg+xml" href={faviconUrl} />
 
     <title>{pageTitle}</title>
-    {description && <meta name="description" content={description} />}
-    {noindex && <meta name="robots" content="noindex, nofollow" />}
-    <link rel="canonical" href={canonicalUrl} />
-    {hreflangLinks && hreflangLinks.length > 1 && hreflangLinks.map(({ locale, path }) => (
-      <link rel="alternate" hreflang={locale} href={new URL(path, Astro.url.origin).toString()} />
-    ))}
+    <link rel="canonical" href={canonical?.trim() || canonicalUrl.toString()} />
 
-    {ogImage && <meta property="og:image" content={ogImage} />}
-    <meta property="og:title" content={title} />
-    {description && <meta property="og:description" content={description} />}
+    {/* Every meta tag comes from @lib/seo so the rules are in one testable place: an
+        absolute OG image, a positive robots directive, and a Twitter card that is `large`
+        only when there is actually an image to make it large. */}
+    {metaTags.map((tag) =>
+      tag.property
+        ? <meta property={tag.property} content={tag.content} />
+        : <meta name={tag.name} content={tag.content} />
+    )}
+
+    {hreflangs.map(({ hreflang, href }) => (
+      <link rel="alternate" hreflang={hreflang} href={href} />
+    ))}
 
     <link rel="stylesheet" href={themeHref} />
 

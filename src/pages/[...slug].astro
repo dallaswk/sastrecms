@@ -100,7 +100,15 @@ const breadcrumbSchema = buildBreadcrumbSchema(breadcrumbItems);
 
 const allJsonLd = [jsonLd, orgSchema, breadcrumbSchema];
 
-const renderer = resolveRenderer(ct, fields);
+const renderer = resolveRenderer(ct, fields, {
+  hasChildren: children.length > 0,
+  isRoot: !node.parentId,
+});
+
+// `article` for anything dated, so a crawler reads published/modified instead of guessing.
+// A page built out of sections is a landing, not an article.
+// From the type, not the renderer: a post is an article however it is laid out.
+const ogType = ct?.key === "post" || ct?.key === "portfolio_item" ? "article" : "website";
 // Parsed on the read path and never written back: rendering stays a read. Errors are
 // swallowed here on purpose — a block the editor saved before a schema change should
 // degrade to "not shown", not to a broken page.
@@ -118,8 +126,13 @@ const sectionErrors = parsed.errors;
 <BaseLayout
   title={(seo.metaTitle as string) || node.title}
   description={seo.metaDescription as string}
-  ogImage={seo.ogImage as string}
+  ogImage={(seo.ogImage as string) || (fields.cover_image as string)}
+  ogImageAlt={node.title}
+  canonical={seo.canonical as string}
   noindex={seo.noindex as boolean}
+  ogType={ogType}
+  publishedAt={node.publishedAt?.toISOString()}
+  updatedAt={node.updatedAt?.toISOString()}
   jsonLdList={allJsonLd}
   hreflangLinks={hreflangLinks}
   lang={node.locale}

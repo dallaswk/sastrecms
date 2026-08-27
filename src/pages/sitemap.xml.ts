@@ -19,9 +19,14 @@ export const GET: APIRoute = async ({ locals, site, url }) => {
       const seo = (node.seo as Record<string, unknown>) ?? {};
       if (seo.noindex) return null;
       const lastmod = (node.updatedAt ?? node.publishedAt ?? node.createdAt) as Date | null;
+      // Priority by depth, and the home page above everything. It is a hint, not a ranking
+      // factor — but a flat sitemap tells a crawler nothing about what the site is for.
+      const depth = node.path === "/" ? 0 : node.path.split("/").filter(Boolean).length;
+      const priority = node.path === "/" ? "1.0" : Math.max(0.3, 0.8 - (depth - 1) * 0.2).toFixed(1);
       return `  <url>
     <loc>${baseUrl}${node.path}</loc>${lastmod ? `\n    <lastmod>${lastmod.toISOString().split("T")[0]}</lastmod>` : ""}
     <changefreq>weekly</changefreq>
+    <priority>${priority}</priority>
   </url>`;
     })
     .filter(Boolean)
