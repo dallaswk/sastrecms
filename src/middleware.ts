@@ -184,6 +184,19 @@ export const onRequest = defineMiddleware(async (context, next) => {
     response.headers.set("Strict-Transport-Security", HSTS_HEADER);
   }
 
+  /*
+   * The backoffice and the API are never stored anywhere.
+   *
+   * `no-store`, not `max-age=0`: the latter still permits a shared cache to keep a copy and
+   * revalidate it, and a stored /admin page at the edge is one editor's view of the site
+   * waiting to be served to another. Set here rather than through a route rule because the
+   * rules only control the CDN header, not this one.
+   */
+  if (isAdminRoute || isApiRoute) {
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+  }
+
   // Only on documents: a CSP on a stylesheet or an image is noise in the report endpoint.
   const contentType = response.headers.get("Content-Type") ?? "";
   if (contentType.includes("text/html")) {

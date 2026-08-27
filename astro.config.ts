@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import cloudflare from "@astrojs/cloudflare";
+import { cacheCloudflare } from "@astrojs/cloudflare/cache";
 import node from "@astrojs/node";
 import vue from "@astrojs/vue";
 import { fileURLToPath } from "node:url";
@@ -49,6 +50,50 @@ function r2RemotePattern() {
 
 export default defineConfig({
   output: "server",
+  /*
+   * Edge caching.
+   *
+   * `cacheCloudflare()` uses Cloudflare-CDN-Cache-Control and Cache-Tag, and purges by tag
+   * through the Worker cache API — no API credentials, which is why this and not a manual
+   * `caches.default` (per data centre, no tag purge) or KV (eventually consistent, and adds
+   * nothing over HTTP caching for HTML).
+   *
+   * Only configured for the Cloudflare target: under the Node adapter the provider would be
+   * a noop and the route rules would be misleading.
+   *
+   * Consequence to keep in mind: a cached public response must not vary by cookie and must
+   * not carry Set-Cookie, or Workers Cache silently ignores it. That is precisely why the
+   * cookie consent in D3 is entirely client-side.
+   */
+  ...(target === "cloudflare" ? { cache: { provider: cacheCloudflare() } } : {}),
+  routeRules: {
+    // The floor for public pages. Individual routes tighten this with Astro.cache.set().
+    "/[...slug]": { maxAge: 3600, swr: 86400 },
+    // Derived from the database but changes rarely, and both carry their own ETag.
+    "/sitemap.xml": { maxAge: 3600, swr: 86400 },
+    "/robots.txt": { maxAge: 3600, swr: 86400 },
+    // Needs its own rule: the `/[...slug]` catch-all matched it and overwrote the
+    // year-long immutable header with an hour, which defeats the point of putting the
+    // fingerprint in the URL in the first place.
+    "/theme.css": { maxAge: 31536000 },
+    /*
+     * The backoffice, the API and the actions.
+     *
+     * These have to be listed: without a rule the `/[...slug]` catch-all matched them and
+     * the provider emitted `max-age=3600` for the edge, which would have cached one editor's
+     * view of the backoffice for an hour. Found by reading the headers under workerd, not by
+     * reasoning about the config.
+     *
+     * `maxAge: 0` is the strongest the RouteRule type offers — there is no `no-store` option
+     * — and it does mean the edge must revalidate on every request, so a stale admin page can
+     * never be served. The middleware also sets `Cache-Control: private, no-store`, which is
+     * what browsers and any non-Cloudflare proxy honour.
+     */
+    "/admin": { maxAge: 0 },
+    "/admin/[...path]": { maxAge: 0 },
+    "/api/[...path]": { maxAge: 0 },
+    "/_actions/[...path]": { maxAge: 0 },
+  },
   image: {
     // The Cloudflare adapter already defaults imageService to `cloudflare-binding`; what was
     // missing was the allowlist, and without it every remote source is a 403.

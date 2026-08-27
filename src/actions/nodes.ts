@@ -5,6 +5,7 @@ import { nodes, contentTypes } from "@db/schema";
 import { generateId, slugify, computePath, reservedSlugError } from "@lib/id";
 import { requirePermission, viewableContentTypeIds } from "@lib/permissions";
 import { sanitizeFields } from "@lib/sanitize";
+import { invalidateNode } from "@lib/cache-invalidate";
 
 const NodeSeoSchema = z.object({
   metaTitle: z.string().optional(),
@@ -143,6 +144,13 @@ export const nodeActions = {
         updatedAt: now,
       });
 
+      await invalidateNode(context.cache, {
+        siteId,
+        nodeId: id,
+        contentTypeId: input.contentTypeId,
+        parentId: input.parentId ?? null,
+      });
+
       return { id, path };
     },
   }),
@@ -205,6 +213,14 @@ export const nodeActions = {
       }
 
       await db.update(nodes).set(updates).where(eq(nodes.id, input.id));
+
+      await invalidateNode(context.cache, {
+        siteId,
+        nodeId: input.id,
+        contentTypeId: node.contentTypeId,
+        parentId: node.parentId,
+      });
+
       return { id: input.id };
     },
   }),
@@ -227,6 +243,15 @@ export const nodeActions = {
         .update(nodes)
         .set({ status: "published", publishedAt: now, updatedAt: now })
         .where(eq(nodes.id, input.id));
+
+      // The type tag matters most here: publishing a post has to drop the listing and every
+      // page with a `collection` block pointing at that type, not only the post's own page.
+      await invalidateNode(context.cache, {
+        siteId,
+        nodeId: input.id,
+        contentTypeId: node.contentTypeId,
+        parentId: node.parentId,
+      });
 
       return { id: input.id, publishedAt: now };
     },
@@ -255,6 +280,13 @@ export const nodeActions = {
       await db
         .delete(nodes)
         .where(and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)));
+
+      await invalidateNode(context.cache, {
+        siteId,
+        nodeId: input.id,
+        contentTypeId: node.contentTypeId,
+        parentId: node.parentId,
+      });
 
       return { id: input.id };
     },

@@ -7,6 +7,7 @@ import { ANALYTICS_ID_SHAPES } from "@lib/analytics";
 import { normalizeMenus } from "@lib/menus";
 import { SITE_THEMES, FONTS, CONTAINER_WIDTHS, TYPE_SCALES } from "@lib/theme";
 import { MenusSchema } from "./menus";
+import { invalidateSettings } from "@lib/cache-invalidate";
 
 /**
  * The shapes live in @lib/analytics because the layout enforces the same rule at render
@@ -129,6 +130,8 @@ export const settingsActions = {
       } else {
         await db.insert(settings).values({ siteId, siteName: "My Site", ...updates });
       }
+
+      await invalidateSettings(context.cache, siteId);
 
       return { ok: true };
     },

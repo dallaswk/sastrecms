@@ -9,6 +9,7 @@ import {
   viewableContentTypeIds,
 } from "@lib/permissions";
 import { sanitizeFields } from "@lib/sanitize";
+import { invalidateNode } from "@lib/cache-invalidate";
 
 export const prerender = false;
 
@@ -23,7 +24,7 @@ function mcpError(message: string, status = 400) {
   return json({ error: message }, status);
 }
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request, locals, cache }) => {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return mcpError("Missing or invalid Authorization header", 401);
@@ -129,6 +130,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
           title, fields: sanitizeFields(fields), seo, createdBy: tokenResult.userId,
           createdVia: "mcp", createdAt: now, updatedAt: now,
         });
+        /*
+         * The MCP surface writes nodes directly, so it has to purge directly too. Without
+         * this an agent would publish successfully against a cache that never hears about
+         * it, and the client would be told the change is live while the edge serves the old
+         * page for an hour.
+         */
+        await invalidateNode(cache, {
+          siteId, nodeId: id, contentTypeId, parentId: parentId ?? null,
+        });
+
         return json({ result: { id, path } }, 201);
       }
 
@@ -164,6 +175,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
           );
         }
         await db.update(nodes).set(patch).where(eq(nodes.id, id));
+        await invalidateNode(cache, {
+          siteId, nodeId: id, contentTypeId: node.contentTypeId, parentId: node.parentId,
+        });
         return json({ result: { id } });
       }
 
@@ -179,6 +193,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
         await db.update(nodes)
           .set({ status: "published", publishedAt: now, updatedAt: now })
           .where(and(eq(nodes.id, id), eq(nodes.siteId, siteId)));
+        await invalidateNode(cache, {
+          siteId, nodeId: id, contentTypeId: node.contentTypeId, parentId: node.parentId,
+        });
         return json({ result: { id, publishedAt: now } });
       }
 
@@ -193,6 +210,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
         const children = await db.query.nodes.findMany({ where: eq(nodes.parentId, id) });
         if (children.length > 0) return mcpError("Cannot delete a node that has children");
         await db.delete(nodes).where(and(eq(nodes.id, id), eq(nodes.siteId, siteId)));
+        await invalidateNode(cache, {
+          siteId, nodeId: id, contentTypeId: node.contentTypeId, parentId: node.parentId,
+        });
         return json({ result: { id } });
       }
 

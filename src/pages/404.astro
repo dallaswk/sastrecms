@@ -14,6 +14,12 @@ export const prerender = false;
  * someone had already tried the URL.
  */
 Astro.response.headers.set("Cache-Control", "no-store");
+// And the CDN header, which the `/[...slug]` route rule would otherwise set to an hour: a
+// cached 404 is a page that stays missing after it has been created, which is exactly what
+// happens when someone tries a URL just before the draft is published.
+// swr: 0 too, or the route rule's 24-hour stale window survives and the edge keeps
+// serving the 404 from cache while it revalidates.
+Astro.cache.set({ maxAge: 0, swr: 0 });
 ---
 
 <BaseLayout title="Página no encontrada" noindex>

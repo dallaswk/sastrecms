@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { settings, nodes } from "@db/schema";
 import { requireSiteRole } from "@lib/permissions";
 import { normalizeMenus } from "@lib/menus";
+import { invalidateSettings } from "@lib/cache-invalidate";
 
 const MenuItemSchema = z.object({
   label: z.string().min(1),
@@ -67,6 +68,9 @@ export const menuActions = {
         .update(settings)
         .set({ menus: normalizeMenus(input.menus) })
         .where(eq(settings.siteId, siteId));
+      // A menu is in the header of every page, so this is the blunt purge on purpose.
+      await invalidateSettings(context.cache, siteId);
+
       return { ok: true };
     },
   }),

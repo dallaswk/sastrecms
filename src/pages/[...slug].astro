@@ -5,6 +5,7 @@ import BaseLayout from "@layouts/BaseLayout.astro";
 import { buildWebPageSchema, buildArticleSchema, buildBreadcrumbSchema, buildOrganizationSchema } from "@lib/jsonld";
 import { resolveRenderer, sectionsFieldOf } from "@lib/renderers";
 import { lookupMedia } from "@lib/media-lookup";
+import { tagsForNode, PUBLIC_CACHE } from "@lib/cache-tags";
 import { collectMediaUrls } from "@lib/media-url";
 import { parseSections } from "@lib/sections/validate";
 import GenericRenderer from "@components/renderers/GenericRenderer.astro";
@@ -112,6 +113,25 @@ const allJsonLd = [jsonLd, orgSchema, breadcrumbSchema];
  * between one round trip to Turso and one per image.
  */
 const mediaMap = await lookupMedia(db, collectMediaUrls(fields));
+
+/*
+ * Cache tags for this page.
+ *
+ * Emitted through the same functions the actions purge with, so the two cannot drift — a
+ * stale page looks exactly like a working one, which makes this the one place where a naming
+ * mistake is invisible until a client notices their update never appeared.
+ */
+Astro.cache.set({
+  ...PUBLIC_CACHE,
+  tags: tagsForNode({
+    siteId: Astro.locals.siteId,
+    nodeId: node.id,
+    contentTypeId: node.contentTypeId,
+    referencedNodeIds: children.map((child) => child.id),
+    ...(ct?.id ? { referencedTypeIds: [ct.id] } : {}),
+  }),
+  ...(node.updatedAt ? { lastModified: node.updatedAt } : {}),
+});
 
 const renderer = resolveRenderer(ct, fields, {
   hasChildren: children.length > 0,
