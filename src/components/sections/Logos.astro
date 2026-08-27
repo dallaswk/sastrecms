@@ -1,0 +1,15 @@
+---
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+const images = Array.isArray(data.images) ? (data.images as string[]) : [];
+---
+<section id={anchor ?? id} class="bg-base-100 border-y border-base-200">
+  <div class="max-w-5xl mx-auto px-4 py-10 flex flex-col items-center gap-5">
+    {data.title && <p class="text-xs uppercase tracking-widest text-base-content/40 font-semibold">{data.title}</p>}
+    <div class="flex flex-wrap justify-center items-center gap-x-10 gap-y-6">
+      {images.map((src) => (
+        <img src={src} alt="" class="h-7 w-auto opacity-50 grayscale" loading="lazy" decoding="async" />
+      ))}
+    </div>
+  </div>
+</section>

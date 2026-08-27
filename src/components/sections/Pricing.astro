@@ -1,0 +1,51 @@
+---
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+const plans = Array.isArray(data.plans) ? (data.plans as Record<string, unknown>[]) : [];
+const COLS = { 1: "max-w-md mx-auto", 2: "md:grid-cols-2 max-w-3xl mx-auto", 3: "md:grid-cols-3", 4: "md:grid-cols-2 lg:grid-cols-4" } as const;
+const cols = COLS[Math.min(plans.length, 4) as keyof typeof COLS] ?? COLS[3];
+---
+<section id={anchor ?? id} class="bg-base-200">
+  <div class="max-w-5xl mx-auto px-4 py-16 flex flex-col gap-8">
+    {(data.title || data.intro) && (
+      <div class="flex flex-col gap-2 text-center max-w-2xl mx-auto">
+        {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
+        {data.intro && <p class="text-base-content/70">{data.intro}</p>}
+      </div>
+    )}
+    <div class={`grid gap-5 ${cols}`}>
+      {plans.map((plan) => {
+        const featured = plan.featured === "sí";
+        const lines = String(plan.features ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+        return (
+          <div class={`rounded-xl p-6 flex flex-col gap-4 bg-base-100 ${featured ? "ring-2 ring-primary shadow-lg" : "border border-base-300"}`}>
+            <div class="flex items-center gap-2">
+              <h3 class="font-semibold text-lg">{plan.name}</h3>
+              {featured && <span class="badge badge-primary badge-sm">Recomendado</span>}
+            </div>
+            <p class="flex items-baseline gap-1">
+              <span class="text-3xl font-bold tabular-nums">{plan.price}</span>
+              {plan.period && <span class="text-sm text-base-content/50">{plan.period}</span>}
+            </p>
+            {plan.description && <p class="text-sm text-base-content/70">{plan.description}</p>}
+            {lines.length > 0 && (
+              <ul class="flex flex-col gap-1.5 text-sm flex-1">
+                {lines.map((line) => (
+                  <li class="grid grid-cols-[1rem_1fr] gap-2">
+                    <span class="text-primary" aria-hidden="true">✓</span>
+                    <span class="text-base-content/80">{line}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {plan.button_label && plan.button_url && (
+              <a href={plan.button_url as string} class={`btn btn-sm ${featured ? "btn-primary" : "btn-outline"}`}>
+                {plan.button_label}
+              </a>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+</section>

@@ -4,6 +4,14 @@ import Features from "./Features.astro";
 import Steps from "./Steps.astro";
 import Quotes from "./Quotes.astro";
 import Faq from "./Faq.astro";
+import Notice from "./Notice.astro";
+import Split from "./Split.astro";
+import Collection from "./Collection.astro";
+import Gallery from "./Gallery.astro";
+import Logos from "./Logos.astro";
+import Stats from "./Stats.astro";
+import Team from "./Team.astro";
+import Pricing from "./Pricing.astro";
 import Cta from "./Cta.astro";
 
 /**
@@ -19,5 +27,13 @@ export const SECTION_COMPONENTS = {
   steps: Steps,
   quotes: Quotes,
   faq: Faq,
+  notice: Notice,
+  split: Split,
+  collection: Collection,
+  gallery: Gallery,
+  logos: Logos,
+  stats: Stats,
+  team: Team,
+  pricing: Pricing,
   cta: Cta,
 } as const;

@@ -1,0 +1,17 @@
+---
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+const images = Array.isArray(data.images) ? (data.images as string[]) : [];
+const COLS = { "2": "sm:grid-cols-2", "3": "sm:grid-cols-2 md:grid-cols-3", "4": "sm:grid-cols-2 lg:grid-cols-4" } as const;
+const cols = COLS[(data.columns as keyof typeof COLS) ?? "3"] ?? COLS["3"];
+---
+<section id={anchor ?? id} class="bg-base-100">
+  <div class="max-w-5xl mx-auto px-4 py-16 flex flex-col gap-6">
+    {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
+    <div class={`grid gap-3 ${cols}`}>
+      {images.map((src) => (
+        <img src={src} alt="" class="rounded-lg w-full aspect-[4/3] object-cover" loading="lazy" decoding="async" />
+      ))}
+    </div>
+  </div>
+</section>

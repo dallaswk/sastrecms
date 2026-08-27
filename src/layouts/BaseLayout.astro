@@ -2,6 +2,7 @@
 import "@styles/global.css";
 import { buildWebSiteSchema } from "@lib/jsonld";
 import { sanitizeAnalyticsIds } from "@lib/analytics";
+import { themeColorValue } from "@lib/color";
 
 interface Props {
   title: string;
@@ -32,6 +33,13 @@ const analytics = sanitizeAnalyticsIds(siteSettings?.analyticsIds);
 
 const theme = (siteSettings?.theme as Record<string, string> | null) ?? {};
 
+/** daisyUI's readable-foreground variable for each background it derives. */
+const CONTRAST_FOR: Record<string, string> = {
+  "--p": "--pc",
+  "--s": "--sc",
+  "--a": "--ac",
+};
+
 const CSS_VAR_MAP: Record<string, string> = {
   primaryColor: "--p",
   secondaryColor: "--s",
@@ -40,9 +48,34 @@ const CSS_VAR_MAP: Record<string, string> = {
   borderRadius: "--rounded-box",
 };
 
+// daisyUI 4 keeps its palette as bare OKLCH components, but settings offers a colour
+// picker, which can only give hex. Writing the hex straight in produced an invalid value
+// and the theme pickers did nothing at all.
+const COLOR_VARS = new Set(["--p", "--s", "--a", "--b1"]);
+
 const themeVars = Object.entries(theme)
   .filter(([k]) => CSS_VAR_MAP[k])
-  .map(([k, v]) => `${CSS_VAR_MAP[k]}: ${v};`)
+  .map(([k, v]) => {
+    const cssVar = CSS_VAR_MAP[k];
+    if (!COLOR_VARS.has(cssVar)) return `${cssVar}: ${v};`;
+    const converted = themeColorValue(String(v));
+    return converted ? `${cssVar}: ${converted};` : "";
+  })
+  .filter(Boolean)
+  .join(" ");
+
+// daisyUI derives the readable foreground from the background, but only for its own
+// themes; an overridden --p leaves --pc pointing at the old one. Pick black or white by
+// lightness so a custom primary never renders text on top of itself.
+const contrastVars = Object.entries(theme)
+  .filter(([k]) => CSS_VAR_MAP[k] && CONTRAST_FOR[CSS_VAR_MAP[k]])
+  .map(([k, v]) => {
+    const converted = themeColorValue(String(v));
+    if (!converted) return "";
+    const lightness = parseFloat(converted);
+    return `${CONTRAST_FOR[CSS_VAR_MAP[k]]}: ${lightness > 60 ? "0% 0 0" : "100% 0 0"};`;
+  })
+  .filter(Boolean)
   .join(" ");
 
 const daisyuiTheme = (theme as Record<string, string>).daisyuiTheme ?? "light";
@@ -73,7 +106,7 @@ const pageTitle = title === siteTitle ? title : `${title} — ${siteTitle}`;
     {description && <meta property="og:description" content={description} />}
 
     {themeVars && (
-      <style set:html={`:root { ${themeVars} }`} />
+      <style set:html={`:root { ${themeVars} ${contrastVars} }`} />
     )}
 
     <script type="application/ld+json" set:html={JSON.stringify(buildWebSiteSchema(siteTitle, Astro.url.origin))} />

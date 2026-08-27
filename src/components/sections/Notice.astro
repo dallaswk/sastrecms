@@ -1,0 +1,18 @@
+---
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+const TONE = {
+  info: "bg-base-300 text-base-content",
+  aviso: "bg-warning text-warning-content",
+  urgente: "bg-error text-error-content",
+} as const;
+const tone = TONE[(data.tone as keyof typeof TONE) ?? "info"] ?? TONE.info;
+---
+<section id={anchor ?? id} class={tone}>
+  <div class="max-w-5xl mx-auto px-4 py-2.5 text-sm flex flex-wrap gap-x-3 gap-y-1 justify-center items-center">
+    <span>{data.text}</span>
+    {data.link_label && data.link_url && (
+      <a href={data.link_url as string} class="underline underline-offset-2 font-medium">{data.link_label}</a>
+    )}
+  </div>
+</section>

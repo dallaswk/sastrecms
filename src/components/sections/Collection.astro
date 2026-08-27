@@ -1,0 +1,99 @@
+---
+import { eq, and } from "drizzle-orm";
+import { nodes } from "@db/schema";
+
+/**
+ * The one section that reads other content instead of holding its own.
+ *
+ * Latest posts, portfolio items and service listings are all the same thing — the
+ * published children of another page — so this is one parameterised block rather than
+ * three near-identical ones. It queries at render time, which is worth knowing when the
+ * caching work lands: this section is why a page can go stale without its own row
+ * changing.
+ */
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+
+const parentId = (data.parent as string) ?? "";
+const limit = Math.max(1, Math.min(Number(data.limit) || 6, 24));
+const grid = ((data.layout as string) ?? "rejilla") === "rejilla";
+const showImage = ((data.show_image as string) ?? "sí") === "sí";
+
+const db = Astro.locals.db;
+const siteId = Astro.locals.siteId;
+
+let parent: { id: string; title: string; path: string } | null = null;
+let items: { id: string; title: string; path: string; fields: unknown; publishedAt: Date | null }[] = [];
+
+if (parentId) {
+  parent = (await db.query.nodes.findFirst({
+    where: and(eq(nodes.id, parentId), eq(nodes.siteId, siteId)),
+    columns: { id: true, title: true, path: true },
+  })) ?? null;
+
+  if (parent) {
+    items = await db.query.nodes.findMany({
+      where: and(eq(nodes.parentId, parent.id), eq(nodes.status, "published")),
+      orderBy: (n, { desc }) => [desc(n.publishedAt)],
+      limit,
+      columns: { id: true, title: true, path: true, fields: true, publishedAt: true },
+    });
+  }
+}
+
+function excerptOf(fields: unknown): string {
+  const f = (fields ?? {}) as Record<string, unknown>;
+  return typeof f.excerpt === "string" ? f.excerpt : "";
+}
+function imageOf(fields: unknown): string {
+  const f = (fields ?? {}) as Record<string, unknown>;
+  for (const key of ["cover_image", "image"]) {
+    if (typeof f[key] === "string" && f[key]) return f[key] as string;
+  }
+  const g = f.gallery;
+  return Array.isArray(g) && typeof g[0] === "string" ? g[0] : "";
+}
+---
+
+<section id={anchor ?? id} class="bg-base-100">
+  <div class="max-w-5xl mx-auto px-4 py-16 flex flex-col gap-6">
+    <div class="flex items-end justify-between gap-4 flex-wrap">
+      {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
+      {parent && data.more_label && (
+        <a href={parent.path} class="link link-primary text-sm">{data.more_label} →</a>
+      )}
+    </div>
+
+    {items.length === 0 ? (
+      <p class="text-sm text-base-content/50 border border-dashed border-base-300 rounded-lg px-4 py-8 text-center">
+        {parent ? `"${parent.title}" todavía no tiene contenido publicado.` : "Elige de qué página se listan los contenidos."}
+      </p>
+    ) : (
+      <div class={grid ? "grid gap-6 sm:grid-cols-2 md:grid-cols-3" : "flex flex-col divide-y divide-base-200"}>
+        {items.map((item) => {
+          const image = showImage ? imageOf(item.fields) : "";
+          const excerpt = excerptOf(item.fields);
+          return grid ? (
+            <a href={item.path} class="group flex flex-col gap-3">
+              {showImage && (image
+                ? <img src={image} alt="" class="rounded-lg w-full aspect-[3/2] object-cover" loading="lazy" decoding="async" />
+                : <div class="rounded-lg w-full aspect-[3/2] bg-base-200" aria-hidden="true"></div>)}
+              <h3 class="font-semibold group-hover:text-primary transition-colors">{item.title}</h3>
+              {excerpt && <p class="text-sm text-base-content/60 leading-relaxed">{excerpt}</p>}
+            </a>
+          ) : (
+            <a href={item.path} class="group flex gap-4 py-4 items-start">
+              {showImage && image && (
+                <img src={image} alt="" class="rounded w-24 h-16 object-cover shrink-0" loading="lazy" decoding="async" />
+              )}
+              <div class="flex flex-col gap-1">
+                <h3 class="font-semibold group-hover:text-primary transition-colors">{item.title}</h3>
+                {excerpt && <p class="text-sm text-base-content/60">{excerpt}</p>}
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</section>

@@ -1,0 +1,21 @@
+---
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+const right = ((data.side as string) ?? "derecha") === "derecha";
+---
+<section id={anchor ?? id} class="bg-base-100">
+  <div class="max-w-5xl mx-auto px-4 py-16 grid md:grid-cols-2 gap-10 items-center">
+    <div class={`flex flex-col gap-4 ${right ? "" : "md:order-2"}`}>
+      <h2 class="text-3xl font-bold">{data.title}</h2>
+      {data.body && <div class="prose max-w-none" set:html={data.body as string} />}
+      {data.cta_label && data.cta_url && (
+        <a href={data.cta_url as string} class="btn btn-primary btn-sm self-start">{data.cta_label}</a>
+      )}
+    </div>
+    {data.image ? (
+      <img src={data.image as string} alt="" class="rounded-xl w-full object-cover aspect-[4/3]" loading="lazy" decoding="async" />
+    ) : (
+      <div class="rounded-xl w-full aspect-[4/3] bg-base-200" aria-hidden="true"></div>
+    )}
+  </div>
+</section>

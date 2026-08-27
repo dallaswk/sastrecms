@@ -5,6 +5,14 @@ import { features } from "./defs/features";
 import { steps } from "./defs/steps";
 import { quotes } from "./defs/quotes";
 import { faq } from "./defs/faq";
+import { gallery } from "./defs/gallery";
+import { logos } from "./defs/logos";
+import { stats } from "./defs/stats";
+import { pricing } from "./defs/pricing";
+import { split } from "./defs/split";
+import { team } from "./defs/team";
+import { notice } from "./defs/notice";
+import { collection } from "./defs/collection";
 import { cta } from "./defs/cta";
 
 /**
@@ -17,7 +25,10 @@ import { cta } from "./defs/cta";
  * the two stay in step.
  */
 export const SECTIONS: Record<string, SectionDefinition> = Object.fromEntries(
-  [hero, prose, features, steps, quotes, faq, cta].map((def) => [def.type, def])
+  [
+    hero, notice, prose, split, features, steps, collection,
+    gallery, logos, stats, quotes, team, faq, pricing, cta,
+  ].map((def) => [def.type, def])
 );
 
 /** What the picker offers: everything not retired. */
