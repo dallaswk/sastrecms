@@ -103,6 +103,57 @@
                   <span class="label-text text-sm">Requerido</span>
                 </div>
 
+                <!-- Relation: which content type the target must be -->
+                <div v-if="field.type === 'relation'" class="col-span-2 form-control">
+                  <label class="label py-0"><span class="label-text text-xs">Tipo de contenido relacionado</span></label>
+                  <select v-model="field.relatedContentType" class="select select-bordered select-sm">
+                    <option :value="undefined">Cualquiera</option>
+                    <option v-for="ct in otherContentTypes" :key="ct.key" :value="ct.key">
+                      {{ ct.label }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Repeater subfields -->
+                <div v-if="field.type === 'repeater'" class="col-span-2 form-control">
+                  <label class="label py-0">
+                    <span class="label-text text-xs">Subcampos que se repiten</span>
+                  </label>
+                  <div class="border border-base-300 rounded-lg p-3 flex flex-col gap-2 bg-base-100">
+                    <p v-if="!(field.subfields ?? []).length" class="text-xs text-base-content/50">
+                      Sin subcampos. El repetidor no se podrá editar hasta que añadas al menos uno.
+                    </p>
+                    <div
+                      v-for="(sub, subIdx) in field.subfields ?? []"
+                      :key="subIdx"
+                      class="flex gap-2 items-center"
+                    >
+                      <select v-model="sub.type" class="select select-bordered select-xs w-32">
+                        <option v-for="type in SUBFIELD_TYPES" :key="type" :value="type">
+                          {{ FIELD_TYPE_LABELS[type] }}
+                        </option>
+                      </select>
+                      <input
+                        v-model="sub.label" type="text" placeholder="Etiqueta"
+                        class="input input-bordered input-xs flex-1"
+                        @input="autoKey(sub)"
+                      />
+                      <input
+                        v-model="sub.key" type="text" placeholder="clave"
+                        class="input input-bordered input-xs w-32 font-mono"
+                      />
+                      <button
+                        type="button" class="btn btn-ghost btn-xs text-error"
+                        @click="removeSubfield(field, subIdx)"
+                      >✕</button>
+                    </div>
+                    <button
+                      type="button" class="btn btn-ghost btn-xs self-start"
+                      @click="addSubfield(field)"
+                    >+ Subcampo</button>
+                  </div>
+                </div>
+
                 <!-- Select options -->
                 <div v-if="field.type === 'select'" class="col-span-2 form-control">
                   <label class="label py-0"><span class="label-text text-xs">Opciones (separadas por coma)</span></label>
@@ -142,7 +193,7 @@
 <script setup lang="ts">
 import { FIELD_TYPES, FIELD_TYPE_LABELS } from "@lib/fields/types";
 import type { FieldType, FieldDefinition } from "@lib/fields/types";
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, onMounted, computed } from "vue";
 import { actions } from "astro:actions";
 import Sortable from "sortablejs";
 
@@ -161,6 +212,8 @@ interface Field {
 
 const props = defineProps<{
   contentTypeId?: string;
+  /** Serialised [{key,label}] of the site's content types, for the relation select. */
+  contentTypes?: string;
   initialData?: {
     key?: string;
     label?: string;
@@ -194,10 +247,37 @@ function slugifyKey(text: string): string {
   return text.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
 }
 
-function autoKey(field: Field) {
+function autoKey(field: { key: string; label: string }) {
   if (!field.key || field.key === slugifyKey(field.label.slice(0, -1))) {
     field.key = slugifyKey(field.label);
   }
+}
+
+/**
+ * Subfields are one level deep on purpose: a repeater inside a repeater is a page
+ * builder, and that is what the sections field is for. Keeping the nesting flat here
+ * also keeps this editor non-recursive.
+ */
+const SUBFIELD_TYPES = FIELD_TYPES.filter(
+  (t) => t !== "repeater" && t !== "sections" && t !== "relation"
+);
+
+const otherContentTypes = computed<{ key: string; label: string }[]>(() => {
+  try {
+    const parsed = JSON.parse(props.contentTypes ?? "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+});
+
+function addSubfield(field: Field) {
+  if (!field.subfields) field.subfields = [];
+  field.subfields.push({ key: "", label: "", type: "text" });
+}
+
+function removeSubfield(field: Field, idx: number) {
+  field.subfields?.splice(idx, 1);
 }
 
 function addField() {

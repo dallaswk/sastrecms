@@ -19,6 +19,15 @@ if (!isNew) {
   if (!ct) return Astro.redirect("/admin/content-types");
 }
 
+// Feeds the relation field's "related content type" select. Excludes the type being
+// edited: a relation pointing at its own type is a footgun more often than a feature.
+const allTypes = await db.query.contentTypes.findMany({
+  where: eq(contentTypes.siteId, siteId),
+  columns: { key: true, label: true, id: true },
+  orderBy: (t, { asc }) => [asc(t.label)],
+});
+const relatable = allTypes.filter((t) => t.id !== id).map((t) => ({ key: t.key, label: t.label }));
+
 const title = isNew ? "Nuevo tipo de contenido" : `Editar: ${ct?.label}`;
 ---
 
@@ -36,6 +45,7 @@ const title = isNew ? "Nuevo tipo de contenido" : `Editar: ${ct?.label}`;
   <ContentTypeBuilder
     client:load
     contentTypeId={isNew ? undefined : id}
+    contentTypes={JSON.stringify(relatable)}
     initialData={ct ? {
       key: ct.key,
       label: ct.label,
