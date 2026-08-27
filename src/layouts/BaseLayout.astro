@@ -48,6 +48,9 @@ const themeVars = Object.entries(theme)
 const daisyuiTheme = (theme as Record<string, string>).daisyuiTheme ?? "light";
 const faviconUrl = siteSettings?.faviconUrl ?? "/favicon.svg";
 const siteTitle = siteSettings?.siteName ?? "sASTRe";
+// No suffix when the page is already the site: the home page of sASTRe was titled
+// "sASTRe — sASTRe", which is what building the real landing surfaced.
+const pageTitle = title === siteTitle ? title : `${title} — ${siteTitle}`;
 ---
 
 <!doctype html>
@@ -57,7 +60,7 @@ const siteTitle = siteSettings?.siteName ?? "sASTRe";
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href={faviconUrl} />
 
-    <title>{title} — {siteTitle}</title>
+    <title>{pageTitle}</title>
     {description && <meta name="description" content={description} />}
     {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonicalUrl} />

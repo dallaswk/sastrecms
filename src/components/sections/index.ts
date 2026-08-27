@@ -1,4 +1,9 @@
 import Hero from "./Hero.astro";
+import Prose from "./Prose.astro";
+import Features from "./Features.astro";
+import Steps from "./Steps.astro";
+import Quotes from "./Quotes.astro";
+import Faq from "./Faq.astro";
 import Cta from "./Cta.astro";
 
 /**
@@ -9,5 +14,10 @@ import Cta from "./Cta.astro";
  */
 export const SECTION_COMPONENTS = {
   hero: Hero,
+  prose: Prose,
+  features: Features,
+  steps: Steps,
+  quotes: Quotes,
+  faq: Faq,
   cta: Cta,
 } as const;

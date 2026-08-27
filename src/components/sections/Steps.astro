@@ -1,0 +1,24 @@
+---
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
+---
+<section id={anchor ?? id} class="bg-base-200">
+  <div class="max-w-3xl mx-auto px-4 py-16 flex flex-col gap-8">
+    {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
+    <ol class="flex flex-col gap-6">
+      {items.map((item, i) => (
+        <li class="grid grid-cols-[2.5rem_1fr] gap-4 items-start">
+          {/* The number is the content here: this section only exists when order matters. */}
+          <span class="font-mono text-sm font-semibold text-primary pt-1 tabular-nums">
+            {String(i + 1).padStart(2, "0")}
+          </span>
+          <div class="flex flex-col gap-1">
+            <h3 class="font-semibold text-lg">{item.title}</h3>
+            {item.text && <p class="text-base-content/70 leading-relaxed">{item.text}</p>}
+          </div>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>

@@ -1,0 +1,13 @@
+---
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+const title = (data.title as string) ?? "";
+const WIDTH = { estrecho: "max-w-2xl", normal: "max-w-3xl" } as const;
+const width = WIDTH[(data.width as keyof typeof WIDTH) ?? "normal"] ?? WIDTH.normal;
+---
+<section id={anchor ?? id} class="bg-base-100">
+  <div class={`${width} mx-auto px-4 py-14 flex flex-col gap-4`}>
+    {title && <h2 class="text-3xl font-bold">{title}</h2>}
+    <div class="prose max-w-none" set:html={(data.body as string) ?? ""} />
+  </div>
+</section>

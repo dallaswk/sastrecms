@@ -1,0 +1,21 @@
+---
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
+---
+<section id={anchor ?? id} class="bg-base-100">
+  <div class="max-w-3xl mx-auto px-4 py-16 flex flex-col gap-6">
+    {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
+    <div class="flex flex-col gap-2">
+      {items.map((item) => (
+        <details class="border-b border-base-300 py-3 group">
+          <summary class="font-medium cursor-pointer list-none flex justify-between gap-4">
+            {item.question}
+            <span class="text-base-content/40 group-open:rotate-45 transition-transform" aria-hidden="true">+</span>
+          </summary>
+          <p class="text-base-content/70 mt-2 leading-relaxed whitespace-pre-line">{item.answer}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>

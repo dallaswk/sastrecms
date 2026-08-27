@@ -1,0 +1,31 @@
+---
+interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data } = Astro.props;
+const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
+// Literal lookup: Tailwind reads these files as text and would never emit `grid-cols-${n}`.
+const COLS = {
+  "2": "md:grid-cols-2",
+  "3": "md:grid-cols-3",
+  "4": "md:grid-cols-2 lg:grid-cols-4",
+} as const;
+const cols = COLS[(data.columns as keyof typeof COLS) ?? "3"] ?? COLS["3"];
+---
+<section id={anchor ?? id} class="bg-base-100">
+  <div class="max-w-5xl mx-auto px-4 py-16 flex flex-col gap-8">
+    {(data.title || data.intro) && (
+      <div class="flex flex-col gap-2 max-w-2xl">
+        {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
+        {data.intro && <p class="text-base-content/70">{data.intro}</p>}
+      </div>
+    )}
+    <div class={`grid gap-6 ${cols}`}>
+      {items.map((item) => (
+        <div class="flex flex-col gap-2">
+          {item.icon && <span class="text-2xl" aria-hidden="true">{item.icon}</span>}
+          <h3 class="font-semibold text-lg">{item.title}</h3>
+          {item.text && <p class="text-base-content/70 text-sm leading-relaxed">{item.text}</p>}
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

@@ -1,5 +1,10 @@
 import type { SectionDefinition } from "./types";
 import { hero } from "./defs/hero";
+import { prose } from "./defs/prose";
+import { features } from "./defs/features";
+import { steps } from "./defs/steps";
+import { quotes } from "./defs/quotes";
+import { faq } from "./defs/faq";
 import { cta } from "./defs/cta";
 
 /**
@@ -12,7 +17,7 @@ import { cta } from "./defs/cta";
  * the two stay in step.
  */
 export const SECTIONS: Record<string, SectionDefinition> = Object.fromEntries(
-  [hero, cta].map((def) => [def.type, def])
+  [hero, prose, features, steps, quotes, faq, cta].map((def) => [def.type, def])
 );
 
 /** What the picker offers: everything not retired. */
