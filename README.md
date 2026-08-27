@@ -15,7 +15,7 @@ Designed mono-tenant today. Ready to scale to SaaS tomorrow.
 | Framework | Astro 7 (SSR/hybrid) with Live Content Collections |
 | Mutations | Astro Actions (type-safe, reused by MCP) |
 | Database | Turso (libSQL) via Drizzle ORM |
-| Hosting | Cloudflare Workers / Pages |
+| Hosting | Cloudflare Workers |
 | Auth | Better Auth + Drizzle adapter |
 | Email | Resend |
 | Media | Cloudflare R2 |
@@ -182,6 +182,7 @@ Better Auth with Drizzle adapter (`sqlite` provider — works with Turso and D1)
 
 ## Things to watch
 
+- **Cloudflare Workers, not Pages**: `@astrojs/cloudflare` v14 builds a Worker with an `ASSETS` binding, and that name is reserved in Pages projects — `wrangler.toml` must not carry `pages_build_output_dir`.
 - **Astro 7**: stable and in use since 27 Aug 2026 (7.2.8). Tailwind is wired through `postcss.config.mjs`, not `@astrojs/tailwind`, whose peer range stopped at Astro 5.
 - **`@astrojs/db` deprecated**: do not use it under any circumstance.
 - **No automatic image optimization in MVP**: clients uploading heavy or unoptimized images will directly impact Core Web Vitals. Mitigate with upload limits and clear UI guidance.

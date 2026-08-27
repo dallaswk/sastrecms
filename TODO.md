@@ -52,6 +52,47 @@ Estado del proyecto a fecha 27 Ago 2026. Rama activa: `dev`. Astro 7.2.8.
 
 ### Funcionalidad
 
+- [x] **El worker, ejecutado de verdad en `workerd`** ✅ *(27 Ago 2026)*
+  Era lo último sin probar, y **había un fallo de despliegue esperando**.
+
+  🔴 **`wrangler.toml` era config de Pages y el adaptador v14 construye un Worker.**
+  `@astrojs/cloudflare` 14 genera un binding `ASSETS` para los estáticos, y ese nombre
+  está reservado en proyectos Pages, así que wrangler rechazaba la config generada de
+  plano:
+
+  ```
+  ✘ [ERROR] Processing dist/server/wrangler.json configuration:
+      - The name 'ASSETS' is reserved in Pages projects.
+  ```
+
+  Se ha quitado `pages_build_output_dir`; el adaptador rellena `main` y `assets` al
+  escribir `dist/server/wrangler.json`. **Ojo, esto cambia el modelo de despliegue de
+  Pages a Workers**: el proyecto, el comando de deploy y dónde se ponen las variables de
+  entorno pasan a ser los de Workers. Es consecuencia de subir el adaptador de 13 a 14, y
+  no se veía ni en `dev` ni compilando — sólo al ejecutar.
+
+  Cómo se probó sin desplegar: `workerd` no tiene sistema de ficheros, así que
+  `file:./local.db` no vale dentro del worker. Se levantó un **servidor HTTP mínimo que
+  habla el protocolo Hrana** de libsql sobre `local.db`, se validó primero desde Node con
+  las mismas consultas de la app (joins, columnas JSON, booleanos) y luego se apuntó el
+  worker a él. Es andamiaje de pruebas, no Turso, pero es el mismo protocolo por el que
+  habla producción.
+
+  Verificado dentro de `workerd`: rutas públicas y 404, sitemap, estáticos por el binding
+  `ASSETS`, login con Better Auth (incluido el 401 de contraseña incorrecta, que ejercita
+  el hash), las siete páginas de admin con sesión, las actions, el ciclo completo de
+  mutación con escrituras reales, el MCP (que usa `crypto.subtle` para el hash del token),
+  los guards de permisos y las islas Vue.
+
+  **Y la sesión sobrevive al redespliegue**, que era la otra incógnita. Con rebuild e
+  isolate nuevos la cookie sigue valiendo (200); con el secreto cambiado cae (302 +
+  Unauthorized). El control negativo es lo que da valor al positivo: confirma que la
+  validez de la sesión depende del secreto, y por tanto que pasarlo explícito es lo que
+  la garantiza en Workers.
+
+  *(El primer intento del control negativo dio un falso positivo porque wrangler no había
+  recargado `.dev.vars`; hizo falta reiniciar del todo.)*
+
 - [x] **Astro 7.2.8** ✅ *(27 Ago 2026)*
   Levantada la restricción de "quedarse en Astro 6": era por la beta, y Astro 7 salió estable.
   **No existe Astro 7.3** — el `latest` del registro es `7.2.8` y la rama 7.x se para ahí.
