@@ -1,21 +1,349 @@
 ---
 import AdminLayout from "@layouts/AdminLayout.astro";
+import { and, count, desc, eq } from "drizzle-orm";
+import { formSubmissions, media, nodes, settings, contentTypes } from "@db/schema";
+import { buildChecklist, summarise, type SiteSnapshot } from "@lib/launch-checklist";
+import { sanitizeAnalyticsIds } from "@lib/analytics";
+import { readMenu } from "@lib/menus";
+import { sectionsFieldOf } from "@lib/renderers";
 export const prerender = false;
+
+const db = Astro.locals.db;
+const siteId = Astro.locals.siteId;
+const user = Astro.locals.user;
+
+/*
+ * One pass over the site, then everything on the page is derived from it.
+ *
+ * The alternative — a query per card — is what turns a dashboard into the slowest page in
+ * the backoffice, and this is the page people land on.
+ */
+const [siteSettings, allNodes, allTypes, mediaRows, submissions] = await Promise.all([
+  db.query.settings.findFirst({ where: eq(settings.siteId, siteId) }),
+  db.query.nodes.findMany({
+    where: eq(nodes.siteId, siteId),
+    columns: {
+      id: true, title: true, path: true, status: true, fields: true, seo: true,
+      contentTypeId: true, updatedAt: true,
+    },
+    orderBy: [desc(nodes.updatedAt)],
+  }),
+  db.query.contentTypes.findMany({
+    where: eq(contentTypes.siteId, siteId),
+    columns: { id: true, key: true, label: true, fieldSchema: true },
+  }),
+  db.query.media.findMany({
+    where: eq(media.siteId, siteId),
+    columns: { id: true, type: true, altText: true, width: true },
+  }),
+  db.query.formSubmissions.findMany({
+    where: eq(formSubmissions.siteId, siteId),
+    columns: { id: true, fromName: true, fromEmail: true, status: true, createdAt: true, values: true },
+    orderBy: [desc(formSubmissions.createdAt)],
+    limit: 5,
+  }),
+]);
+
+const unreadCount = Number(
+  (
+    await db
+      .select({ n: count() })
+      .from(formSubmissions)
+      .where(and(eq(formSubmissions.siteId, siteId), eq(formSubmissions.status, "new")))
+  )[0]?.n ?? 0
+);
+
+const published = allNodes.filter((n) => n.status === "published");
+const drafts = allNodes.filter((n) => n.status !== "published");
+const typeById = new Map(allTypes.map((t) => [t.id, t]));
+
+/** A page is empty when it has neither section blocks nor a body worth rendering. */
+function isEmpty(node: (typeof allNodes)[number]): boolean {
+  const fields = (node.fields ?? {}) as Record<string, unknown>;
+  const type = typeById.get(node.contentTypeId);
+  const sectionsField = sectionsFieldOf(type ?? null);
+  const blocks = sectionsField ? fields[sectionsField.key] : null;
+  if (Array.isArray(blocks) && blocks.length > 0) return false;
+  const body = fields.body;
+  return !(typeof body === "string" && body.trim().length > 0);
+}
+
+/** True when any published page carries a contact form. */
+const hasContactForm = published.some((node) => {
+  const type = typeById.get(node.contentTypeId);
+  const sectionsField = sectionsFieldOf(type ?? null);
+  if (!sectionsField) return false;
+  const blocks = (node.fields as Record<string, unknown>)?.[sectionsField.key];
+  return Array.isArray(blocks) && blocks.some((b) => (b as { type?: string })?.type === "contact");
+});
+
+const menus = siteSettings?.menus ?? {};
+const images = mediaRows.filter((m) => m.type === "image");
+
+const snapshot: SiteSnapshot = {
+  siteName: siteSettings?.siteName,
+  tagline: siteSettings?.tagline,
+  logoUrl: siteSettings?.logoUrl,
+  faviconUrl: siteSettings?.faviconUrl,
+  contactEmail: siteSettings?.contactEmail,
+  business: (siteSettings?.business ?? {}) as Record<string, string>,
+  analytics: sanitizeAnalyticsIds(siteSettings?.analyticsIds),
+  integrations: (siteSettings?.integrations ?? {}) as Record<string, string>,
+  publishedPaths: published.map((n) => n.path),
+  draftCount: drafts.length,
+  pagesWithoutDescription: published
+    .filter((n) => !((n.seo as Record<string, unknown>)?.metaDescription as string)?.trim())
+    .map((n) => n.path),
+  imagesWithoutAlt: images.filter((m) => !m.altText?.trim()).length,
+  imagesWithoutDimensions: images.filter((m) => !m.width).length,
+  mainMenuItems: readMenu(menus, "main").length,
+  legalMenuItems: readMenu(menus, "legal").length,
+  hasContactForm,
+  emptyPages: published.filter(isEmpty).map((n) => n.path),
+};
+
+const checks = buildChecklist(snapshot);
+const summary = summarise(checks);
+
+// Blockers first, then warnings, then what is done: the list is read top to bottom and the
+// reader wants the work, not the applause.
+const ORDER = { todo: 0, warn: 1, ok: 2 } as const;
+
+/*
+ * Ajustes is admin-only, so an editor would see a «Arreglar» button that redirects them
+ * straight back here. The check still shows — they should know the site is not ready — but
+ * without a button that goes nowhere.
+ */
+const ordered = [...checks]
+  .sort((a, b) => ORDER[a.status] - ORDER[b.status])
+  .map((check) =>
+    check.href === "/admin/settings" && !Astro.locals.isAdmin
+      ? { ...check, href: undefined, detail: `${check.detail} Lo tiene que hacer un administrador.` }
+      : check
+  );
+
+const recent = allNodes.slice(0, 6);
+
+const STATUS_STYLE = {
+  ok: { icon: "✓", ring: "text-success", bg: "bg-success/10", border: "border-success/25" },
+  warn: { icon: "!", ring: "text-warning", bg: "bg-warning/10", border: "border-warning/30" },
+  todo: { icon: "•", ring: "text-error", bg: "bg-error/10", border: "border-error/30" },
+} as const;
+
+const relative = (date: Date | null) => {
+  if (!date) return "—";
+  const minutes = Math.round((Date.now() - date.getTime()) / 60000);
+  if (minutes < 1) return "ahora mismo";
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `hace ${days} día${days === 1 ? "" : "s"}`;
+  return date.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+};
+
+const firstName = user?.name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "";
 ---
 
 <AdminLayout title="Dashboard">
-  <div class="stats shadow w-full">
-    <div class="stat">
-      <div class="stat-title">Nodos publicados</div>
-      <div class="stat-value">—</div>
+  <div class="flex flex-col gap-6 max-w-5xl">
+
+    <!-- Cabecera -->
+    <header class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-bold">
+          {firstName ? `Hola, ${firstName}` : "Panel"}
+        </h1>
+        <p class="text-base-content/60">
+          {siteSettings?.siteName ?? "Sin nombre"}
+          {siteSettings?.tagline && <span class="text-base-content/40"> · {siteSettings.tagline}</span>}
+        </p>
+      </div>
+      <a href="/" target="_blank" rel="noopener" class="btn btn-sm btn-ghost border border-base-300">
+        Ver el sitio ↗
+      </a>
+    </header>
+
+    <!-- Estado de entrega: la razón de ser de esta página -->
+    <section class="card bg-base-100 border border-base-300">
+      <div class="card-body gap-5">
+        <div class="flex items-center gap-5 flex-wrap">
+          <div
+            class="radial-progress shrink-0"
+            class:list={[summary.ready ? "text-success" : "text-warning"]}
+            style={`--value:${summary.progress}; --size:5rem; --thickness:0.5rem`}
+            role="progressbar"
+            aria-valuenow={summary.progress}
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <span class="text-sm font-semibold">{summary.progress}%</span>
+          </div>
+
+          <div class="flex flex-col gap-1 min-w-0">
+            <h2 class="card-title text-base">
+              {summary.ready ? "Listo para entregar" : "Aún no se puede entregar"}
+            </h2>
+            <p class="text-sm text-base-content/60">
+              {summary.done} de {summary.total} comprobaciones.
+              {summary.blockers > 0 && (
+                <span class="text-error font-medium"> {summary.blockers} bloqueante(s).</span>
+              )}
+              {summary.warnings > 0 && (
+                <span class="text-warning"> {summary.warnings} por mejorar.</span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <ul class="flex flex-col gap-2">
+          {ordered.map((check) => (
+            <li
+              class:list={[
+                "flex items-start gap-3 rounded-lg border px-3 py-2",
+                STATUS_STYLE[check.status].bg,
+                STATUS_STYLE[check.status].border,
+              ]}
+            >
+              <span
+                class:list={["font-bold leading-6 shrink-0 w-4 text-center", STATUS_STYLE[check.status].ring]}
+                aria-hidden="true"
+              >{STATUS_STYLE[check.status].icon}</span>
+
+              <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                <span class="text-sm font-medium">{check.label}</span>
+                {check.detail && (
+                  <span class="text-xs text-base-content/60">{check.detail}</span>
+                )}
+              </div>
+
+              {check.href && (
+                <a href={check.href} class="btn btn-xs btn-ghost border border-base-300 shrink-0">
+                  Arreglar
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- Cifras -->
+    <div class="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <a href="/admin/content" class="card bg-base-100 border border-base-300 hover:border-primary/40 transition-colors">
+        <div class="card-body p-4 gap-0">
+          <span class="text-xs uppercase tracking-wide text-base-content/50">Publicadas</span>
+          <span class="text-3xl font-bold tabular-nums">{published.length}</span>
+        </div>
+      </a>
+      <a href="/admin/content" class="card bg-base-100 border border-base-300 hover:border-primary/40 transition-colors">
+        <div class="card-body p-4 gap-0">
+          <span class="text-xs uppercase tracking-wide text-base-content/50">Borradores</span>
+          <span class="text-3xl font-bold tabular-nums">{drafts.length}</span>
+        </div>
+      </a>
+      <a href="/admin/forms" class="card bg-base-100 border border-base-300 hover:border-primary/40 transition-colors">
+        <div class="card-body p-4 gap-0">
+          <span class="text-xs uppercase tracking-wide text-base-content/50">Mensajes sin leer</span>
+          <span
+            class:list={["text-3xl font-bold tabular-nums", unreadCount > 0 && "text-primary"]}
+          >{unreadCount}</span>
+        </div>
+      </a>
+      <a href="/admin/media" class="card bg-base-100 border border-base-300 hover:border-primary/40 transition-colors">
+        <div class="card-body p-4 gap-0">
+          <span class="text-xs uppercase tracking-wide text-base-content/50">Archivos</span>
+          <span class="text-3xl font-bold tabular-nums">{mediaRows.length}</span>
+        </div>
+      </a>
     </div>
-    <div class="stat">
-      <div class="stat-title">Borradores</div>
-      <div class="stat-value">—</div>
+
+    <!-- Actividad -->
+    <div class="grid gap-4 lg:grid-cols-2">
+      <section class="card bg-base-100 border border-base-300">
+        <div class="card-body gap-3">
+          <div class="flex items-baseline justify-between">
+            <h2 class="card-title text-base">Editado hace poco</h2>
+            <a href="/admin/content" class="link text-sm">Todo el contenido</a>
+          </div>
+
+          {recent.length === 0 ? (
+            <p class="text-sm text-base-content/50 py-4 text-center">Todavía no hay contenido.</p>
+          ) : (
+            <ul class="flex flex-col divide-y divide-base-200 -my-1">
+              {recent.map((node) => (
+                <li class="py-2 flex items-center gap-3">
+                  <a href={`/admin/content/${node.id}`} class="flex-1 min-w-0 group">
+                    <span class="text-sm font-medium group-hover:text-primary transition-colors block truncate">
+                      {node.title}
+                    </span>
+                    <span class="text-xs text-base-content/50 font-mono">{node.path}</span>
+                  </a>
+                  {node.status !== "published" && (
+                    <span class="badge badge-ghost badge-sm shrink-0">borrador</span>
+                  )}
+                  <span class="text-xs text-base-content/40 shrink-0 tabular-nums">
+                    {relative(node.updatedAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <section class="card bg-base-100 border border-base-300">
+        <div class="card-body gap-3">
+          <div class="flex items-baseline justify-between">
+            <h2 class="card-title text-base">Últimos mensajes</h2>
+            <a href="/admin/forms" class="link text-sm">La bandeja</a>
+          </div>
+
+          {submissions.length === 0 ? (
+            <p class="text-sm text-base-content/50 py-4 text-center">
+              {hasContactForm
+                ? "Nadie ha escrito todavía."
+                : "No hay formulario publicado, así que no puede llegar ninguno."}
+            </p>
+          ) : (
+            <ul class="flex flex-col divide-y divide-base-200 -my-1">
+              {submissions.map((submission) => (
+                <li class="py-2 flex items-center gap-3">
+                  <a href="/admin/forms" class="flex-1 min-w-0 group">
+                    <span
+                      class:list={[
+                        "text-sm block truncate group-hover:text-primary transition-colors",
+                        submission.status === "new" && "font-semibold",
+                      ]}
+                    >{submission.fromName || submission.fromEmail || "Sin nombre"}</span>
+                    <span class="text-xs text-base-content/50 block truncate">
+                      {Object.values((submission.values ?? {}) as Record<string, string>)
+                        .filter((v) => v && v !== "sí" && v !== "no")
+                        .sort((a, b) => b.length - a.length)[0] ?? ""}
+                    </span>
+                  </a>
+                  {submission.status === "new" && (
+                    <span class="badge badge-primary badge-sm shrink-0">nuevo</span>
+                  )}
+                  <span class="text-xs text-base-content/40 shrink-0 tabular-nums">
+                    {relative(submission.createdAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
     </div>
-    <div class="stat">
-      <div class="stat-title">Archivos multimedia</div>
-      <div class="stat-value">—</div>
-    </div>
+
+    <!-- Atajos -->
+    <section class="flex flex-wrap gap-2">
+      <a href="/admin/content" class="btn btn-sm btn-primary">Nueva página</a>
+      <a href="/admin/media" class="btn btn-sm btn-ghost border border-base-300">Subir un archivo</a>
+      <a href="/admin/menus" class="btn btn-sm btn-ghost border border-base-300">Editar menús</a>
+      {Astro.locals.isAdmin && (
+        <a href="/admin/settings" class="btn btn-sm btn-ghost border border-base-300">Ajustes</a>
+      )}
+    </section>
   </div>
 </AdminLayout>
