@@ -11,7 +11,7 @@ const COLS = {
 const cols = COLS[(data.columns as keyof typeof COLS) ?? "3"] ?? COLS["3"];
 ---
 <section id={anchor ?? id} class="bg-base-100">
-  <div class="max-w-5xl mx-auto px-4 py-16 flex flex-col gap-8">
+  <div class="site-wide px-4 py-16 flex flex-col gap-8">
     {(data.title || data.intro) && (
       <div class="flex flex-col gap-2 max-w-2xl">
         {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}

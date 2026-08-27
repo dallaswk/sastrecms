@@ -5,12 +5,18 @@ import { settings } from "@db/schema";
 import { requireAdmin } from "@lib/permissions";
 import { ANALYTICS_ID_SHAPES } from "@lib/analytics";
 import { normalizeMenus } from "@lib/menus";
+import { SITE_THEMES, FONTS, CONTAINER_WIDTHS, TYPE_SCALES } from "@lib/theme";
 import { MenusSchema } from "./menus";
 
 /**
  * The shapes live in @lib/analytics because the layout enforces the same rule at render
  * time. The empty string stays allowed so a field can be cleared from the UI.
  */
+// z.enum needs a non-empty tuple, so the registries are widened here rather than inline.
+const FONT_KEYS = FONTS.map((f) => f.key) as [string, ...string[]];
+const CONTAINER_KEYS = CONTAINER_WIDTHS.map((c) => c.key) as [string, ...string[]];
+const TYPE_SCALE_KEYS = TYPE_SCALES.map((t) => t.key) as [string, ...string[]];
+
 function analyticsId(pattern: RegExp) {
   return z
     .string()
@@ -25,15 +31,24 @@ const AnalyticsSchema = z.object(
   ) as Record<keyof typeof ANALYTICS_ID_SHAPES, ReturnType<typeof analyticsId>>
 );
 
+/**
+ * Every choice is checked against the registry, not accepted as free text.
+ *
+ * A theme name that Tailwind never compiled, or a font key that maps to nothing, produces a
+ * site that silently renders with the defaults and no indication why. And `daisyuiTheme`
+ * lands in a `data-theme` attribute, so it is also the one field here that reaches the DOM.
+ */
 const ThemeSchema = z.object({
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
   accentColor: z.string().optional(),
   baseColor: z.string().optional(),
   borderRadius: z.string().optional(),
-  fontHeading: z.string().optional(),
-  fontBody: z.string().optional(),
-  daisyuiTheme: z.string().optional(),
+  fontHeading: z.enum(FONT_KEYS).or(z.literal("")).optional(),
+  fontBody: z.enum(FONT_KEYS).or(z.literal("")).optional(),
+  daisyuiTheme: z.enum(SITE_THEMES).or(z.literal("")).optional(),
+  containerWidth: z.enum(CONTAINER_KEYS).or(z.literal("")).optional(),
+  typeScale: z.enum(TYPE_SCALE_KEYS).or(z.literal("")).optional(),
 });
 
 const SocialLinksSchema = z.object({

@@ -36,7 +36,7 @@ const align = ALIGN[(data.align as keyof typeof ALIGN) ?? "centro"] ?? ALIGN.cen
       decoding="async"
     />
   )}
-  <div class={`relative max-w-4xl mx-auto px-4 py-24 flex flex-col gap-5 ${align}`}>
+  <div class={`relative site-wide px-4 py-24 flex flex-col gap-5 ${align}`}>
     <h1 class="text-4xl md:text-5xl font-bold text-base-content">{title}</h1>
     {subtitle && <p class="text-lg text-base-content/70 max-w-2xl">{subtitle}</p>}
     {ctaLabel && ctaUrl && (

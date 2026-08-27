@@ -1,3 +1,36 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Site containers.
+ *
+ * The sections used to hardcode `max-w-5xl` and `max-w-3xl`, so the container width in
+ * settings had nothing to act on. Both now scale off one variable: the narrow one stays
+ * capped at a readable measure even on a very wide site, because a 76rem line of prose is
+ * unreadable no matter what the owner picked.
+ */
+.site-wide {
+  width: 100%;
+  max-width: var(--site-width, 64rem);
+  margin-inline: auto;
+}
+
+.site-narrow {
+  width: 100%;
+  max-width: min(var(--site-width, 64rem), 48rem);
+  margin-inline: auto;
+}
+
+/* The type scale, applied where every rem on the public site resolves from. */
+.site-root {
+  font-size: var(--type-scale, 16px);
+  font-family: var(--font-body, ui-sans-serif), system-ui, sans-serif;
+}
+
+.site-root h1,
+.site-root h2,
+.site-root h3,
+.site-root h4 {
+  font-family: var(--font-heading, ui-sans-serif), system-ui, sans-serif;
+}

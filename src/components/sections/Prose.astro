@@ -2,7 +2,10 @@
 interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data } = Astro.props;
 const title = (data.title as string) ?? "";
-const WIDTH = { estrecho: "max-w-2xl", normal: "max-w-3xl" } as const;
+// Literal lookup, never interpolation: Tailwind cannot see a class it never reads as text.
+// `site-narrow` follows the container width from settings; `max-w-prose` is a fixed measure
+// for a block the owner explicitly wants narrow regardless.
+const WIDTH = { estrecho: "max-w-prose", normal: "site-narrow" } as const;
 const width = WIDTH[(data.width as keyof typeof WIDTH) ?? "normal"] ?? WIDTH.normal;
 ---
 <section id={anchor ?? id} class="bg-base-100">

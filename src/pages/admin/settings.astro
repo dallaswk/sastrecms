@@ -1,6 +1,19 @@
 ---
 import AdminLayout from "@layouts/AdminLayout.astro";
 import MediaField from "@components/admin/MediaField.vue";
+// The same list Tailwind compiles from, so the selector cannot offer a theme that does not
+// exist. It used to list all 32 while the config generated 2.
+import {
+  SITE_THEMES,
+  THEME_LABELS,
+  FONTS,
+  CONTAINER_WIDTHS,
+  TYPE_SCALES,
+  DEFAULT_THEME,
+  DEFAULT_CONTAINER,
+  DEFAULT_TYPE_SCALE,
+  DEFAULT_FONT,
+} from "@lib/theme";
 import { eq } from "drizzle-orm";
 import { settings } from "@db/schema";
 export const prerender = false;
@@ -19,12 +32,7 @@ const redirects = (siteSettings?.redirects as { from: string; to: string; perman
 const analyticsIds = (siteSettings?.analyticsIds as Record<string, string>) ?? {};
 const integrations = (siteSettings?.integrations as Record<string, string>) ?? {};
 
-const DAISY_THEMES = [
-  "light","dark","cupcake","bumblebee","emerald","corporate","synthwave",
-  "retro","cyberpunk","valentine","halloween","garden","forest","aqua",
-  "lofi","pastel","fantasy","wireframe","black","luxury","dracula","cmyk",
-  "autumn","business","acid","lemonade","night","coffee","winter","dim","nord","sunset",
-];
+
 ---
 
 <AdminLayout title="Ajustes">
@@ -83,12 +91,24 @@ const DAISY_THEMES = [
         <h2 class="card-title text-base">Tema</h2>
 
         <div class="form-control">
-          <label class="label"><span class="label-text">Tema daisyUI base</span></label>
+          <label class="label">
+            <span class="label-text">Tema base</span>
+            <span class="label-text-alt text-base-content/40">Los colores de abajo lo sobreescriben</span>
+          </label>
           <select name="daisyuiTheme" class="select select-bordered">
-            {DAISY_THEMES.map((t) => (
-              <option value={t} selected={theme.daisyuiTheme === t}>{t}</option>
+            {SITE_THEMES.map((t) => (
+              <option value={t} selected={(theme.daisyuiTheme ?? DEFAULT_THEME) === t}>
+                {THEME_LABELS[t]}
+              </option>
             ))}
           </select>
+          <label class="label">
+            <span class="label-text-alt text-base-content/40">
+              Ocho temas, no los treinta y dos de daisyUI: cada uno añade su paleta completa
+              a la hoja de estilos de todas las páginas, así que generarlos todos le cobra a
+              cada visitante una decisión que se toma una vez.
+            </span>
+          </label>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
@@ -114,8 +134,60 @@ const DAISY_THEMES = [
             </div>
           </div>
           <div class="form-control">
-            <label class="label"><span class="label-text">Border radius</span></label>
-            <input type="text" name="borderRadius" class="input input-bordered" placeholder="e.g. 0.5rem" value={theme.borderRadius ?? ""} />
+            <label class="label"><span class="label-text">Redondeo de esquinas</span></label>
+            <input type="text" name="borderRadius" class="input input-bordered" placeholder="p. ej. 0.5rem" value={theme.borderRadius ?? ""} />
+          </div>
+        </div>
+
+        <div class="divider my-0"></div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="form-control">
+            <label class="label"><span class="label-text">Fuente de titulares</span></label>
+            <select name="fontHeading" class="select select-bordered">
+              {FONTS.map((font) => (
+                <option value={font.key} selected={(theme.fontHeading ?? DEFAULT_FONT) === font.key}>
+                  {font.label}{font.google ? " · Google" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text">Fuente del texto</span></label>
+            <select name="fontBody" class="select select-bordered">
+              {FONTS.map((font) => (
+                <option value={font.key} selected={(theme.fontBody ?? DEFAULT_FONT) === font.key}>
+                  {font.label}{font.google ? " · Google" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <p class="text-xs text-base-content/50 -mt-2">
+          Las marcadas «Google» se descargan de Google Fonts, lo que envía la IP de cada
+          visitante a Google. Las «del sistema» no hacen ninguna petición externa.
+        </p>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="form-control">
+            <label class="label"><span class="label-text">Ancho del contenido</span></label>
+            <select name="containerWidth" class="select select-bordered">
+              {CONTAINER_WIDTHS.map((width) => (
+                <option value={width.key} selected={(theme.containerWidth ?? DEFAULT_CONTAINER) === width.key}>
+                  {width.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text">Escala tipográfica</span></label>
+            <select name="typeScale" class="select select-bordered">
+              {TYPE_SCALES.map((scale) => (
+                <option value={scale.key} selected={(theme.typeScale ?? DEFAULT_TYPE_SCALE) === scale.key}>
+                  {scale.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -428,6 +500,10 @@ const DAISY_THEMES = [
         secondaryColor: data.get("secondaryColor") as string,
         accentColor: data.get("accentColor") as string,
         borderRadius: data.get("borderRadius") as string,
+        fontHeading: data.get("fontHeading") as string,
+        fontBody: data.get("fontBody") as string,
+        containerWidth: data.get("containerWidth") as string,
+        typeScale: data.get("typeScale") as string,
       },
       socialLinks: {
         twitter: data.get("social_twitter") as string,

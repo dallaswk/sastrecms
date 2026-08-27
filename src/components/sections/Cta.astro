@@ -22,7 +22,7 @@ const tone = TONE[(data.tone as keyof typeof TONE) ?? "color"] ?? TONE.color;
 ---
 
 <section id={anchor ?? id} class={tone}>
-  <div class="max-w-3xl mx-auto px-4 py-16 flex flex-col items-center text-center gap-4">
+  <div class="site-narrow px-4 py-16 flex flex-col items-center text-center gap-4">
     <h2 class="text-3xl font-bold">{title}</h2>
     {text && <p class="opacity-80">{text}</p>}
     {label && url && <a href={url} class="btn btn-secondary">{label}</a>}

@@ -2,13 +2,13 @@
 interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data } = Astro.props;
 const plans = Array.isArray(data.plans) ? (data.plans as Record<string, unknown>[]) : [];
-const COLS = { 1: "max-w-md mx-auto", 2: "md:grid-cols-2 max-w-3xl mx-auto", 3: "md:grid-cols-3", 4: "md:grid-cols-2 lg:grid-cols-4" } as const;
+const COLS = { 1: "max-w-md mx-auto", 2: "md:grid-cols-2 site-narrow", 3: "md:grid-cols-3", 4: "md:grid-cols-2 lg:grid-cols-4" } as const;
 const cols = COLS[Math.min(plans.length, 4) as keyof typeof COLS] ?? COLS[3];
 ---
 <section id={anchor ?? id} class="bg-base-200">
-  <div class="max-w-5xl mx-auto px-4 py-16 flex flex-col gap-8">
+  <div class="site-wide px-4 py-16 flex flex-col gap-8">
     {(data.title || data.intro) && (
-      <div class="flex flex-col gap-2 text-center max-w-2xl mx-auto">
+      <div class="flex flex-col gap-2 text-center site-narrow">
         {data.title && <h2 class="text-3xl font-bold">{data.title}</h2>}
         {data.intro && <p class="text-base-content/70">{data.intro}</p>}
       </div>

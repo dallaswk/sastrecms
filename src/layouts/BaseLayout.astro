@@ -2,7 +2,13 @@
 import "@styles/global.css";
 import { buildWebSiteSchema } from "@lib/jsonld";
 import { sanitizeAnalyticsIds } from "@lib/analytics";
-import { themeColorValue } from "@lib/color";
+import {
+  DEFAULT_THEME,
+  googleFontsHref,
+  isSiteTheme,
+  themeFingerprint,
+  type SiteTheme,
+} from "@lib/theme";
 import { referencedNodeIds, resolveMenu } from "@lib/menus";
 import { inArray } from "drizzle-orm";
 import { nodes } from "@db/schema";
@@ -36,54 +42,21 @@ const siteSettings = Astro.locals.settings;
 // that validation existed, which would otherwise be executable JS in the tags below.
 const analytics = sanitizeAnalyticsIds(siteSettings?.analyticsIds);
 
-const theme = (siteSettings?.theme as Record<string, string> | null) ?? {};
+const theme = (siteSettings?.theme ?? {}) as SiteTheme;
 
-/** daisyUI's readable-foreground variable for each background it derives. */
-const CONTRAST_FOR: Record<string, string> = {
-  "--p": "--pc",
-  "--s": "--sc",
-  "--a": "--ac",
-};
+/*
+ * The palette is served from /theme.css rather than inlined here.
+ *
+ * It is what makes a strict CSP possible: Astro hashes inline styles at build time, and a
+ * block whose contents come from the database per request can never match a build-time hash.
+ * The fingerprint in the URL is what lets it be cached forever and still change the instant
+ * the owner saves a colour.
+ */
+const themeHref = `/theme.css?v=${themeFingerprint(theme)}`;
 
-const CSS_VAR_MAP: Record<string, string> = {
-  primaryColor: "--p",
-  secondaryColor: "--s",
-  accentColor: "--a",
-  baseColor: "--b1",
-  borderRadius: "--rounded-box",
-};
+const fontsHref = googleFontsHref(theme.fontHeading, theme.fontBody);
 
-// daisyUI 4 keeps its palette as bare OKLCH components, but settings offers a colour
-// picker, which can only give hex. Writing the hex straight in produced an invalid value
-// and the theme pickers did nothing at all.
-const COLOR_VARS = new Set(["--p", "--s", "--a", "--b1"]);
-
-const themeVars = Object.entries(theme)
-  .filter(([k]) => CSS_VAR_MAP[k])
-  .map(([k, v]) => {
-    const cssVar = CSS_VAR_MAP[k];
-    if (!COLOR_VARS.has(cssVar)) return `${cssVar}: ${v};`;
-    const converted = themeColorValue(String(v));
-    return converted ? `${cssVar}: ${converted};` : "";
-  })
-  .filter(Boolean)
-  .join(" ");
-
-// daisyUI derives the readable foreground from the background, but only for its own
-// themes; an overridden --p leaves --pc pointing at the old one. Pick black or white by
-// lightness so a custom primary never renders text on top of itself.
-const contrastVars = Object.entries(theme)
-  .filter(([k]) => CSS_VAR_MAP[k] && CONTRAST_FOR[CSS_VAR_MAP[k]])
-  .map(([k, v]) => {
-    const converted = themeColorValue(String(v));
-    if (!converted) return "";
-    const lightness = parseFloat(converted);
-    return `${CONTRAST_FOR[CSS_VAR_MAP[k]]}: ${lightness > 60 ? "0% 0 0" : "100% 0 0"};`;
-  })
-  .filter(Boolean)
-  .join(" ");
-
-const daisyuiTheme = (theme as Record<string, string>).daisyuiTheme ?? "light";
+const daisyuiTheme = isSiteTheme(theme.daisyuiTheme) ? theme.daisyuiTheme : DEFAULT_THEME;
 /*
  * Menus store node ids, not paths, so a renamed slug does not silently break every page's
  * navigation. That costs one lookup — but only when a menu actually points at content;
@@ -142,8 +115,14 @@ const pageTitle = title === siteTitle ? title : `${title} — ${siteTitle}`;
     <meta property="og:title" content={title} />
     {description && <meta property="og:description" content={description} />}
 
-    {themeVars && (
-      <style set:html={`:root { ${themeVars} ${contrastVars} }`} />
+    <link rel="stylesheet" href={themeHref} />
+
+    {fontsHref && (
+      <Fragment>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link rel="stylesheet" href={fontsHref} />
+      </Fragment>
     )}
 
     <script type="application/ld+json" set:html={JSON.stringify(buildWebSiteSchema(siteTitle, Astro.url.origin))} />
@@ -184,7 +163,7 @@ const pageTitle = title === siteTitle ? title : `${title} — ${siteTitle}`;
       <script set:html={`(function(h,o,t,j,a,r){h.hj=h.hj||function(){(h.hj.q=h.hj.q||[]).push(arguments)};h._hjSettings={hjid:${analytics.hotjar},hjsv:6};a=o.getElementsByTagName('head')[0];r=o.createElement('script');r.async=1;r.src=t+h._hjSettings.hjid+j+h._hjSettings.hjsv;a.appendChild(r);})(window,document,'https://static.hotjar.com/c/hotjar-','.js?sv=');`} />
     )}
   </head>
-  <body class="min-h-screen flex flex-col">
+  <body class="site-root min-h-screen flex flex-col">
     {/* Google Tag Manager — <body> noscript fallback */}
     {analytics.gtm && (
       <noscript set:html={`<iframe src="https://www.googletagmanager.com/ns.html?id=${analytics.gtm}" height="0" width="0" style="display:none;visibility:hidden"></iframe>`} />
