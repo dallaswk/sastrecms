@@ -28,6 +28,8 @@ const props = defineProps<{
   /** content type ids the current user may edit / delete; omitted means "everything" (admin). */
   editableTypes?: string | null;
   deletableTypes?: string | null;
+  /** Needed to mirror computePath: only non-default locales carry a path prefix. */
+  defaultLocale?: string;
 }>();
 
 function parseTypeList(raw: string | null | undefined): Set<string> | null {
@@ -78,7 +80,7 @@ function canDelete(node: TreeNode) {
 }
 
 function commit(moved: Set<string> = new Set()) {
-  recomputePaths(tree.value, "", moved);
+  recomputePaths(tree.value, "", moved, props.defaultLocale ?? "es");
   lastGood = clone(tree.value);
   baseline = baselineOf(tree.value);
 }

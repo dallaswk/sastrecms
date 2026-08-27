@@ -4,6 +4,9 @@ import { eq } from "drizzle-orm";
 import { users, userRoles, roles } from "@db/schema";
 export const prerender = false;
 
+// Admin-only: this page reads the permission matrix / user roles / the Resend key.
+if (!Astro.locals.isAdmin) return Astro.redirect("/admin");
+
 const SITE_ID = "site_default";
 const db = Astro.locals.db;
 
@@ -39,6 +42,7 @@ const currentUserId = Astro.locals.user!.id;
             <th>Email</th>
             <th>Rol</th>
             <th>Verificado</th>
+            <th>Estado</th>
             <th></th>
           </tr>
         </thead>
@@ -47,7 +51,7 @@ const currentUserId = Astro.locals.user!.id;
             const role = roleByUser[user.id] ?? null;
             const isSelf = user.id === currentUserId;
             return (
-              <tr class={!user.emailVerified ? "opacity-50" : ""}>
+              <tr class={user.disabled ? "opacity-50" : ""}>
                 <td>
                   <div class="flex items-center gap-2">
                     <div class="avatar placeholder">
@@ -81,13 +85,18 @@ const currentUserId = Astro.locals.user!.id;
                   </span>
                 </td>
                 <td>
+                  <span class={`badge badge-sm ${user.disabled ? "badge-error" : "badge-success"}`}>
+                    {user.disabled ? "Desactivado" : "Activo"}
+                  </span>
+                </td>
+                <td>
                   {!isSelf && (
                     <button
-                      class="btn btn-xs btn-ghost text-error"
+                      class={`btn btn-xs btn-ghost ${user.disabled ? "text-success" : "text-error"}`}
                       data-user-id={user.id}
-                      data-action="deactivate"
+                      data-action={user.disabled ? "reactivate" : "deactivate"}
                     >
-                      {user.emailVerified ? "Desactivar" : "Activar"}
+                      {user.disabled ? "Activar" : "Desactivar"}
                     </button>
                   )}
                 </td>
@@ -135,13 +144,20 @@ const currentUserId = Astro.locals.user!.id;
     });
   });
 
-  document.querySelectorAll<HTMLButtonElement>("button[data-action='deactivate']").forEach((btn) => {
+  document
+    .querySelectorAll<HTMLButtonElement>(
+      "button[data-action='deactivate'], button[data-action='reactivate']"
+    )
+    .forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.dataset.userId!;
       const label = btn.textContent?.trim() ?? "";
       if (!confirm(`¿${label} este usuario?`)) return;
 
-      const { error } = await actions.users.deactivate({ userId });
+      const { error } =
+        btn.dataset.action === "reactivate"
+          ? await actions.users.reactivate({ userId })
+          : await actions.users.deactivate({ userId });
       if (error) showMsg(error.message, true);
       else {
         showMsg("Hecho");

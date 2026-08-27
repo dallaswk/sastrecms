@@ -1,7 +1,7 @@
 import { defineAction } from "astro:actions";
 import { z } from "astro:schema";
 import { eq, and, desc, isNotNull, inArray } from "drizzle-orm";
-import { nodes, contentTypes } from "@db/schema";
+import { nodes, contentTypes, sites } from "@db/schema";
 import { generateId, slugify, computePath } from "@lib/id";
 import { requirePermission } from "@lib/permissions";
 
@@ -88,7 +88,8 @@ export const nodeActions = {
         parentPath = parent.path;
       }
 
-      const path = computePath(parentPath, slug);
+      const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
+      const path = computePath(parentPath, slug, input.locale, site?.defaultLocale);
 
       const existing = await db.query.nodes.findFirst({
         where: and(eq(nodes.siteId, SITE_ID), eq(nodes.path, path)),
@@ -140,6 +141,12 @@ export const nodeActions = {
       if (!node) throw new Error("Node not found");
       await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "edit");
 
+      // Writing `status` through update was a way around the publish permission that
+      // nodes.publish enforces. Any status transition — including unpublishing — needs it.
+      if (input.status && input.status !== node.status) {
+        await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "publish");
+      }
+
       const updates: Partial<typeof node> = { updatedAt: new Date() };
 
       if (input.title) updates.title = input.title;
@@ -149,8 +156,11 @@ export const nodeActions = {
 
       if (input.slug && input.slug !== node.slug) {
         const newSlug = slugify(input.slug);
+        // For a nested node this is the parent path, prefix included; for a root-level
+        // one it is null and the locale prefix gets reapplied from scratch.
         const parentPath = node.path.substring(0, node.path.lastIndexOf("/")) || null;
-        const newPath = computePath(parentPath, newSlug);
+        const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
+        const newPath = computePath(parentPath, newSlug, node.locale, site?.defaultLocale);
 
         const existing = await db.query.nodes.findFirst({
           where: and(eq(nodes.siteId, SITE_ID), eq(nodes.path, newPath)),
@@ -300,6 +310,8 @@ export const nodeActions = {
       const allNodes = await db.query.nodes.findMany({
         where: eq(nodes.siteId, SITE_ID),
       });
+      const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
+      const defaultLocale = site?.defaultLocale;
       const nodeById = Object.fromEntries(allNodes.map((n) => [n.id, n]));
       const pathById = Object.fromEntries(allNodes.map((n) => [n.id, n.path]));
 
@@ -307,6 +319,35 @@ export const nodeActions = {
       const newParentById: Record<string, string | null | undefined> = {};
       for (const item of input.items) {
         newParentById[item.id] = item.parentId;
+      }
+
+      // Reject cycles. SortableJS prevents this in the UI, but a direct call could move
+      // a node under its own descendant and detach that whole subtree from the root,
+      // making it unreachable from the tree and from path resolution.
+      const childrenOf = new Map<string | null, string[]>();
+      for (const n of allNodes) {
+        const key = n.parentId ?? null;
+        childrenOf.set(key, [...(childrenOf.get(key) ?? []), n.id]);
+      }
+      function isDescendant(candidateId: string, ancestorId: string): boolean {
+        const stack = [...(childrenOf.get(ancestorId) ?? [])];
+        while (stack.length > 0) {
+          const current = stack.pop()!;
+          if (current === candidateId) return true;
+          stack.push(...(childrenOf.get(current) ?? []));
+        }
+        return false;
+      }
+      for (const item of input.items) {
+        const target = item.parentId;
+        if (target === undefined || target === null) continue;
+        if (target === item.id) throw new Error("Un nodo no puede ser su propio padre");
+        if (isDescendant(target, item.id)) {
+          const node = nodeById[item.id];
+          throw new Error(
+            `No se puede mover "${node?.title ?? item.id}" dentro de su propio contenido`
+          );
+        }
       }
 
       // Collect all path changes (node + descendants) for nodes that moved under a new parent
@@ -321,7 +362,7 @@ export const nodeActions = {
         if (newParentId === undefined || newParentId === oldParentId) continue;
 
         const parentPath = newParentId ? pathById[newParentId] : "";
-        const newPath = computePath(parentPath, node.slug);
+        const newPath = computePath(parentPath, node.slug, node.locale, defaultLocale);
         if (newPath === node.path) continue;
 
         const oldPath = node.path;
@@ -337,14 +378,9 @@ export const nodeActions = {
         }
       }
 
-      // Verify permissions for all moved nodes (edit is required for changing structure)
-      for (const id of Object.keys(pathUpdates)) {
-        const node = nodeById[id];
-        if (!node) continue;
-        await requirePermission(db, context.locals.user.id, SITE_ID, node.contentTypeId, "edit");
-      }
-
-      // Verify permissions for all reordered nodes
+      // Every node the client asked to move needs "edit". This covers the reparented
+      // ones too: they are all in input.items, so a second loop over pathUpdates would
+      // only repeat work.
       for (const item of input.items) {
         const node = nodeById[item.id];
         if (!node) continue;
@@ -360,11 +396,13 @@ export const nodeActions = {
       }
 
       // Execute updates
+      const now = new Date();
       await Promise.all(
         input.items.map(({ id, position, parentId }) => {
           const pathUpdate = pathUpdates[id];
           const set: Record<string, unknown> = {
             position,
+            updatedAt: now,
             ...(parentId !== undefined ? { parentId } : {}),
             ...(pathUpdate ? { path: pathUpdate.newPath } : {}),
           };
@@ -377,7 +415,10 @@ export const nodeActions = {
         Object.entries(pathUpdates)
           .filter(([id]) => !affectedIds.includes(id))
           .map(([id, { newPath }]) =>
-            db.update(nodes).set({ path: newPath }).where(and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)))
+            db
+              .update(nodes)
+              .set({ path: newPath, updatedAt: now })
+              .where(and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)))
           )
       );
 

@@ -1,7 +1,5 @@
 ---
 import "@styles/global.css";
-import { eq } from "drizzle-orm";
-import { settings } from "@db/schema";
 import { buildWebSiteSchema } from "@lib/jsonld";
 
 interface Props {
@@ -12,26 +10,46 @@ interface Props {
   jsonLd?: Record<string, unknown>;
   jsonLdList?: Record<string, unknown>[];
   hreflangLinks?: { locale: string; path: string }[];
+  /** The node's own locale. Astro.currentLocale is empty without i18n routing. */
+  lang?: string;
 }
 
-const { title, description, ogImage, noindex = false, jsonLd, jsonLdList, hreflangLinks } = Astro.props;
+const { title, description, ogImage, noindex = false, jsonLd, jsonLdList, hreflangLinks, lang } = Astro.props;
 const schemas = jsonLdList ?? (jsonLd ? [jsonLd] : []);
 // `site` is deliberately not set in astro.config.ts: each client deployment has its own
 // domain and it isn't known at build time. Fall back to the request origin, same as
 // sitemap.xml.ts — without this every public page throws "Invalid URL".
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
 
-const siteSettings = Astro.locals.db
-  ? await Astro.locals.db.query.settings.findFirst({
-      where: eq(settings.siteId, "site_default"),
-    })
-  : null;
+// Loaded once per request by the middleware; re-querying here cost a second round
+// trip to Turso on every public page.
+const siteSettings = Astro.locals.settings;
 
 type AnalyticsIds = {
   ga4?: string; gtm?: string; metaPixel?: string;
   tiktokPixel?: string; hotjar?: string; gscVerification?: string;
 };
-const analytics = (siteSettings?.analyticsIds as AnalyticsIds | null) ?? {};
+const rawAnalytics = (siteSettings?.analyticsIds as AnalyticsIds | null) ?? {};
+
+// Defence in depth. settings.update validates these ids now, but a value stored
+// before that validation existed would still land inside the inline <script> tags
+// below, where it is executable JavaScript rather than data. Anything that does not
+// match its known shape is dropped instead of rendered.
+const ID_SHAPES: Record<keyof AnalyticsIds, RegExp> = {
+  ga4: /^G-[A-Z0-9]{4,20}$/i,
+  gtm: /^GTM-[A-Z0-9]{4,20}$/i,
+  metaPixel: /^[0-9]{5,25}$/,
+  tiktokPixel: /^[A-Z0-9]{5,30}$/i,
+  hotjar: /^[0-9]{4,15}$/,
+  gscVerification: /^[A-Za-z0-9_-]{10,100}$/,
+};
+
+const analytics: AnalyticsIds = Object.fromEntries(
+  Object.entries(rawAnalytics).filter(
+    ([key, value]) =>
+      typeof value === "string" && ID_SHAPES[key as keyof AnalyticsIds]?.test(value)
+  )
+);
 
 const theme = (siteSettings?.theme as Record<string, string> | null) ?? {};
 
@@ -54,7 +72,7 @@ const siteTitle = siteSettings?.siteName ?? "sASTRe";
 ---
 
 <!doctype html>
-<html lang={Astro.currentLocale ?? "es"} data-theme={daisyuiTheme}>
+<html lang={lang ?? Astro.currentLocale ?? "es"} data-theme={daisyuiTheme}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

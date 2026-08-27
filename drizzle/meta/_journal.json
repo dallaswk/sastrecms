@@ -36,6 +36,13 @@
       "when": 1786956932953,
       "tag": "0004_add_body_field_to_system_types",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1787817761521,
+      "tag": "0005_broad_enchantress",
+      "breakpoints": true
     }
   ]
 }

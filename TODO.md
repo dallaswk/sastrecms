@@ -52,6 +52,54 @@ Estado del proyecto a fecha 17 Ago 2026. Rama activa: `dev`.
 
 ### Funcionalidad
 
+- [x] **Auditoría de seguridad y permisos** ✅ *(27 Ago 2026)*
+  Diez hallazgos de la auditoría de código, todos verificados contra el servidor en local.
+
+  **Crítico**
+  - `requireAdmin()` en `users.ts` y `permissions.ts` sólo comprobaba que hubiera sesión.
+    Cualquier colaborador podía llamar `users.assignRole` y hacerse admin, o reescribir la
+    matriz de permisos. Ahora existe `isAdmin()`/`requireAdmin()` en `@lib/permissions` y
+    ambos módulos lo usan.
+  - **XSS almacenado** en toda la web pública: `settings.update` no exigía admin y
+    `BaseLayout` interpolaba los IDs de analytics sin escapar dentro de `<script>`
+    (`hjid:${analytics.hotjar}`). Dos capas: validación por regex en el esquema Zod, y
+    saneado en el layout para los valores que ya estuvieran guardados.
+  - El endpoint MCP no llamaba a `checkPermission` en ninguna de sus once herramientas.
+    Ahora un token hereda exactamente los permisos de su dueño; `get_settings` y
+    `update_settings` exigen admin, y los listados filtran por permiso de `view`.
+
+  **Alto**
+  - `nodes.update` permitía publicar escribiendo `status`, saltándose el permiso
+    `publish`. Cualquier transición de estado lo exige ahora.
+  - `media.upload` construía la URL pública con un host `workers.dev` inventado: todo lo
+    subido quedaba con URL rota. Lee `R2_PUBLIC_URL` y genera un solo id para la fila y
+    la clave de storage.
+  - Desactivar un usuario ponía `emailVerified = false`, que no impide el login. Nueva
+    columna `user.disabled` (migración `0005`) que el middleware aplica, borrado de sus
+    sesiones activas, invalidación de sus tokens MCP y acción `reactivate`. La UI de
+    `/admin/users` separa "Verificado" de "Estado"; antes el botón "Activar" llamaba a
+    `deactivate` y no hacía nada.
+
+  **Medio**
+  - **Prefijo de locale en `path`.** El índice único es `(siteId, path)` sin idioma, así
+    que dos traducciones con el mismo slug chocaban. El idioma por defecto conserva la
+    ruta desnuda y el resto se namespacea: `/contacto` (es) y `/en/contacto` (en).
+    `computePath` recibe `locale` y `defaultLocale`; `recomputePaths` en el cliente
+    replica la misma regla y `[...slug].astro` propaga el idioma al `<html lang>`.
+    Ojo: `computePath` ya devuelve `/` para el slug `index`, en vez de `/index`.
+  - `reorder` no validaba ciclos: por API se podía mover un nodo dentro de su propio
+    subárbol y dejarlo inalcanzable. Rechazado, y ahora también actualiza `updatedAt`
+    para que el sitemap refleje los movimientos.
+  - El middleware hacía 3-4 round trips a Turso por request, incluidas páginas públicas
+    anónimas. `ensureBootstrap` corre una vez por isolate, `getSession` sólo en `/admin`
+    y las APIs, y los settings viajan en `locals` en vez de consultarse otra vez en
+    `BaseLayout` y en el resolver.
+  - Better Auth recibe `secret` y `baseURL` explícitos. Los buscaba en `process.env`, que
+    en Workers no se rellena desde los bindings con `compatibility_date` < 2025-04-01.
+
+  Efecto colateral deliberado: `/admin/users`, `/admin/permissions` y `/admin/settings`
+  redirigen a `/admin` si no eres admin, y sus enlaces desaparecen del menú.
+
 - [x] **Drag & drop entre niveles en el árbol de nodos** ✅ *(rehecho el 17 Ago 2026)*
   Los arreglos de hidratación de junio (`927c345`, `770ad33`) habían dejado el árbol sin drag & drop:
   se sustituyó `<VueDraggable>` por un `v-for` plano y quedaron `buildUpdates`/`persistUpdates`

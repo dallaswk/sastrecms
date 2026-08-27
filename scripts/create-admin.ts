@@ -30,7 +30,10 @@ async function main() {
   }
 
   const db = createDb(url, process.env.TURSO_AUTH_TOKEN);
-  const auth = createAuth(db, "", "");
+  const auth = createAuth(db, "", "", {
+    secret: process.env.BETTER_AUTH_SECRET,
+    baseURL: process.env.BETTER_AUTH_URL,
+  });
 
   const result = await (auth.api as any).signUpEmail({
     body: { email, password, name: email.split("@")[0] },

@@ -1,5 +1,5 @@
 import { eq, and, isNull } from "drizzle-orm";
-import { apiTokens } from "@db/schema";
+import { apiTokens, users } from "@db/schema";
 import type { Database } from "@db/client";
 
 export async function hashToken(token: string): Promise<string> {
@@ -32,6 +32,15 @@ export async function validateApiToken(
   });
 
   if (!token) return null;
+
+  // A token carries its owner's permissions, so deactivating the owner has to
+  // invalidate it too — otherwise the MCP surface stays open to someone who can no
+  // longer sign in.
+  const owner = await db.query.users.findFirst({
+    where: eq(users.id, token.userId),
+    columns: { disabled: true },
+  });
+  if (!owner || owner.disabled) return null;
 
   await db
     .update(apiTokens)

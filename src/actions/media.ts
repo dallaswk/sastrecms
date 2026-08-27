@@ -84,17 +84,30 @@ export const mediaActions = {
       const r2 = context.locals.runtime?.env?.R2_BUCKET as R2Bucket | undefined;
       if (!r2) throw new Error("R2 bucket not configured");
 
+      // The public host is per-deployment (a custom domain or the r2.dev URL), so it
+      // comes from the environment. It used to be hardcoded to a workers.dev host that
+      // does not exist, which left every uploaded file with a broken URL.
+      const publicBase = context.locals.env?.R2_PUBLIC_URL;
+      if (!publicBase) {
+        throw new Error(
+          "R2_PUBLIC_URL no está configurado: sin él los archivos subidos quedarían con una URL inválida"
+        );
+      }
+
       const ext = file.name.split(".").pop() ?? "bin";
-      const storageKey = `${SITE_ID}/${generateId("media")}.${ext}`;
+
+      // One id for both the row and the storage key, so a file in the bucket can always
+      // be traced back to its media record.
+      const id = generateId("media");
+      const storageKey = `${SITE_ID}/${id}.${ext}`;
 
       const arrayBuffer = await file.arrayBuffer();
       await r2.put(storageKey, arrayBuffer, {
         httpMetadata: { contentType: file.type },
       });
 
-      const url = `https://media.${SITE_ID}.workers.dev/${storageKey}`;
+      const url = `${publicBase.replace(/\/+$/, "")}/${storageKey}`;
 
-      const id = generateId("media");
       await db.insert(media).values({
         id,
         siteId: SITE_ID,

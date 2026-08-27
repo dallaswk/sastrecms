@@ -3,17 +3,26 @@ import { z } from "astro:schema";
 import { eq, and } from "drizzle-orm";
 import { roles, roleContentPermissions, contentTypes, userRoles } from "@db/schema";
 import { generateId } from "@lib/id";
+import { requireAdmin as assertAdmin } from "@lib/permissions";
+import type { Database } from "@db/client";
 
 const SITE_ID = "site_default";
 
-function requireAdmin(context: { locals: { user: { id: string } | null } }) {
+/**
+ * Only admins may read or rewrite the permission matrix. Checking for a session
+ * alone let any role edit the rules that constrain it.
+ */
+async function requireAdmin(context: {
+  locals: { user: { id: string } | null; db: Database };
+}) {
   if (!context.locals.user) throw new Error("Unauthorized");
+  await assertAdmin(context.locals.db, context.locals.user.id, SITE_ID);
 }
 
 export const permissionActions = {
   listRolesWithPermissions: defineAction({
     handler: async (_input, context) => {
-      requireAdmin(context);
+      await requireAdmin(context);
       const db = context.locals.db;
 
       const allRoles = await db.query.roles.findMany({
@@ -40,7 +49,7 @@ export const permissionActions = {
       canPublish: z.boolean().default(false),
     }),
     handler: async (input, context) => {
-      requireAdmin(context);
+      await requireAdmin(context);
       const db = context.locals.db;
 
       const existing = await db.query.roleContentPermissions.findFirst({
@@ -78,7 +87,7 @@ export const permissionActions = {
   deletePermission: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      requireAdmin(context);
+      await requireAdmin(context);
       const db = context.locals.db;
       await db.delete(roleContentPermissions).where(eq(roleContentPermissions.id, input.id));
       return { ok: true };

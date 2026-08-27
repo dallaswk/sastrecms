@@ -4,11 +4,24 @@ import { magicLink } from "better-auth/plugins";
 import type { Database } from "@db/client";
 import * as schema from "@db/schema";
 
-export function createAuth(db: Database, resendApiKey?: string, emailFrom?: string) {
+/**
+ * `secret` and `baseURL` are passed in rather than left to Better Auth's process.env
+ * fallback: on Cloudflare Workers process.env isn't populated from bindings below
+ * compat date 2025-04-01, so the fallback silently finds nothing in production and
+ * sessions stop surviving deploys.
+ */
+export function createAuth(
+  db: Database,
+  resendApiKey?: string,
+  emailFrom?: string,
+  options?: { secret?: string; baseURL?: string }
+) {
   const key = resendApiKey ?? "";
-  const from = emailFrom || "sASTRe <noreply@example.com>";  
+  const from = emailFrom || "sASTRe <noreply@example.com>";
 
   return betterAuth({
+    ...(options?.secret ? { secret: options.secret } : {}),
+    ...(options?.baseURL ? { baseURL: options.baseURL } : {}),
     database: drizzleAdapter(db, {
       provider: "sqlite",
       schema: {

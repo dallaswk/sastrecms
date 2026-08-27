@@ -11,7 +11,36 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export function computePath(parentPath: string | null, slug: string): string {
-  if (!parentPath || parentPath === "/") return `/${slug}`;
-  return `${parentPath}/${slug}`;
+/**
+ * Builds the public path for a node.
+ *
+ * The unique index is (siteId, path), so two translations that share a slug would
+ * collide. The default locale keeps the bare path and every other locale is namespaced
+ * under its code — the same convention WordPress and Astro's own i18n routing use, and
+ * the one search engines read without ambiguity.
+ *
+ *   es (default)  contacto  ->  /contacto
+ *   en            contact   ->  /en/contact
+ *   en            contacto  ->  /en/contacto   (no longer collides with the Spanish one)
+ *
+ * Nested nodes inherit whatever prefix their parent already carries, so the locale is
+ * only ever applied once, at the root of each tree.
+ */
+export function computePath(
+  parentPath: string | null,
+  slug: string,
+  locale?: string,
+  defaultLocale?: string
+): string {
+  if (parentPath && parentPath !== "/") return `${parentPath}/${slug}`;
+
+  const prefix =
+    locale && defaultLocale && locale !== defaultLocale ? `/${locale}` : "";
+
+  // "index" is the home slug: it names the root of its locale, not a child of it.
+  // The wizard already writes "/" for the default-locale home; this keeps every other
+  // caller (and recomputePaths) agreeing with it instead of producing "/index".
+  if (slug === "index") return prefix || "/";
+
+  return `${prefix}/${slug}`;
 }

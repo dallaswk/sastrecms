@@ -63,3 +63,32 @@ export async function requirePermission(
   const ok = await checkPermission(db, userId, siteId, contentTypeId, action);
   if (!ok) throw new Error(`Forbidden: no "${action}" permission for this content type`);
 }
+
+/**
+ * True only if the user holds the "admin" role on this site.
+ *
+ * Every "admin only" action must go through this. Checking `locals.user` alone
+ * proves authentication, not authorisation: any collaborator with a session
+ * would otherwise be able to grant themselves the admin role.
+ */
+export async function isAdmin(
+  db: Database,
+  userId: string,
+  siteId: string
+): Promise<boolean> {
+  const assignment = await db.query.userRoles.findFirst({
+    where: and(eq(userRoles.userId, userId), eq(userRoles.siteId, siteId)),
+    with: { role: true },
+  });
+  return assignment?.role.key === "admin";
+}
+
+export async function requireAdmin(
+  db: Database,
+  userId: string,
+  siteId: string
+): Promise<void> {
+  if (!(await isAdmin(db, userId, siteId))) {
+    throw new Error("Forbidden: se requiere rol de administrador");
+  }
+}

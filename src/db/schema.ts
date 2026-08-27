@@ -301,6 +301,10 @@ export const users = sqliteTable("user", {
   emailVerified: integer("email_verified", { mode: "boolean" })
     .notNull()
     .default(false),
+  // Our own flag, not Better Auth's. `emailVerified: false` does not block sign-in
+  // while emailAndPassword runs without requireEmailVerification, so deactivating a
+  // user needs a field the middleware actually enforces.
+  disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
   image: text("image"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

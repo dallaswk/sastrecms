@@ -1,12 +1,29 @@
 import type { APIRoute } from "astro";
 import { eq, and } from "drizzle-orm";
-import { nodes, contentTypes, media, settings } from "@db/schema";
+import { nodes, contentTypes, media, settings, sites } from "@db/schema";
 import { validateApiToken } from "@lib/api-token";
 import { generateId, slugify, computePath } from "@lib/id";
+import { checkPermission, requirePermission, isAdmin } from "@lib/permissions";
+import type { Database } from "@db/client";
 
 export const prerender = false;
 
 const SITE_ID = "site_default";
+
+/**
+ * A token carries exactly the permissions of the user who created it. Without this the
+ * MCP surface was a way around the whole role system: any collaborator could mint a
+ * token and get full CRUD plus settings.
+ */
+async function viewableTypeIds(db: Database, userId: string): Promise<Set<string>> {
+  const cts = await db.query.contentTypes.findMany({
+    where: eq(contentTypes.siteId, SITE_ID),
+  });
+  const allowed = await Promise.all(
+    cts.map((ct) => checkPermission(db, userId, SITE_ID, ct.id, "view"))
+  );
+  return new Set(cts.filter((_, i) => allowed[i]).map((ct) => ct.id));
+}
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -40,6 +57,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const { tool, params = {} } = body;
   const db = locals.db;
+  const userId = tokenResult.userId;
 
   try {
     switch (tool) {
@@ -47,7 +65,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         const cts = await db.query.contentTypes.findMany({
           where: eq(contentTypes.siteId, SITE_ID),
         });
-        return json({ result: cts });
+        const viewable = await viewableTypeIds(db, userId);
+        return json({ result: cts.filter((ct) => viewable.has(ct.id)) });
       }
 
       case "list_nodes": {
@@ -60,7 +79,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
           with: { contentType: true },
           orderBy: (n, { desc }) => [desc(n.updatedAt)],
         });
-        return json({ result: list });
+        const viewable = await viewableTypeIds(db, userId);
+        return json({ result: list.filter((n) => viewable.has(n.contentTypeId)) });
       }
 
       case "get_node": {
@@ -74,6 +94,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           with: { contentType: true },
         });
         if (!node) return mcpError("Node not found", 404);
+        await requirePermission(db, userId, SITE_ID, node.contentTypeId, "view");
         return json({ result: node });
       }
 
@@ -85,6 +106,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
         const ct = await db.query.contentTypes.findFirst({ where: eq(contentTypes.id, contentTypeId) });
         if (!ct) return mcpError("Content type not found", 404);
+        await requirePermission(db, userId, SITE_ID, contentTypeId, "create");
 
         const slug = rawSlug ? slugify(rawSlug) : slugify(title);
         let parentPath: string | null = null;
@@ -94,7 +116,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
           parentPath = parent.path;
         }
 
-        const path = computePath(parentPath, slug);
+        const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
+        const path = computePath(parentPath, slug, locale, site?.defaultLocale);
         const existing = await db.query.nodes.findFirst({
           where: and(eq(nodes.siteId, SITE_ID), eq(nodes.path, path)),
         });
@@ -118,6 +141,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
           where: and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)),
         });
         if (!node) return mcpError("Node not found", 404);
+        await requirePermission(db, userId, SITE_ID, node.contentTypeId, "edit");
+        // Changing status is publishing, not editing — same rule as nodes.update.
+        if (updates.status && updates.status !== node.status) {
+          await requirePermission(db, userId, SITE_ID, node.contentTypeId, "publish");
+        }
 
         const patch: Record<string, unknown> = { updatedAt: new Date() };
         if (updates.title) patch.title = updates.title;
@@ -127,8 +155,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
         if (updates.slug && updates.slug !== node.slug) {
           const newSlug = slugify(updates.slug as string);
           const parentPath = node.path.substring(0, node.path.lastIndexOf("/")) || null;
+          const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
           patch.slug = newSlug;
-          patch.path = computePath(parentPath, newSlug);
+          patch.path = computePath(parentPath, newSlug, node.locale, site?.defaultLocale);
         }
         await db.update(nodes).set(patch).where(eq(nodes.id, id));
         return json({ result: { id } });
@@ -137,6 +166,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       case "publish_node": {
         const { id } = params as { id: string };
         if (!id) return mcpError("id is required");
+        const node = await db.query.nodes.findFirst({
+          where: and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)),
+        });
+        if (!node) return mcpError("Node not found", 404);
+        await requirePermission(db, userId, SITE_ID, node.contentTypeId, "publish");
         const now = new Date();
         await db.update(nodes)
           .set({ status: "published", publishedAt: now, updatedAt: now })
@@ -147,6 +181,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       case "delete_node": {
         const { id } = params as { id: string };
         if (!id) return mcpError("id is required");
+        const node = await db.query.nodes.findFirst({
+          where: and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)),
+        });
+        if (!node) return mcpError("Node not found", 404);
+        await requirePermission(db, userId, SITE_ID, node.contentTypeId, "delete");
         const children = await db.query.nodes.findMany({ where: eq(nodes.parentId, id) });
         if (children.length > 0) return mcpError("Cannot delete a node that has children");
         await db.delete(nodes).where(and(eq(nodes.id, id), eq(nodes.siteId, SITE_ID)));
@@ -169,13 +208,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
           with: { contentType: true },
         });
         const q = query.toLowerCase();
+        const viewable = await viewableTypeIds(db, userId);
         const results = allNodes.filter(
-          (n) => n.title.toLowerCase().includes(q) || n.path.toLowerCase().includes(q)
+          (n) =>
+            viewable.has(n.contentTypeId) &&
+            (n.title.toLowerCase().includes(q) || n.path.toLowerCase().includes(q))
         );
         return json({ result: results });
       }
 
       case "get_settings": {
+        if (!(await isAdmin(db, userId, SITE_ID))) {
+          return mcpError("Forbidden: se requiere rol de administrador", 403);
+        }
         const row = await db.query.settings.findFirst({
           where: eq(settings.siteId, SITE_ID),
         });
@@ -183,6 +228,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
 
       case "update_settings": {
+        if (!(await isAdmin(db, userId, SITE_ID))) {
+          return mcpError("Forbidden: se requiere rol de administrador", 403);
+        }
         const row = await db.query.settings.findFirst({ where: eq(settings.siteId, SITE_ID) });
         const patch: Record<string, unknown> = {};
         const allowed = ["siteName", "tagline", "theme", "socialLinks", "analyticsIds"];

@@ -4,6 +4,9 @@ import { eq } from "drizzle-orm";
 import { settings } from "@db/schema";
 export const prerender = false;
 
+// Admin-only: this page reads the permission matrix / user roles / the Resend key.
+if (!Astro.locals.isAdmin) return Astro.redirect("/admin");
+
 const db = Astro.locals.db;
 const siteSettings = await db.query.settings.findFirst({
   where: eq(settings.siteId, "site_default"),

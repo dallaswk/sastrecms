@@ -1,6 +1,6 @@
 ---
 import { eq, and, isNotNull } from "drizzle-orm";
-import { nodes, contentTypes, settings } from "@db/schema";
+import { nodes, contentTypes } from "@db/schema";
 import BaseLayout from "@layouts/BaseLayout.astro";
 import { buildWebPageSchema, buildArticleSchema, buildBreadcrumbSchema, buildOrganizationSchema } from "@lib/jsonld";
 import PageRenderer from "@components/renderers/PageRenderer.astro";
@@ -73,9 +73,7 @@ if (node.translationGroupId) {
   hreflangLinks = translations.map((t) => ({ locale: t.locale, path: t.path }));
 }
 
-const siteSettings = await db.query.settings.findFirst({
-  where: eq(settings.siteId, SITE_ID) ,
-});
+const siteSettings = Astro.locals.settings;
 
 const orgSchema = buildOrganizationSchema({
   name: siteSettings?.siteName ?? "sASTRe",
@@ -107,6 +105,7 @@ const allJsonLd = [jsonLd, orgSchema, breadcrumbSchema];
   noindex={seo.noindex as boolean}
   jsonLdList={allJsonLd}
   hreflangLinks={hreflangLinks}
+  lang={node.locale}
 >
   {ct?.hasArchive ? (
     <ArchiveRenderer node={node} contentType={ct} children={children} fields={fields} />

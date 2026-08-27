@@ -6,6 +6,7 @@ export interface TreeNode {
   slug: string;
   path: string;
   status: string;
+  locale: string;
   position: number;
   parentId: string | null;
   contentTypeId: string;
@@ -95,24 +96,29 @@ export function reparentedIds(
 
 /**
  * Mirrors computePath() from @lib/id so the paths shown in the tree stay truthful
- * after a move — the reorder action only returns { ok: true }.
+ * after a move — the reorder action only returns { ok: true }. Keep the two in step:
+ * a divergence here shows the user a path the server never wrote.
  *
  * Only reparented nodes and their descendants are rewritten, exactly like the action.
- * Recomputing everything would break the home node, which the wizard creates with
- * slug "index" but path "/" — a plain recompute would show it as "/index".
  */
 export function recomputePaths(
   list: TreeNode[],
   parentPath: string,
   moved: Set<string>,
+  defaultLocale: string,
   inMovedSubtree = false
 ): void {
   for (const node of list) {
     const rewrite = inMovedSubtree || moved.has(node.id);
     if (rewrite) {
-      node.path = parentPath ? `${parentPath}/${node.slug}` : `/${node.slug}`;
+      if (parentPath) {
+        node.path = `${parentPath}/${node.slug}`;
+      } else {
+        const prefix = node.locale && node.locale !== defaultLocale ? `/${node.locale}` : "";
+        node.path = node.slug === "index" ? prefix || "/" : `${prefix}/${node.slug}`;
+      }
     }
-    recomputePaths(node.children, node.path, moved, rewrite);
+    recomputePaths(node.children, node.path, moved, defaultLocale, rewrite);
   }
 }
 

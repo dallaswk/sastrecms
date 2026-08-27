@@ -3,7 +3,7 @@ import AdminLayout from "@layouts/AdminLayout.astro";
 import NodeTree from "@components/admin/NodeTree.vue";
 import type { TreeNode } from "@components/admin/nodeTreeContext";
 import { eq, and } from "drizzle-orm";
-import { nodes, contentTypes, userRoles } from "@db/schema";
+import { nodes, contentTypes, userRoles, sites } from "@db/schema";
 import { checkPermission } from "@lib/permissions";
 export const prerender = false;
 
@@ -20,6 +20,8 @@ const allNodes = await db.query.nodes.findMany({
 const allContentTypes = await db.query.contentTypes.findMany({
   where: eq(contentTypes.siteId, SITE_ID),
 });
+
+const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
 
 const assignment = await db.query.userRoles.findFirst({
   where: and(eq(userRoles.userId, userId), eq(userRoles.siteId, SITE_ID)),
@@ -47,6 +49,7 @@ function buildTree(flat: RawNode[], parentId: string | null = null): TreeNode[] 
       slug: n.slug,
       path: n.path,
       status: n.status,
+      locale: n.locale,
       position: n.position,
       parentId: n.parentId ?? null,
       contentTypeId: n.contentTypeId,
@@ -94,6 +97,7 @@ const creatableTypes = allContentTypes.filter((ct) => canCreatePerType[ct.id]);
           nodes={JSON.stringify(treeData)}
           editableTypes={isAdmin ? null : JSON.stringify(editableTypeIds)}
           deletableTypes={isAdmin ? null : JSON.stringify(deletableTypeIds)}
+          defaultLocale={site?.defaultLocale ?? "es"}
         />
       </div>
     </div>

@@ -2,8 +2,32 @@ import { defineAction } from "astro:actions";
 import { z } from "astro:schema";
 import { eq } from "drizzle-orm";
 import { settings } from "@db/schema";
+import { requireAdmin } from "@lib/permissions";
 
 const SITE_ID = "site_default";
+
+/**
+ * Analytics ids end up interpolated into inline <script> tags in BaseLayout, so an
+ * unvalidated value is arbitrary JavaScript on every public page. Each id has a known
+ * shape; anything else is rejected here rather than escaped downstream. The empty
+ * string stays allowed so a field can be cleared from the UI.
+ */
+function analyticsId(pattern: RegExp) {
+  return z
+    .string()
+    .regex(pattern, "Formato de identificador no válido")
+    .or(z.literal(""))
+    .optional();
+}
+
+const AnalyticsSchema = z.object({
+  ga4: analyticsId(/^G-[A-Z0-9]{4,20}$/i),
+  gtm: analyticsId(/^GTM-[A-Z0-9]{4,20}$/i),
+  metaPixel: analyticsId(/^[0-9]{5,25}$/),
+  tiktokPixel: analyticsId(/^[A-Z0-9]{5,30}$/i),
+  hotjar: analyticsId(/^[0-9]{4,15}$/),
+  gscVerification: analyticsId(/^[A-Za-z0-9_-]{10,100}$/),
+});
 
 const ThemeSchema = z.object({
   primaryColor: z.string().optional(),
@@ -29,6 +53,9 @@ export const settingsActions = {
   get: defineAction({
     handler: async (_input, context) => {
       if (!context.locals.user) throw new Error("Unauthorized");
+      // `integrations` carries the Resend API key in clear, and redirects/analytics
+      // affect every public page — admin only, not merely authenticated.
+      await requireAdmin(context.locals.db, context.locals.user.id, SITE_ID);
       const row = await context.locals.db.query.settings.findFirst({
         where: eq(settings.siteId, SITE_ID),
       });
@@ -44,14 +71,7 @@ export const settingsActions = {
       faviconUrl: z.string().optional(),
       theme: ThemeSchema.optional(),
       socialLinks: SocialLinksSchema.optional(),
-      analyticsIds: z.object({
-        ga4: z.string().optional(),
-        gtm: z.string().optional(),
-        metaPixel: z.string().optional(),
-        tiktokPixel: z.string().optional(),
-        hotjar: z.string().optional(),
-        gscVerification: z.string().optional(),
-      }).optional(),
+      analyticsIds: AnalyticsSchema.optional(),
       redirects: z
         .array(z.object({ from: z.string(), to: z.string(), permanent: z.boolean() }))
         .optional(),
@@ -62,6 +82,7 @@ export const settingsActions = {
     }),
     handler: async (input, context) => {
       if (!context.locals.user) throw new Error("Unauthorized");
+      await requireAdmin(context.locals.db, context.locals.user.id, SITE_ID);
       const db = context.locals.db;
 
       const existing = await db.query.settings.findFirst({
