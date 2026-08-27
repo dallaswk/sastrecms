@@ -71,6 +71,16 @@ Estado del proyecto a fecha 27 Ago 2026. Rama activa: `dev`. Astro 7.2.8.
   de usar `astro dev stop`, el servidor sobrevive y el siguiente arranque coge el puerto
   4322 en lugar del 4321 — pasó durante esta actualización.
 
+  **Build de producción verificado** con los dos adaptadores:
+  Cloudflare 14 en 6 s y Node en 1,4 s — este último es la prueba de que el fix de
+  `SASTRE_ADAPTER` sirve, porque antes `astro build` siempre inferÍa Cloudflare. El build
+  de Node se arrancó y se le pasó la batería entera: rutas públicas, las ocho páginas de
+  admin, las actions, el ciclo de mutación con reescritura de `path`, el MCP y los módulos
+  de las islas servidos desde `dist/client/_astro` con nombre hasheado.
+
+  Confirmado también que **la trampa de la caché de Vite sigue viva en Vite 8**: el build
+  deja 2 MB en `node_modules/.vite/deps`. Hay que borrarlo antes de volver a `dev`.
+
   Verificado: 84 tests, `tsc` en los mismos 7 errores preexistentes, las 15 rutas con
   admin y editor (incluidos los 302 del editor), las ocho actions, el ciclo completo de
   mutación, el MCP, las cinco islas Vue con sus módulos, y la hoja de estilos generada
