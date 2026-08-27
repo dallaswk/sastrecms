@@ -1,0 +1,42 @@
+---
+import { SECTION_COMPONENTS } from "./index";
+import type { SectionInstance, SectionError } from "@lib/sections/types";
+import { formatSectionErrors } from "@lib/sections/validate";
+
+interface Props {
+  sections: SectionInstance[];
+  /** Blocks parseSections refused. Shown in dev only. */
+  errors?: SectionError[];
+}
+const { sections, errors = [] } = Astro.props;
+---
+
+{import.meta.env.DEV && errors.length > 0 && (
+  <div class="alert alert-warning m-4 text-sm">
+    <span>
+      <strong>{errors.length} bloque(s) no se han pintado.</strong> {formatSectionErrors(errors)}
+    </span>
+  </div>
+)}
+
+{sections.filter((s) => !s.hidden).map((section, index) => {
+  const Component = SECTION_COMPONENTS[section.type as keyof typeof SECTION_COMPONENTS];
+
+  // An unknown type renders nothing in production rather than taking the page down:
+  // an agent inventing a section must not be able to break a client's site. In dev it
+  // says so out loud.
+  if (!Component) {
+    return import.meta.env.DEV
+      ? <div class="alert alert-warning m-4">Sección desconocida: {section.type}</div>
+      : null;
+  }
+
+  return (
+    <Component
+      id={section.id}
+      anchor={section.anchor}
+      data={section.data}
+      index={index}
+    />
+  );
+})}

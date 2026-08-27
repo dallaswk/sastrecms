@@ -9,6 +9,19 @@ const src = resolve(root, "src");
 // Astro integrations and adapters, which the unit tests neither need nor can run.
 // The aliases have to mirror it, though — if you add one there, add it here.
 export default defineConfig({
+  plugins: [
+    {
+      /**
+       * Lets a test import src/components/sections/index.ts, which pulls in .astro files
+       * that vitest cannot parse. Stubbing them to an empty module is enough: the test
+       * that needs this only compares the map's *keys* against the section registry.
+       * Without it the registry and the component map could silently drift apart.
+       */
+      name: "stub-astro",
+      enforce: "pre" as const,
+      load: (id: string) => (id.endsWith(".astro") ? "export default {}" : null),
+    },
+  ],
   resolve: {
     alias: {
       "@": src,

@@ -48,6 +48,17 @@ declare module "cloudflare:workers" {
   export const env: Env;
 }
 
+/**
+ * Astro does not ship an ambient declaration for .astro modules, and
+ * src/components/sections/index.ts imports them so the section renderer can dispatch by
+ * type. Typing them as AstroComponentFactory is enough for that map; nothing type-checks
+ * their props through it, which is why a test compares its keys against the registry.
+ */
+declare module "*.astro" {
+  const Component: (props: Record<string, unknown>) => unknown;
+  export default Component;
+}
+
 declare namespace App {
   interface Locals extends Runtime {
     db: import("@db/client").Database;

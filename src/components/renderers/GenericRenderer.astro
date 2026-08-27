@@ -1,0 +1,30 @@
+---
+import FieldValue from "./fields/FieldValue.astro";
+import type { FieldDefinition } from "@lib/fields/types";
+
+/**
+ * Renders any content type by walking its field schema.
+ *
+ * Replaces PageRenderer, which was its degenerate case — a single `body` field. Before
+ * this, a custom content type fell through to PageRenderer and its own fields were never
+ * painted: the ACF-style builder produced fields the site ignored. Plain, but never blank.
+ */
+interface Props {
+  node: { title: string };
+  contentType: { fieldSchema?: FieldDefinition[] | null } | null;
+  fields: Record<string, unknown>;
+}
+const { node, contentType, fields } = Astro.props;
+
+// Sections render on their own path, and a relation needs a lookup this component has no
+// business doing; both are skipped rather than half-painted.
+const schema = (contentType?.fieldSchema ?? []).filter(
+  (f) => f.type !== "sections" && f.type !== "relation"
+);
+---
+
+<article class="max-w-3xl mx-auto px-4 py-12 flex flex-col gap-6">
+  <h1 class="text-4xl font-bold">{node.title}</h1>
+  {schema.map((field) => <FieldValue field={field} value={fields[field.key]} />)}
+  <slot />
+</article>

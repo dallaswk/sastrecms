@@ -1,0 +1,46 @@
+---
+/**
+ * Semantic daisyUI classes only (bg-base-100, text-primary…), so the CSS variables
+ * BaseLayout injects from settings.theme keep control of the palette. And never build a
+ * class name by interpolation: Tailwind scans these files as text, so `bg-${x}` emits
+ * nothing. Variants map through a literal lookup.
+ */
+interface Props {
+  id: string;
+  anchor?: string;
+  data: Record<string, unknown>;
+  index: number;
+}
+const { id, anchor, data, index } = Astro.props;
+
+const title = (data.title as string) ?? "";
+const subtitle = (data.subtitle as string) ?? "";
+const image = (data.image as string) ?? "";
+const ctaLabel = (data.cta_label as string) ?? "";
+const ctaUrl = (data.cta_url as string) ?? "";
+
+const ALIGN = {
+  izquierda: "text-left items-start",
+  centro: "text-center items-center",
+} as const;
+const align = ALIGN[(data.align as keyof typeof ALIGN) ?? "centro"] ?? ALIGN.centro;
+---
+
+<section id={anchor ?? id} class="relative bg-base-200">
+  {image && (
+    <img
+      src={image}
+      alt=""
+      class="absolute inset-0 w-full h-full object-cover opacity-30"
+      loading={index === 0 ? "eager" : "lazy"}
+      decoding="async"
+    />
+  )}
+  <div class={`relative max-w-4xl mx-auto px-4 py-24 flex flex-col gap-5 ${align}`}>
+    <h1 class="text-4xl md:text-5xl font-bold text-base-content">{title}</h1>
+    {subtitle && <p class="text-lg text-base-content/70 max-w-2xl">{subtitle}</p>}
+    {ctaLabel && ctaUrl && (
+      <a href={ctaUrl} class="btn btn-primary">{ctaLabel}</a>
+    )}
+  </div>
+</section>

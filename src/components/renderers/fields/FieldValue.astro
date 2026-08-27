@@ -1,0 +1,64 @@
+---
+import type { FieldDefinition } from "@lib/fields/types";
+
+/**
+ * Paints one field value by type. The public-side twin of FieldRenderer.vue: Vue cannot
+ * generate the public HTML and Astro cannot be the editor, so there are two dispatchers.
+ * They stay in step because both key off FIELD_TYPES.
+ */
+interface Props {
+  field: FieldDefinition;
+  value: unknown;
+}
+const { field, value } = Astro.props;
+
+const isEmpty =
+  value === undefined ||
+  value === null ||
+  value === "" ||
+  (Array.isArray(value) && value.length === 0);
+
+const list = Array.isArray(value) ? value : [];
+---
+
+{!isEmpty && (
+  <div class="field" data-field={field.key}>
+    {field.type === "richtext" && (
+      <div class="prose max-w-none" set:html={value as string} />
+    )}
+
+    {field.type === "image" && (
+      <img src={value as string} alt="" class="rounded-lg max-w-full h-auto" loading="lazy" decoding="async" />
+    )}
+
+    {field.type === "gallery" && (
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {list.map((url) => (
+          <img src={url as string} alt="" class="rounded-lg w-full h-40 object-cover" loading="lazy" decoding="async" />
+        ))}
+      </div>
+    )}
+
+    {field.type === "repeater" && (
+      <ul class="flex flex-col gap-4">
+        {list.map((item) => (
+          <li class="border-l-2 border-base-300 pl-4">
+            {(field.subfields ?? []).map((sub) => (
+              <Astro.self field={sub} value={(item as Record<string, unknown>)?.[sub.key]} />
+            ))}
+          </li>
+        ))}
+      </ul>
+    )}
+
+    {field.type === "textarea" && (
+      <p class="whitespace-pre-line text-base-content/80">{value as string}</p>
+    )}
+
+    {["text", "number", "date", "select"].includes(field.type) && (
+      <p class="text-base-content/80">
+        <span class="text-sm text-base-content/50">{field.label}: </span>{String(value)}
+      </p>
+    )}
+  </div>
+)}

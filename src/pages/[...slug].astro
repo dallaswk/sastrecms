@@ -3,7 +3,10 @@ import { eq, and, isNotNull } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
 import BaseLayout from "@layouts/BaseLayout.astro";
 import { buildWebPageSchema, buildArticleSchema, buildBreadcrumbSchema, buildOrganizationSchema } from "@lib/jsonld";
-import PageRenderer from "@components/renderers/PageRenderer.astro";
+import { resolveRenderer, sectionsFieldOf } from "@lib/renderers";
+import { parseSections } from "@lib/sections/validate";
+import GenericRenderer from "@components/renderers/GenericRenderer.astro";
+import SectionList from "@components/sections/SectionList.astro";
 import PostRenderer from "@components/renderers/PostRenderer.astro";
 import PortfolioItemRenderer from "@components/renderers/PortfolioItemRenderer.astro";
 import ArchiveRenderer from "@components/renderers/ArchiveRenderer.astro";
@@ -96,6 +99,20 @@ breadcrumbItems[breadcrumbItems.length - 1].name = node.title;
 const breadcrumbSchema = buildBreadcrumbSchema(breadcrumbItems);
 
 const allJsonLd = [jsonLd, orgSchema, breadcrumbSchema];
+
+const renderer = resolveRenderer(ct, fields);
+// Parsed on the read path and never written back: rendering stays a read. Errors are
+// swallowed here on purpose — a block the editor saved before a schema change should
+// degrade to "not shown", not to a broken page.
+const sectionsField = sectionsFieldOf(ct);
+const parsed =
+  renderer === "sections" && sectionsField
+    ? parseSections(fields[sectionsField.key])
+    : { sections: [], errors: [] };
+const sections = parsed.sections;
+// Surfaced in dev only: in production a block that no longer validates just does not
+// render, but while building a site silently losing one is worse than an ugly banner.
+const sectionErrors = parsed.errors;
 ---
 
 <BaseLayout
@@ -107,13 +124,15 @@ const allJsonLd = [jsonLd, orgSchema, breadcrumbSchema];
   hreflangLinks={hreflangLinks}
   lang={node.locale}
 >
-  {ct?.hasArchive ? (
+  {renderer === "sections" ? (
+    <SectionList sections={sections} errors={sectionErrors} />
+  ) : renderer === "archive" ? (
     <ArchiveRenderer node={node} contentType={ct} children={children} fields={fields} />
-  ) : ct?.key === "post" ? (
+  ) : renderer === "post" ? (
     <PostRenderer node={node} contentType={ct} fields={fields} />
-  ) : ct?.key === "portfolio_item" ? (
+  ) : renderer === "portfolio_item" ? (
     <PortfolioItemRenderer node={node} contentType={ct} fields={fields} />
   ) : (
-    <PageRenderer node={node} contentType={ct} fields={fields} />
+    <GenericRenderer node={node} contentType={ct} fields={fields} />
   )}
 </BaseLayout>
