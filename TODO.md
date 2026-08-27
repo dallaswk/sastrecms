@@ -1,6 +1,6 @@
 # TODO — sASTRe
 
-Estado del proyecto a fecha 17 Ago 2026. Rama activa: `dev`.
+Estado del proyecto a fecha 27 Ago 2026. Rama activa: `dev`. Astro 7.2.8.
 
 ---
 
@@ -51,6 +51,34 @@ Estado del proyecto a fecha 17 Ago 2026. Rama activa: `dev`.
 ## 🟡 Mi parte — pendiente de código
 
 ### Funcionalidad
+
+- [x] **Astro 7.2.8** ✅ *(27 Ago 2026)*
+  Levantada la restricción de "quedarse en Astro 6": era por la beta, y Astro 7 salió estable.
+  **No existe Astro 7.3** — el `latest` del registro es `7.2.8` y la rama 7.x se para ahí.
+
+  - `astro` 6.4.8 → **7.2.8**
+  - `@astrojs/cloudflare` 13.7.0 → **14.2.5** (peer `astro ^7.2.0`)
+  - `@astrojs/node` 10.1.4 → **11.1.4** (peer `astro ^7.2.1`)
+  - `@astrojs/vue` 6.0.1 → **7.0.2** (peer `astro ^7.0.0`)
+  - `wrangler` → **^4.125.0**, que es lo que pide el adaptador de Cloudflare 14
+
+  Instala sin `--legacy-peer-deps`. Cero cambios de código: middleware, Astro Actions,
+  islas Vue, MCP y renderers funcionan tal cual.
+
+  **Cambio de comportamiento importante:** `astro dev` **se demoniza** en Astro 7.
+  `npm run dev` devuelve el control al momento y el servidor sigue vivo en segundo plano.
+  Se maneja con `npx astro dev status | logs | stop`. Si matas el proceso de `npm` en vez
+  de usar `astro dev stop`, el servidor sobrevive y el siguiente arranque coge el puerto
+  4322 en lugar del 4321 — pasó durante esta actualización.
+
+  Verificado: 84 tests, `tsc` en los mismos 7 errores preexistentes, las 15 rutas con
+  admin y editor (incluidos los 302 del editor), las ocho actions, el ciclo completo de
+  mutación, el MCP, las cinco islas Vue con sus módulos, y la hoja de estilos generada
+  **byte a byte idéntica** a la de Astro 6 (119571 bytes, mismo sha256).
+
+  Anécdota útil: la comparación de CSS falló al principio por 37 bytes, y el culpable era
+  la palabra "invisible" en un comentario que había escrito en `auth.ts` — el escáner de
+  contenido de Tailwind la tomó por un nombre de clase y emitió `.invisible`.
 
 - [x] **Grafo de dependencias consistente y adaptador explícito** ✅ *(27 Ago 2026)*
   `npm install` ya funciona **sin `--legacy-peer-deps`**. La auditoría decía dos peers
@@ -282,6 +310,7 @@ Estado del proyecto a fecha 17 Ago 2026. Rama activa: `dev`.
   así que era un peer incumplido que funcionaba de milagro. Bajados a `^2.11.0`.
   Ojo: `npm install` en este repo necesita `--legacy-peer-deps` por el conflicto
   preexistente de `@astrojs/node@9` (pide astro ^5) con Astro 6.
+  *(Resuelto el 27 Ago 2026: ver la entrada del grafo de dependencias.)*
 
 - [x] **Árbol de contenido reactivo a permisos** ✅
   `/admin/content` calcula `edit` y `delete` por tipo de contenido y se los pasa al árbol.
@@ -306,6 +335,18 @@ env -u TURSO_AUTH_TOKEN npm run db:seed
 env -u TURSO_AUTH_TOKEN npm run create-admin -- admin@local.test <password>
 env -u TURSO_AUTH_TOKEN npm run dev
 ```
+
+⚠️ **Desde Astro 7 `astro dev` se demoniza**: `npm run dev` devuelve el control al momento
+y el servidor sigue vivo en segundo plano. Para manejarlo:
+
+```bash
+npx astro dev status   # ¿corriendo? en qué puerto y pid
+npx astro dev logs     # los logs que antes salían por stdout
+npx astro dev stop     # pararlo
+```
+
+Ojo: si matas el proceso de `npm` en vez de usar `astro dev stop`, el servidor sobrevive y
+el siguiente arranque coge el puerto 4322 en vez del 4321.
 
 En dev el adaptador es Node y las vars se leen del `.env` vía dotenv; en `build` se usa
 Cloudflare y salen de `cloudflare:workers`. Lo resuelve `loadEnv()` en `middleware.ts`.

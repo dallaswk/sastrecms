@@ -1,6 +1,6 @@
 # sASTRe
 
-**Tailored for Astro** — A fast, SEO-friendly CMS for small and medium businesses, built on Astro 6.
+**Tailored for Astro** — A fast, SEO-friendly CMS for small and medium businesses, built on Astro 7.
 
 sASTRe lets you deploy full websites for clients in record time: a public-facing Astro site with no rebuilds on publish, a backoffice for managing content, media and settings, a unified content tree with customizable types — all without touching code — and an MCP server so content can be published via AI agents.
 
@@ -12,7 +12,7 @@ Designed mono-tenant today. Ready to scale to SaaS tomorrow.
 
 | Layer | Choice |
 |---|---|
-| Framework | Astro 6 (SSR/hybrid) with Live Content Collections |
+| Framework | Astro 7 (SSR/hybrid) with Live Content Collections |
 | Mutations | Astro Actions (type-safe, reused by MCP) |
 | Database | Turso (libSQL) via Drizzle ORM |
 | Hosting | Cloudflare Workers / Pages |
@@ -24,7 +24,11 @@ Designed mono-tenant today. Ready to scale to SaaS tomorrow.
 | Drag & drop | SortableJS / vue-draggable |
 | MCP server | Custom, built on Astro Actions |
 
-> ⚠️ Astro 7 is in beta (as of June 2026). Stay on Astro 6 stable for production. `@astrojs/db` is deprecated — use Drizzle directly.
+> ⚠️ Astro 7 went stable and the project is on 7.2. `@astrojs/db` is deprecated — use Drizzle directly.
+>
+> Note that `astro dev` daemonises since Astro 7: `npm run dev` returns immediately and the
+> server keeps running in the background. Use `astro dev status`, `astro dev logs` and
+> `astro dev stop` to drive it.
 
 ---
 
@@ -34,7 +38,7 @@ A single Astro app in SSR/hybrid mode, deployed to Cloudflare Workers, serving t
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Cloudflare Worker (Astro 6 SSR)                 │
+│  Cloudflare Worker (Astro 7 SSR)                 │
 │                                                   │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────┐ │
 │  │ Public site   │ │  Backoffice   │ │   MCP    │ │
@@ -134,7 +138,7 @@ Each node has `locale` + `translation_group_id`. The Spanish and English version
 
 ## Dynamic theming
 
-daisyUI compiles themes at build time, so per-client theming works by injecting an inline `<style>` in the `<head>` on each request that overrides daisyUI CSS custom properties with the values stored in `settings.theme`. Typography uses a curated set of pairings via Astro 6's Fonts API.
+daisyUI compiles themes at build time, so per-client theming works by injecting an inline `<style>` in the `<head>` on each request that overrides daisyUI CSS custom properties with the values stored in `settings.theme`. Typography uses a curated set of pairings via Astro's Fonts API.
 
 ---
 
@@ -163,7 +167,7 @@ Better Auth with Drizzle adapter (`sqlite` provider — works with Turso and D1)
 
 | Phase | What's in it |
 |---|---|
-| 0 | Base setup: repo, Astro 6 + Cloudflare adapter, Drizzle + Turso, Better Auth, Tailwind + daisyUI, Vue |
+| 0 | Base setup: repo, Astro 7 + Cloudflare adapter, Drizzle + Turso, Better Auth, Tailwind + daisyUI, Vue |
 | 1 | Core data model + migrations |
 | 2 | Basic backoffice CRUD (login, node management with fixed types) |
 | 3 | Content type builder (ACF-style) + granular role permissions |
@@ -178,7 +182,7 @@ Better Auth with Drizzle adapter (`sqlite` provider — works with Turso and D1)
 
 ## Things to watch
 
-- **Astro 7 in beta**: don't build on beta code for production. Review when it stabilizes.
+- **Astro 7**: stable and in use since 27 Aug 2026 (7.2.8). Tailwind is wired through `postcss.config.mjs`, not `@astrojs/tailwind`, whose peer range stopped at Astro 5.
 - **`@astrojs/db` deprecated**: do not use it under any circumstance.
 - **No automatic image optimization in MVP**: clients uploading heavy or unoptimized images will directly impact Core Web Vitals. Mitigate with upload limits and clear UI guidance.
 - **Image optimization service for paid plan**: evaluate Cloudflare Images, ImageKit or Cloudinary when designing that feature — must be Workers-compatible (no `sharp`).

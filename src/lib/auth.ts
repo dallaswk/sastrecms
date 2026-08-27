@@ -20,7 +20,7 @@ export function createAuth(
 ) {
   // Better Auth falls back to process.env.BETTER_AUTH_SECRET when no secret is passed,
   // and on Workers process.env isn't populated from bindings below compat date
-  // 2025-04-01. That fallback failing is invisible: sessions get signed with whatever it
+  // 2025-04-01. That fallback failing is silent: sessions get signed with whatever it
   // derives, and stop validating after a redeploy. Fail here instead, where the message
   // says what is missing.
   if (!options?.secret) {
