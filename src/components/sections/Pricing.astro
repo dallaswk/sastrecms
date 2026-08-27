@@ -1,5 +1,6 @@
 ---
-interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+interface Props {
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>; id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data } = Astro.props;
 const plans = Array.isArray(data.plans) ? (data.plans as Record<string, unknown>[]) : [];
 const COLS = { 1: "max-w-md mx-auto", 2: "md:grid-cols-2 site-narrow", 3: "md:grid-cols-3", 4: "md:grid-cols-2 lg:grid-cols-4" } as const;

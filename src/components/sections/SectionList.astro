@@ -10,8 +10,10 @@ interface Props {
   /** The node being rendered. Only the contact form needs it — a form has to tell the
    *  endpoint which page it is on so the server can read its real field list. */
   nodeId?: string;
+  /** Every image on the page, looked up once. Keyed by URL, which is what fields store. */
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>;
 }
-const { sections, errors = [], nodeId } = Astro.props;
+const { sections, errors = [], nodeId, media } = Astro.props;
 ---
 
 {import.meta.env.DEV && errors.length > 0 && (
@@ -41,6 +43,7 @@ const { sections, errors = [], nodeId } = Astro.props;
       data={section.data}
       index={index}
       nodeId={nodeId}
+      media={media}
     />
   );
 })}

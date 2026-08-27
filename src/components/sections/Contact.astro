@@ -3,6 +3,7 @@ import { parseFormFields } from "@lib/forms/validate";
 import { FIELD_PATTERNS, HONEYPOT_FIELD } from "@lib/forms/types";
 
 interface Props {
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>;
   id: string;
   anchor?: string;
   data: Record<string, unknown>;

@@ -1,8 +1,11 @@
 ---
+import SmartImage from "@components/SmartImage.astro";
+import { imgProps } from "@lib/media-lookup";
 import Carousel from "./Carousel.astro";
 
-interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
-const { id, anchor, data } = Astro.props;
+interface Props {
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>; id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data, media } = Astro.props;
 
 const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
 const single = items.length === 1;
@@ -25,7 +28,8 @@ const autoplay = ((data.autoplay as string) ?? "no") === "sí";
               <blockquote class="text-base-content/80 leading-relaxed">“{item.quote}”</blockquote>
               <figcaption class="flex items-center gap-3 mt-auto">
                 {item.photo && (
-                  <img src={item.photo as string} alt="" width="40" height="40"
+                  <img src={item.photo as string} width="40" height="40"
+                       alt={imgProps(media, item.photo as string, { fallbackAlt: item.author as string }).alt}
                        class="w-10 h-10 rounded-full object-cover" loading="lazy" decoding="async" />
                 )}
                 <span class="text-sm">
@@ -47,7 +51,8 @@ const autoplay = ((data.autoplay as string) ?? "no") === "sí";
             </blockquote>
             <figcaption class="flex items-center gap-3">
               {item.photo && (
-                <img src={item.photo as string} alt="" width="40" height="40"
+                <img src={item.photo as string} width="40" height="40"
+                     alt={imgProps(media, item.photo as string, { fallbackAlt: item.author as string }).alt}
                      class="w-10 h-10 rounded-full object-cover" loading="lazy" decoding="async" />
               )}
               <span class="text-sm">

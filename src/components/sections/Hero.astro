@@ -1,4 +1,6 @@
 ---
+import SmartImage from "@components/SmartImage.astro";
+import { imgProps } from "@lib/media-lookup";
 /**
  * Semantic daisyUI classes only (bg-base-100, text-primary…), so the CSS variables
  * BaseLayout injects from settings.theme keep control of the palette. And never build a
@@ -6,12 +8,13 @@
  * nothing. Variants map through a literal lookup.
  */
 interface Props {
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>;
   id: string;
   anchor?: string;
   data: Record<string, unknown>;
   index: number;
 }
-const { id, anchor, data, index } = Astro.props;
+const { id, anchor, data, index, media } = Astro.props;
 
 const title = (data.title as string) ?? "";
 const subtitle = (data.subtitle as string) ?? "";
@@ -28,12 +31,12 @@ const align = ALIGN[(data.align as keyof typeof ALIGN) ?? "centro"] ?? ALIGN.cen
 
 <section id={anchor ?? id} class="relative bg-base-200">
   {image && (
-    <img
-      src={image}
-      alt=""
+    <SmartImage
+      {...imgProps(media, image, { decorative: true })}
       class="absolute inset-0 w-full h-full object-cover opacity-30"
-      loading={index === 0 ? "eager" : "lazy"}
-      decoding="async"
+      sizes="100vw"
+      renderWidth={1600}
+      priority={index === 0}
     />
   )}
   <div class={`relative site-wide px-4 py-24 flex flex-col gap-5 ${align}`}>

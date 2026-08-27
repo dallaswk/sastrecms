@@ -1,0 +1,87 @@
+---
+import { Image } from "astro:assets";
+import { aspectRatio } from "@lib/media-url";
+
+interface Props {
+  src: string;
+  alt?: string;
+  /** Intrinsic size, from the media row. Without it there is no box to reserve. */
+  width?: number | null;
+  height?: number | null;
+  /** The `sizes` attribute. Say how wide the image renders, or the browser assumes 100vw. */
+  sizes?: string;
+  /**
+   * Set on the one image that is the largest thing above the fold.
+   *
+   * It stops that image being lazy-loaded and asks for it early. Marking several defeats the
+   * purpose: every "high" priority competes with the others for the same bandwidth.
+   */
+  priority?: boolean;
+  class?: string;
+  /** Rendered width to ask the optimiser for. Defaults to a sensible content width. */
+  renderWidth?: number;
+}
+
+const {
+  src,
+  alt = "",
+  width,
+  height,
+  sizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 800px",
+  priority = false,
+  class: className = "",
+  renderWidth,
+} = Astro.props;
+
+const ratio = aspectRatio(width, height);
+
+/*
+ * Whether the optimiser can be used at all.
+ *
+ * `<Image>` with a remote source needs the intrinsic size, and the host has to be in
+ * image.remotePatterns or /_image answers 403. An SVG has nothing to optimise and a data URI
+ * has nothing to fetch. In any of those cases fall back to a plain <img>, which still gets
+ * the reserved box and the lazy loading — the point is never to render nothing.
+ */
+const isSvg = /\.svg($|\?)/i.test(src);
+const isData = src.startsWith("data:");
+const optimisable = !!(width && height) && !isSvg && !isData;
+
+// Only widths at or below the intrinsic one: upscaling produces a larger file that looks
+// worse than the original.
+const CANDIDATES = [400, 800, 1200, 1600];
+const widths = optimisable ? CANDIDATES.filter((w) => w <= (width as number)) : [];
+if (optimisable && widths.length === 0) widths.push(width as number);
+
+// Parenthesised: `??` and `||` cannot be mixed without them, and the Astro compiler is
+// stricter about it than tsc — which does not read .astro files at all.
+const target = renderWidth ?? (Math.max(...widths, 0) || undefined);
+---
+
+{optimisable ? (
+  <Image
+    src={src}
+    alt={alt}
+    width={target}
+    height={target ? Math.round((target * (height as number)) / (width as number)) : undefined}
+    widths={widths}
+    sizes={sizes}
+    loading={priority ? "eager" : "lazy"}
+    decoding={priority ? "auto" : "async"}
+    fetchpriority={priority ? "high" : "auto"}
+    class={className}
+    style={ratio ? `aspect-ratio: ${ratio}` : undefined}
+  />
+) : (
+  <img
+    src={src}
+    alt={alt}
+    width={width ?? undefined}
+    height={height ?? undefined}
+    loading={priority ? "eager" : "lazy"}
+    decoding={priority ? "auto" : "async"}
+    fetchpriority={priority ? "high" : "auto"}
+    class={className}
+    style={ratio ? `aspect-ratio: ${ratio}` : undefined}
+  />
+)}

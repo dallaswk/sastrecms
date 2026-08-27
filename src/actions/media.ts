@@ -6,6 +6,7 @@ import { generateId } from "@lib/id";
 import { requireSiteRole } from "@lib/permissions";
 import { findUrlInValue, describeUsage, type UsageLocation } from "@lib/media-usage";
 import type { Database } from "@db/client";
+import { imageMetadata } from "astro/assets/utils";
 
 const ACCEPTED_TYPES: Record<string, "image" | "video" | "pdf" | "doc"> = {
   "image/jpeg": "image",
@@ -170,6 +171,36 @@ export const mediaActions = {
       const storageKey = `${siteId}/${id}.${ext}`;
 
       const arrayBuffer = await file.arrayBuffer();
+
+      /*
+       * Dimensions read from the bytes, before the upload.
+       *
+       * `imageMetadata` is pure JS from Astro's own asset utilities — it parses the header,
+       * so it runs on Workers, unlike sharp, which this project cannot use at all. Storing
+       * width and height is what lets a page reserve the right space for an image and get a
+       * CLS of zero; without them every image on the site shifts the layout as it loads.
+       *
+       * It also reports EXIF orientation, which is why a photo straight off a phone is not
+       * silently rendered sideways.
+       */
+      let dimensions: { width: number; height: number } | null = null;
+      if (mediaType === "image" && file.type !== "image/svg+xml") {
+        try {
+          const meta = await imageMetadata(new Uint8Array(arrayBuffer));
+          if (meta?.width && meta?.height) {
+            // 5, 6, 7 and 8 mean the image is stored rotated a quarter turn, so the stored
+            // width and height are the other way round from how it displays.
+            const rotated = typeof meta.orientation === "number" && meta.orientation >= 5;
+            dimensions = rotated
+              ? { width: meta.height, height: meta.width }
+              : { width: meta.width, height: meta.height };
+          }
+        } catch {
+          // An unreadable header is not a reason to refuse the upload: the file may still be
+          // perfectly usable, it just renders without a reserved box.
+        }
+      }
+
       await r2.put(storageKey, arrayBuffer, {
         httpMetadata: { contentType: file.type },
       });
@@ -183,13 +214,14 @@ export const mediaActions = {
         storageKey,
         url,
         altText: input.altText,
+        ...(dimensions ?? {}),
         sizeBytes: file.size,
         folderId: input.folderId ?? null,
         uploadedBy: context.locals.user.id,
         createdAt: new Date(),
       });
 
-      return { id, url, storageKey };
+      return { id, url, storageKey, ...(dimensions ?? {}) };
     },
   }),
 

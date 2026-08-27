@@ -1,6 +1,9 @@
 ---
-interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
-const { id, anchor, data } = Astro.props;
+import SmartImage from "@components/SmartImage.astro";
+import { imgProps } from "@lib/media-lookup";
+interface Props {
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>; id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data, media } = Astro.props;
 const right = ((data.side as string) ?? "derecha") === "derecha";
 ---
 <section id={anchor ?? id} class="bg-base-100">
@@ -13,7 +16,12 @@ const right = ((data.side as string) ?? "derecha") === "derecha";
       )}
     </div>
     {data.image ? (
-      <img src={data.image as string} alt="" class="rounded-xl w-full object-cover aspect-[4/3]" loading="lazy" decoding="async" />
+      <SmartImage
+        {...imgProps(media, data.image as string)}
+        class="rounded-xl w-full object-cover aspect-[4/3]"
+        sizes="(max-width: 768px) 100vw, 50vw"
+        renderWidth={800}
+      />
     ) : (
       <div class="rounded-xl w-full aspect-[4/3] bg-base-200" aria-hidden="true"></div>
     )}

@@ -1,4 +1,6 @@
 ---
+import SmartImage from "@components/SmartImage.astro";
+import { imgProps } from "@lib/media-lookup";
 import { eq, and } from "drizzle-orm";
 import { nodes } from "@db/schema";
 
@@ -11,8 +13,9 @@ import { nodes } from "@db/schema";
  * caching work lands: this section is why a page can go stale without its own row
  * changing.
  */
-interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
-const { id, anchor, data } = Astro.props;
+interface Props {
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>; id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data, media } = Astro.props;
 
 const parentId = (data.parent as string) ?? "";
 const limit = Math.max(1, Math.min(Number(data.limit) || 6, 24));
@@ -76,7 +79,12 @@ function imageOf(fields: unknown): string {
           return grid ? (
             <a href={item.path} class="group flex flex-col gap-3">
               {showImage && (image
-                ? <img src={image} alt="" class="rounded-lg w-full aspect-[3/2] object-cover" loading="lazy" decoding="async" />
+                ? <SmartImage
+                    {...imgProps(media, image, { fallbackAlt: item.title as string })}
+                    class="rounded-lg w-full aspect-[3/2] object-cover"
+                    sizes="(max-width: 640px) 100vw, 33vw"
+                    renderWidth={600}
+                  />
                 : <div class="rounded-lg w-full aspect-[3/2] bg-base-200" aria-hidden="true"></div>)}
               <h3 class="font-semibold group-hover:text-primary transition-colors">{item.title}</h3>
               {excerpt && <p class="text-sm text-base-content/60 leading-relaxed">{excerpt}</p>}
@@ -84,7 +92,12 @@ function imageOf(fields: unknown): string {
           ) : (
             <a href={item.path} class="group flex gap-4 py-4 items-start">
               {showImage && image && (
-                <img src={image} alt="" class="rounded w-24 h-16 object-cover shrink-0" loading="lazy" decoding="async" />
+                <img
+                  src={image}
+                  alt={imgProps(media, image, { fallbackAlt: item.title as string }).alt}
+                  width="96" height="64"
+                  class="rounded w-24 h-16 object-cover shrink-0" loading="lazy" decoding="async"
+                />
               )}
               <div class="flex flex-col gap-1">
                 <h3 class="font-semibold group-hover:text-primary transition-colors">{item.title}</h3>

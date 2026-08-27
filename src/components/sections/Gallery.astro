@@ -1,9 +1,12 @@
 ---
+import SmartImage from "@components/SmartImage.astro";
+import { imgProps } from "@lib/media-lookup";
 import Lightbox from "./Lightbox.astro";
 import Carousel from "./Carousel.astro";
 
-interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
-const { id, anchor, data } = Astro.props;
+interface Props {
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>; id: string; anchor?: string; data: Record<string, unknown>; index: number }
+const { id, anchor, data, media } = Astro.props;
 
 const images = Array.isArray(data.images) ? (data.images as string[]) : [];
 const layout = (data.layout as string) ?? "rejilla";
@@ -40,7 +43,7 @@ const MOSAIC_SPAN = ["row-span-2", "", ""];
           {images.map((src) => (
             <img
               src={src}
-              alt=""
+              alt={imgProps(media, src).alt}
               class:list={["snap-start shrink-0 w-[85%] sm:w-[48%] md:w-[32%] aspect-[4/3] object-cover rounded-lg", lightbox && "cursor-zoom-in"]}
               loading="lazy"
               decoding="async"
@@ -63,7 +66,7 @@ const MOSAIC_SPAN = ["row-span-2", "", ""];
         {images.map((src, i) => (
           <img
             src={src}
-            alt=""
+            alt={imgProps(media, src).alt}
             class:list={[
               "w-full h-full object-cover rounded-lg",
               layout === "mosaico" ? MOSAIC_SPAN[i % 3] : "aspect-[4/3]",

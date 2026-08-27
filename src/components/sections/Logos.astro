@@ -1,5 +1,6 @@
 ---
-interface Props { id: string; anchor?: string; data: Record<string, unknown>; index: number }
+interface Props {
+  media?: Map<string, import("@lib/media-lookup").MediaInfo>; id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data } = Astro.props;
 const images = Array.isArray(data.images) ? (data.images as string[]) : [];
 

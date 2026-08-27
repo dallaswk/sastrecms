@@ -26,8 +26,34 @@ if (target !== "cloudflare" && target !== "node") {
   );
 }
 
+/**
+ * Which hosts `/_image` may fetch from.
+ *
+ * Never `{ protocol: "https" }` on its own: that turns the Worker into an open image proxy
+ * that anybody can point at any URL on the internet, on this site's bandwidth and with this
+ * site's IP. Only the deployment's own R2 host is allowed, read at build time — with none
+ * configured the list stays empty and `/_image` refuses remote sources, which is the right
+ * way to fail.
+ */
+function r2RemotePattern() {
+  const raw = process.env.R2_PUBLIC_URL;
+  if (!raw) return [];
+  try {
+    const { protocol, hostname } = new URL(raw);
+    if (protocol !== "https:" && protocol !== "http:") return [];
+    return [{ protocol: protocol.replace(":", "") as "http" | "https", hostname }];
+  } catch {
+    return [];
+  }
+}
+
 export default defineConfig({
   output: "server",
+  image: {
+    // The Cloudflare adapter already defaults imageService to `cloudflare-binding`; what was
+    // missing was the allowlist, and without it every remote source is a 403.
+    remotePatterns: r2RemotePattern(),
+  },
   // No platformProxy: @astrojs/cloudflare v13 accepts only auxiliaryWorkers, configPath,
   // inspectorPort, persistState and remoteBindings from the Vite plugin, plus its own
   // image and session options. Passing platformProxy did nothing at all — local bindings

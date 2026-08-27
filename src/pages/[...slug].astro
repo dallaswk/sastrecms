@@ -4,6 +4,8 @@ import { nodes, contentTypes } from "@db/schema";
 import BaseLayout from "@layouts/BaseLayout.astro";
 import { buildWebPageSchema, buildArticleSchema, buildBreadcrumbSchema, buildOrganizationSchema } from "@lib/jsonld";
 import { resolveRenderer, sectionsFieldOf } from "@lib/renderers";
+import { lookupMedia } from "@lib/media-lookup";
+import { collectMediaUrls } from "@lib/media-url";
 import { parseSections } from "@lib/sections/validate";
 import GenericRenderer from "@components/renderers/GenericRenderer.astro";
 import SectionList from "@components/sections/SectionList.astro";
@@ -100,6 +102,15 @@ const breadcrumbSchema = buildBreadcrumbSchema(breadcrumbItems);
 
 const allJsonLd = [jsonLd, orgSchema, breadcrumbSchema];
 
+/*
+ * Every image the page is about to render, looked up in one query.
+ *
+ * Content fields store the URL, not the media id, so the alt text and the dimensions have to
+ * be recovered from the URL. Doing it here rather than in each component is the difference
+ * between one round trip to Turso and one per image.
+ */
+const mediaMap = await lookupMedia(db, collectMediaUrls(fields));
+
 const renderer = resolveRenderer(ct, fields, {
   hasChildren: children.length > 0,
   isRoot: !node.parentId,
@@ -138,7 +149,7 @@ const sectionErrors = parsed.errors;
   lang={node.locale}
 >
   {renderer === "sections" ? (
-    <SectionList sections={sections} errors={sectionErrors} nodeId={node.id} />
+    <SectionList sections={sections} errors={sectionErrors} nodeId={node.id} media={mediaMap} />
   ) : renderer === "archive" ? (
     <ArchiveRenderer node={node} contentType={ct} children={children} fields={fields} />
   ) : renderer === "post" ? (
