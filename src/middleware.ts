@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { createDb, type Database } from "@db/client";
 import { createAuth } from "@lib/auth";
 import { isAdmin } from "@lib/permissions";
-import { resolveSiteId } from "@lib/site";
+import { resolveSiteId, authBaseUrl } from "@lib/site";
 import { resolveTenant, isServable } from "@lib/tenant";
 import { createControlDb } from "@db/control-client";
 import { resolveMediaStore } from "@lib/media-store";
@@ -132,13 +132,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const siteSettings = row?.settings ?? null;
   const integrations = (siteSettings?.integrations as Record<string, string> | null) ?? {};
 
-  // Better Auth reads `secret` and `baseURL` from process.env when they aren't passed
-  // in. On Workers process.env is not populated from bindings below compat date
-  // 2025-04-01, which is why loadEnv() exists at all — so hand them over explicitly
-  // instead of hoping the fallback finds them in production.
+  /*
+   * El `baseURL` de Better Auth, que con varios dominios no puede ser una constante.
+   *
+   * La decisión vive en `authBaseUrl` y no aquí porque tiene dos filos —si es demasiado fija
+   * nadie entra, si es demasiado laxa se pueden fabricar enlaces de correo hacia otro dominio—
+   * y dentro del middleware no hay forma de probarla.
+   */
   const auth = createAuth(db, integrations.resendApiKey, integrations.resendFrom, {
+    // El secreto sí se pasa siempre: en Workers `process.env` no se rellena desde los bindings
+    // por debajo de la fecha de compatibilidad 2025-04-01, y el respaldo de Better Auth falla
+    // en silencio — las sesiones dejan de validar tras un redespliegue.
     secret: env.BETTER_AUTH_SECRET,
-    baseURL: env.BETTER_AUTH_URL ?? context.url.origin,
+    baseURL: authBaseUrl({
+      requestOrigin: context.url.origin,
+      requestHost: context.url.host,
+      claimedByTenant: tenant.tenantId !== null,
+      siteHost: row?.site?.host ?? null,
+      configured: env.BETTER_AUTH_URL,
+    }),
   });
 
   context.locals.db = db;

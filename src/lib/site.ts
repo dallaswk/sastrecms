@@ -57,3 +57,39 @@ export async function resolveSiteId(db: Database, host: string): Promise<string>
 export function forgetHost(host: string): void {
   hostCache.delete(normaliseHost(host));
 }
+
+/**
+ * Con qué `baseURL` se monta Better Auth en esta petición.
+ *
+ * No puede ser una constante en cuanto la aplicación responde en más de un dominio: Better Auth
+ * valida la cabecera `Origin` contra el `baseURL`, así que con `BETTER_AUTH_URL` fijo todos los
+ * dominios menos ése contestan «Invalid origin» y nadie entra. No salió en ninguna prueba
+ * automática porque `curl` no manda `Origin` y un navegador la manda siempre.
+ *
+ * Y tampoco puede ser el host de la petición sin más. El `baseURL` es con lo que se construyen
+ * los enlaces que salen por correo, así que quien pidiera un enlace mágico con
+ * `Host: sitio-falso.com` conseguiría que a la víctima le llegue un enlace con un token válido
+ * apuntando a su dominio.
+ *
+ * Lo que resuelve las dos cosas es que el conjunto de hosts buenos ya se conoce: los que están
+ * dados de alta. Un host reconocido se cree; uno que no, se cae a `BETTER_AUTH_URL`.
+ */
+export function authBaseUrl(input: {
+  /** El origen de la petición, tal cual: `https://cliente.com`. */
+  requestOrigin: string;
+  /** El host de la petición. Se normaliza aquí. */
+  requestHost: string;
+  /** Si el plano de control ha reconocido el dominio. */
+  claimedByTenant: boolean;
+  /** El host registrado en `sites.host`, cuando lo hay. */
+  siteHost?: string | null;
+  /** El configurado en el entorno, si lo hay. */
+  configured?: string | undefined;
+}): string {
+  const known =
+    input.claimedByTenant ||
+    (input.siteHost != null && normaliseHost(input.siteHost) === normaliseHost(input.requestHost));
+
+  if (known) return input.requestOrigin;
+  return input.configured ?? input.requestOrigin;
+}

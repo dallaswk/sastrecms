@@ -43,7 +43,13 @@ die() { printf '\n%s %s\n\n' "$(red 'No se puede probar:')" "$1" >&2; exit 2; }
 # ── sesiones ──────────────────────────────────────────────────────────────────
 login() { # email cookiejar host
   local code
-  code=$(curl -s -c "$2" -H "Host: $3" -X POST "$BASE/api/auth/sign-in/email" \
+  # Con `Origin`, que es lo que manda un navegador.
+  #
+  # Sin ella este arnés daba verde mientras el formulario de acceso de cualquier inquilino
+  # respondía «Invalid origin» en un navegador de verdad: Better Auth valida el origen contra su
+  # `baseURL`, y con `BETTER_AUTH_URL` fijo sólo cuadraba en un dominio. Un arnés que no manda
+  # las cabeceras que manda un cliente real prueba un cliente que no existe.
+  code=$(curl -s -c "$2" -H "Host: $3" -H "Origin: http://$3" -X POST "$BASE/api/auth/sign-in/email" \
     -H 'Content-Type: application/json' \
     -d "{\"email\":\"$1\",\"password\":\"$PASSWORD\"}" -o /dev/null -w '%{http_code}')
   [ "$code" = "200" ] || die "no entra $1 en $3 (HTTP $code). ¿Existe el usuario y la contraseña es \$PASSWORD?"
@@ -66,7 +72,7 @@ json() { # clave valor [clave valor ...]
 }
 
 act() { # cookiejar host accion cuerpo
-  curl -s -b "$1" -H "Host: $2" -X POST "$BASE/_actions/$3" \
+  curl -s -b "$1" -H "Host: $2" -H "Origin: http://$2" -X POST "$BASE/_actions/$3" \
     -H 'Content-Type: application/json' -d "$4"
 }
 
