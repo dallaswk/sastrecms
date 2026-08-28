@@ -72,6 +72,12 @@ declare namespace App {
     env: RuntimeEnv;
     /** The R2 bucket binding, or null when it isn't configured (local dev). */
     r2: R2Bucket | null;
+    /**
+     * Dónde se guardan los archivos subidos: R2 en producción, disco en desarrollo.
+     * Nulo sólo si no hay ninguno de los dos, y entonces `mediaStoreReason` dice por qué.
+     */
+    mediaStore: import("@lib/media-store").MediaStore | null;
+    mediaStoreReason: string | null;
     /** Site settings row, loaded once per request and shared with the layout. */
     settings: typeof import("@db/schema").settings.$inferSelect | null;
     /** Which site this request is for. Never hardcode the id — read it from here. */

@@ -35,3 +35,6 @@ Thumbs.db
 
 # bases de datos locales de inquilinos (provision --local)
 .tenants/
+
+# medios subidos en desarrollo (en producción van a R2)
+public/uploads/

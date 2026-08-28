@@ -148,19 +148,18 @@ export const mediaActions = {
         throw badRequest(`El tipo de archivo «${file.type}» no se acepta.`);
       }
 
-      // Resolved by the middleware. Reading locals.runtime.env here used to throw on
-      // Workers — the adapter replaced it with a getter that raises — and the optional
-      // chaining hid it, so uploads failed only in production.
-      const r2 = context.locals.r2;
-      if (!r2) throw new Error("R2 bucket not configured");
-
-      // The public host is per-deployment (a custom domain or the r2.dev URL), so it
-      // comes from the environment. It used to be hardcoded to a workers.dev host that
-      // does not exist, which left every uploaded file with a broken URL.
-      const publicBase = context.locals.env?.R2_PUBLIC_URL;
-      if (!publicBase) {
-        throw new Error(
-          "R2_PUBLIC_URL no está configurado: sin él los archivos subidos quedarían con una URL inválida"
+      /*
+       * Dónde se guarda. Lo resuelve el middleware: R2 si hay binding, disco si no.
+       *
+       * Antes esto leía el binding a pelo y lanzaba «R2 bucket not configured» — un 500 sin
+       * explicación que en `astro dev` salía *siempre*, porque el adaptador de Node no tiene
+       * bindings. El efecto era que no se podía montar un sitio en local: lo primero que pide
+       * cualquiera es subir su logo.
+       */
+      const store = context.locals.mediaStore;
+      if (!store) {
+        throw badRequest(
+          context.locals.mediaStoreReason ?? "No hay dónde guardar el archivo."
         );
       }
 
@@ -202,11 +201,9 @@ export const mediaActions = {
         }
       }
 
-      await r2.put(storageKey, arrayBuffer, {
-        httpMetadata: { contentType: file.type },
-      });
+      await store.put(storageKey, arrayBuffer, file.type);
 
-      const url = `${publicBase.replace(/\/+$/, "")}/${storageKey}`;
+      const url = store.urlFor(storageKey);
 
       await db.insert(media).values({
         id,
@@ -290,10 +287,9 @@ export const mediaActions = {
         }
       }
 
-      const r2 = context.locals.r2;
-      if (r2) {
-        await r2.delete(file.storageKey);
-      }
+      // Si no hay almacén, la fila se borra igual: dejarla apuntando a un archivo que nadie
+      // puede quitar es peor que quedarse un huérfano en el disco.
+      await context.locals.mediaStore?.remove(file.storageKey);
 
       await db.delete(media).where(and(eq(media.id, input.id), eq(media.siteId, siteId)));
       return { id: input.id };

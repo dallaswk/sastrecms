@@ -7,6 +7,7 @@ import { isAdmin } from "@lib/permissions";
 import { resolveSiteId } from "@lib/site";
 import { resolveTenant, isServable } from "@lib/tenant";
 import { createControlDb } from "@db/control-client";
+import { resolveMediaStore } from "@lib/media-store";
 import { rolesForSite } from "@lib/roles";
 import { sites, settings, roles, users } from "@db/schema";
 
@@ -163,8 +164,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
    * que hay que servir rápido, no lo necesitan para nada.
    */
   const isPanelRoute = pathname.startsWith("/panel") || pathname.startsWith("/_actions/panel.");
+
   const isAuthRoute = pathname.startsWith("/admin/login");
   const isApiRoute = pathname.startsWith("/api/") || pathname.startsWith("/_actions/");
+
+  /*
+   * Dónde se guardan los archivos subidos.
+   *
+   * R2 en producción y el sistema de ficheros en desarrollo, porque el adaptador de Node no
+   * tiene bindings y sin esto no se puede subir ni el logo trabajando en local.
+   *
+   * Sólo en las rutas que escriben medios: montar el almacén implica un `import()` dinámico de
+   * `node:fs`, y una página pública no tiene por qué pagarlo.
+   */
+  const mediaRoute = isAdminRoute || isApiRoute;
+  const resolved = mediaRoute ? await resolveMediaStore(env) : null;
+  context.locals.mediaStore = resolved?.store ?? null;
+  context.locals.mediaStoreReason = resolved && !resolved.store ? resolved.reason : null;
 
   context.locals.control =
     isPanelRoute && CONTROL_DATABASE_URL
