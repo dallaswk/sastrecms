@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { media } from "@db/schema";
 import { mediaIdsIn } from "./media-url";
 import type { Database } from "@db/client";
@@ -15,6 +15,14 @@ export type MediaInfo = { url: string; altText: string | null; width: number | n
  */
 export async function lookupMedia(
   db: Database | null | undefined,
+  /**
+   * El sitio que se está pintando. Obligatorio y por delante de los datos a propósito: los
+   * ids no vienen de una consulta acotada, sino de leer las URL que hay escritas en los
+   * campos del nodo. Basta con que alguien pegue en un campo la URL de un archivo de otro
+   * cliente para que esto devuelva su fila — poco, un texto alternativo y unas dimensiones,
+   * pero de otro inquilino.
+   */
+  siteId: string,
   urls: unknown[]
 ): Promise<Map<string, MediaInfo>> {
   const out = new Map<string, MediaInfo>();
@@ -24,7 +32,7 @@ export async function lookupMedia(
   if (!ids.length) return out;
 
   const rows = await db.query.media.findMany({
-    where: inArray(media.id, ids),
+    where: and(eq(media.siteId, siteId), inArray(media.id, ids)),
     columns: { url: true, altText: true, width: true, height: true },
   });
 

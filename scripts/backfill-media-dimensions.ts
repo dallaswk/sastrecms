@@ -7,6 +7,7 @@
  *
  * Safe to re-run: it only touches rows where both dimensions are missing.
  */
+import "dotenv/config";
 import { imageMetadata } from "astro/assets/utils";
 import { and, eq, isNull } from "drizzle-orm";
 import { createDb } from "../src/db/client";

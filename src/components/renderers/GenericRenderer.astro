@@ -23,7 +23,7 @@ const schema = (contentType?.fieldSchema ?? []).filter(
 );
 ---
 
-<article class="max-w-3xl mx-auto px-4 py-12 flex flex-col gap-6">
+<article class="site-narrow px-4 py-12 flex flex-col gap-6">
   <h1 class="text-4xl font-bold">{node.title}</h1>
   {schema.map((field) => <FieldValue field={field} value={fields[field.key]} />)}
   <slot />

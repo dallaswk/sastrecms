@@ -12,7 +12,7 @@ import {
   type SiteTheme,
 } from "@lib/theme";
 import { referencedNodeIds, resolveMenu } from "@lib/menus";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { nodes } from "@db/schema";
 import SiteHeader from "@components/site/SiteHeader.astro";
 import SiteFooter from "@components/site/SiteFooter.astro";
@@ -93,7 +93,11 @@ const menuNodeIds = referencedNodeIds(menus);
 const menuPaths = new Map<string, string>();
 if (menuNodeIds.length > 0 && Astro.locals.db) {
   const rows = await Astro.locals.db.query.nodes.findMany({
-    where: inArray(nodes.id, menuNodeIds),
+    // Acotada por sitio además de por id. Los ids salen de los ajustes de este sitio, así que
+    // en la práctica no apuntan a otro — pero «en la práctica» es justo lo que no vale en una
+    // base compartida: basta con que unos ajustes queden mal copiados para que la cabecera de
+    // un cliente enlace a la página de otro.
+    where: and(eq(nodes.siteId, Astro.locals.siteId), inArray(nodes.id, menuNodeIds)),
     columns: { id: true, path: true, status: true },
   });
   for (const row of rows) {

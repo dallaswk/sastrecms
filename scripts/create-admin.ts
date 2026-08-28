@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "dotenv/config";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { createDb } from "../src/db/client";

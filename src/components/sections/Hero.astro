@@ -13,8 +13,10 @@ interface Props {
   anchor?: string;
   data: Record<string, unknown>;
   index: number;
+  /** Si es la primera portada de la página. No es lo mismo que ser el primer bloque. */
+  firstOfType?: boolean;
 }
-const { id, anchor, data, index, media } = Astro.props;
+const { id, anchor, data, index, firstOfType, media } = Astro.props;
 
 const title = (data.title as string) ?? "";
 const subtitle = (data.subtitle as string) ?? "";
@@ -27,9 +29,30 @@ const ALIGN = {
   centro: "text-center items-center",
 } as const;
 const align = ALIGN[(data.align as keyof typeof ALIGN) ?? "centro"] ?? ALIGN.centro;
+
+/*
+ * Sin imagen, un degradado en lugar de un plano gris.
+ *
+ * La mayoría de las portadas nacen sin foto —el cliente aún no la ha mandado, o la página
+ * no la necesita— y `bg-base-200` a secas dejaba una banda plana que se lee como un hueco
+ * por rellenar. El degradado sale de la propia paleta del sitio, así que no impone color:
+ * arranca en el tono de superficie y se funde con el fondo del bloque siguiente.
+ */
+const surface = image
+  ? "bg-base-200"
+  : "bg-gradient-to-b from-base-200 via-base-100 to-base-100";
+
+/*
+ * La primera portada de la página es el primer botón que se ve; el resto no compite.
+ *
+ * Lo decide `SectionList`, no el índice: con un aviso o una franja encima, la portada no está
+ * en la posición 0 y `index === 0` no se cumplía nunca — que es como estaba escrito y por qué
+ * el botón grande no salía en la home.
+ */
+const ctaSize = firstOfType ? "btn-primary btn-lg" : "btn-primary";
 ---
 
-<section id={anchor ?? id} class="relative bg-base-200">
+<section id={anchor ?? id} class:list={["relative overflow-hidden", surface]}>
   {image && (
     <SmartImage
       {...imgProps(media, image, { decorative: true })}
@@ -40,10 +63,10 @@ const align = ALIGN[(data.align as keyof typeof ALIGN) ?? "centro"] ?? ALIGN.cen
     />
   )}
   <div class={`relative site-wide px-4 py-24 flex flex-col gap-5 ${align}`}>
-    <h1 class="text-4xl md:text-5xl font-bold text-base-content">{title}</h1>
-    {subtitle && <p class="text-lg text-base-content/70 max-w-2xl">{subtitle}</p>}
+    <h1 class="text-4xl md:text-5xl font-bold text-base-content text-balance max-w-4xl">{title}</h1>
+    {subtitle && <p class="text-lg text-base-content/70 max-w-2xl leading-relaxed">{subtitle}</p>}
     {ctaLabel && ctaUrl && (
-      <a href={ctaUrl} class="btn btn-primary">{ctaLabel}</a>
+      <a href={ctaUrl} class:list={["btn mt-2", ctaSize]}>{ctaLabel}</a>
     )}
   </div>
 </section>

@@ -15,6 +15,7 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "npx tsx src/db/seed.ts",
     "create-site": "npx tsx scripts/create-site.ts",
+    "landing": "npx tsx scripts/landing.ts",
     "create-admin": "npx tsx scripts/create-admin.ts",
     "db:control:generate": "drizzle-kit generate --config drizzle.control.config.ts",
     "db:control:migrate": "drizzle-kit migrate --config drizzle.control.config.ts",

@@ -139,7 +139,36 @@ function isScoped(condition: string, source: string): boolean {
   return false;
 }
 
-const SOURCES = [...walk("src/actions"), ...walk("src/lib/mcp"), ...walk("src/pages")];
+const SOURCES = walk("src");
+
+/**
+ * Las consultas que no pueden llevar el sitio, con su razón.
+ *
+ * Validar un token de API es el momento *anterior* a saber de qué sitio se trata: el token es
+ * precisamente lo que lo dice. Buscarlo acotado por sitio sería preguntar por la respuesta. Lo
+ * que sí hace `validateApiToken` es rechazarlo comparando `token.siteId` con el sitio de la
+ * petición nada más leerlo, antes incluso de confirmar que su dueño existe.
+ *
+ * Es una lista y no una regla, con dos condiciones: cada entrada dice por qué, y el test de más
+ * abajo falla si una entrada deja de corresponder a ninguna consulta real. Una exención muerta
+ * es peor que no tenerla — parece que alguien lo pensó, y ya no lo está pensando nadie.
+ */
+const EXEMPT: { file: string; table: string; why: string }[] = [
+  {
+    file: "src/lib/api-token.ts",
+    table: "apiTokens",
+    why: "el token es lo que identifica al sitio, y se contrasta con él en cuanto se lee",
+  },
+];
+
+const used = new Set<string>();
+
+function isExempt(file: string, table: string): boolean {
+  const hit = EXEMPT.find((e) => file.endsWith(e.file) && e.table === table);
+  if (!hit) return false;
+  used.add(`${hit.file}:${hit.table}`);
+  return true;
+}
 
 describe("frontera entre tenants: lecturas", () => {
   const offenders: string[] = [];
@@ -149,6 +178,7 @@ describe("frontera entre tenants: lecturas", () => {
     for (const hit of findQueries(source)) {
       if (!SCOPED_TABLES.includes(hit.table)) continue;
       if (isScoped(hit.options, source)) continue;
+      if (isExempt(file, hit.table)) continue;
       offenders.push(`${file}:${lineOf(source, hit.index)} — db.query.${hit.table} sin siteId`);
     }
   }
@@ -166,6 +196,7 @@ describe("frontera entre tenants: escrituras", () => {
     for (const hit of findWrites(source)) {
       if (!SCOPED_TABLES.includes(hit.table)) continue;
       if (isScoped(hit.statement, source)) continue;
+      if (isExempt(file, hit.table)) continue;
       offenders.push(`${file}:${lineOf(source, hit.index)} — db.${hit.table} escrito sin siteId`);
     }
   }
@@ -176,6 +207,14 @@ describe("frontera entre tenants: escrituras", () => {
 });
 
 describe("el test se está mirando algo", () => {
+  it("no arrastra exenciones muertas", () => {
+    // Se evalúa después de las dos pasadas de arriba, que son las que marcan cuáles se han
+    // usado. Una entrada que ya no corresponde a ninguna consulta es una puerta abierta a un
+    // fichero entero por una razón que dejó de existir.
+    const dead = EXEMPT.filter((e) => !used.has(`${e.file}:${e.table}`));
+    expect(dead.map((e) => `${e.file} (${e.table}): ${e.why}`)).toEqual([]);
+  });
+
   it("encuentra consultas de verdad, no cero por un patrón roto", () => {
     // Sin esto, cambiar la forma de las consultas dejaría el test en verde sin comprobar nada.
     const total = SOURCES.reduce(

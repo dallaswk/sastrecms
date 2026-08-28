@@ -132,7 +132,7 @@ const allJsonLd = [jsonLd, orgSchema, breadcrumbSchema];
  * be recovered from the URL. Doing it here rather than in each component is the difference
  * between one round trip to Turso and one per image.
  */
-const mediaMap = await lookupMedia(db, collectMediaUrls(fields));
+const mediaMap = await lookupMedia(db, siteId, collectMediaUrls(fields));
 
 /*
  * Cache tags for this page.

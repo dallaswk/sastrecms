@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// `tsx` no lee `.env` por su cuenta, y sin esto el guion decía «CONTROL_DATABASE_URL no está
+// puesta» con el fichero ahí al lado: un mensaje que manda a revisar la configuración cuando
+// lo que falla es cargarla. Mismo motivo por el que lo hacen `seed.ts` y `provision.ts`.
+import "dotenv/config";
 import { eq } from "drizzle-orm";
 import { createControlDb } from "../src/db/control-client";
 import { tenants, domains, operators, operatorTenants, BILLING_STATUS } from "../src/db/control-schema";

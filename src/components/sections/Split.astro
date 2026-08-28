@@ -6,25 +6,40 @@ interface Props {
   media?: Map<string, import("@lib/media-lookup").MediaInfo>; id: string; anchor?: string; data: Record<string, unknown>; index: number }
 const { id, anchor, data, media } = Astro.props;
 const right = ((data.side as string) ?? "derecha") === "derecha";
+const image = (data.image as string) ?? "";
+/*
+ * Sin imagen no hay dos mitades.
+ *
+ * Antes se pintaba un rectángulo gris en su sitio, que en el editor se entiende como «aquí
+ * va una foto» y en la web publicada se lee como una imagen que no ha cargado. Un bloque
+ * de texto y media pantalla vacía es peor que un bloque de texto: cuando no hay foto, el
+ * texto ocupa una columna legible y se acabó.
+ */
 ---
 <section id={anchor ?? id} class="bg-base-100">
-  <div class="site-wide px-4 py-16 grid md:grid-cols-2 gap-10 items-center">
-    <div class={`flex flex-col gap-4 ${right ? "" : "md:order-2"}`}>
+  {image ? (
+    <div class="site-wide px-4 py-16 grid md:grid-cols-2 gap-10 items-center">
+      <div class={`flex flex-col gap-4 ${right ? "" : "md:order-2"}`}>
+        <h2 class="text-3xl font-bold">{data.title}</h2>
+        {data.body && <div class="prose max-w-none" set:html={sanitizeHtml(data.body as string)} />}
+        {data.cta_label && data.cta_url && (
+          <a href={data.cta_url as string} class="btn btn-primary btn-sm self-start">{data.cta_label}</a>
+        )}
+      </div>
+      <SmartImage
+        {...imgProps(media, image)}
+        class="rounded-xl w-full object-cover aspect-[4/3]"
+        sizes="(max-width: 768px) 100vw, 50vw"
+        renderWidth={800}
+      />
+    </div>
+  ) : (
+    <div class="site-narrow px-4 py-16 flex flex-col gap-4">
       <h2 class="text-3xl font-bold">{data.title}</h2>
       {data.body && <div class="prose max-w-none" set:html={sanitizeHtml(data.body as string)} />}
       {data.cta_label && data.cta_url && (
         <a href={data.cta_url as string} class="btn btn-primary btn-sm self-start">{data.cta_label}</a>
       )}
     </div>
-    {data.image ? (
-      <SmartImage
-        {...imgProps(media, data.image as string)}
-        class="rounded-xl w-full object-cover aspect-[4/3]"
-        sizes="(max-width: 768px) 100vw, 50vw"
-        renderWidth={800}
-      />
-    ) : (
-      <div class="rounded-xl w-full aspect-[4/3] bg-base-200" aria-hidden="true"></div>
-    )}
-  </div>
+  )}
 </section>

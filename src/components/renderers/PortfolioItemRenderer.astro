@@ -9,7 +9,7 @@ const { node, fields } = Astro.props;
 const gallery = (fields.gallery as string[]) ?? [];
 ---
 
-<article class="max-w-4xl mx-auto px-4 py-12">
+<article class="site-wide px-4 py-12">
   <header class="mb-10">
     <h1 class="text-4xl font-bold mb-2">{node.title as string}</h1>
     <div class="flex gap-4 text-sm text-base-content/60">
