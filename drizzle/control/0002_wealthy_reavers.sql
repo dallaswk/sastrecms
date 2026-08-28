@@ -1,0 +1,1 @@
+ALTER TABLE `tenants` ADD `billing_event_at` integer;

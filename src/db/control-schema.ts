@@ -91,6 +91,15 @@ export const tenants = sqliteTable(
      */
     billingRef: text("billing_ref"),
 
+    /**
+     * La marca de tiempo del último evento de la pasarela que se aplicó.
+     *
+     * Stripe no garantiza el orden. Sin esto, un `invoice.payment_failed` que llegue con
+     * retraso después del `invoice.paid` que lo resolvió deja al cliente en impago —y
+     * suspendido— habiendo pagado. Los eventos anteriores a esta fecha se descartan.
+     */
+    billingEventAt: integer("billing_event_at", { mode: "timestamp" }),
+
     /** Hasta cuándo dura la prueba. Pasada, sin pagar, se suspende. */
     trialEndsAt: integer("trial_ends_at", { mode: "timestamp" }),
 

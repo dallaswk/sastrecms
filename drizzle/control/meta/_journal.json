@@ -15,6 +15,13 @@
       "when": 1787911838670,
       "tag": "0001_fancy_ultimo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787912391959,
+      "tag": "0002_wealthy_reavers",
+      "breakpoints": true
     }
   ]
 }

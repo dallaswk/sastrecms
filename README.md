@@ -227,6 +227,22 @@ failing on a column that does not exist while the other twenty-nine are fine, an
 the deploy said so. `npm run provision -- status` reports who is behind — and distinguishes a
 tenant that is behind from one that is unreachable, which otherwise look identical.
 
+**Billing.** `billing_status` (what is owed) and `status` (whether the site serves) are separate
+axes, and `src/lib/billing.ts` is the only place the first decides the second — pure, so the
+rules can be argued about with concrete dates and tested without today's date mattering. A
+declined charge opens a grace window rather than switching the site off: it is almost always an
+expired card, and going dark the same day helps nobody. A null `billing_status` means "not
+billed" and is never touched.
+
+`npm run control -- enforce` applies the policy and is what a cron runs; `--dry-run` shows what
+it would do. Stripe's webhook at `/api/stripe/webhook` moves `billing_status` on its own —
+signature verified with Web Crypto rather than the Stripe SDK, which would be hundreds of
+kilobytes of Worker budget for one function. Point Stripe at it with the subscription and
+invoice events, and put the Stripe customer id on the tenant with
+`npm run control -- billing <slug> paid --ref=cus_XXXX`. Events that arrive out of order are
+discarded by timestamp: without that, a late `payment_failed` would suspend a client who had
+already paid.
+
 **Where the boundary is enforced.** Tenants sharing a database are separated by `site_id` on
 every query, which `src/lib/tenant-boundary.test.ts` checks against the source on every run and
 `scripts/check-tenant-boundary.sh` checks over real HTTP with two sites and two administrators.

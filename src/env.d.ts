@@ -41,6 +41,8 @@ interface RuntimeEnv {
   /** El plano de control. Sin esto, la aplicación se comporta como mono-inquilino. */
   CONTROL_DATABASE_URL?: string;
   CONTROL_AUTH_TOKEN?: string;
+  /** El secreto de firma del webhook de Stripe (`whsec_…`). Sin él no se acepta ninguno. */
+  STRIPE_WEBHOOK_SECRET?: string;
   R2_PUBLIC_URL?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
