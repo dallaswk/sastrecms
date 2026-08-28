@@ -18,7 +18,8 @@
     "create-admin": "npx tsx scripts/create-admin.ts",
     "db:control:generate": "drizzle-kit generate --config drizzle.control.config.ts",
     "db:control:migrate": "drizzle-kit migrate --config drizzle.control.config.ts",
-    "control": "npx tsx scripts/control.ts"
+    "control": "npx tsx scripts/control.ts",
+    "provision": "npx tsx scripts/provision.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.2.5",

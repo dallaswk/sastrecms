@@ -32,3 +32,6 @@ Thumbs.db
 # editors
 .vscode/settings.json
 .idea/
+
+# bases de datos locales de inquilinos (provision --local)
+.tenants/

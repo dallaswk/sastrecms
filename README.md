@@ -193,10 +193,42 @@ Better Auth with Drizzle adapter (`sqlite` provider — works with Turso and D1)
 
 ---
 
-## Path to multi-tenant SaaS
+## Multi-tenant
 
-The architecture is already designed for it:
+Optional, and off unless `CONTROL_DATABASE_URL` is set. Without it the app serves a single
+site exactly as it always has; with it, the request's domain decides which tenant it belongs
+to, and a domain nobody has registered still falls back to the default site — so it can be
+switched on for one domain at a time.
 
-- `site_id` is present from day one in every table.
-- Turso makes it cheap to spin up many lightweight databases — moving from "one DB per deployment" to "one DB per tenant under a shared control plane" is an extension, not a rewrite.
-- Roles, permissions, and the MCP server are already scoped per site.
+**The control plane** is a second database (`drizzle/control/`) holding tenants, their domains,
+and who may administer them. It is separate on purpose: once each tenant has its own database,
+the thing that resolves a domain has to run *before* knowing which database to open, so it
+cannot live inside any of them.
+
+```bash
+npm run db:control:migrate                          # once, on the control database
+npm run control -- add-tenant panaderia "Panadería Sol"
+npm run provision -- new panaderia                  # its database: create, migrate, seed
+npm run control -- map panaderia panaderia-sol.es --primary
+npm run control -- status panaderia active          # until now its domains answer 503
+```
+
+`--local` on `provision new` does the whole thing against a SQLite file, so the path can be
+exercised without a Turso account.
+
+**A tenant only serves while `active`.** `provisioning` covers the window between creating it
+and finishing its migrations; `suspended` cuts it off without deleting anything. Both answer
+503 rather than 404 — the domain is right and the site is coming back, and a 404 tells Google
+to drop it.
+
+**`npm run provision -- migrate-all` belongs in the deploy.** With one database, migrating is a
+deploy step you cannot forget. With thirty, forgetting one means a single client's site starts
+failing on a column that does not exist while the other twenty-nine are fine, and nothing in
+the deploy said so. `npm run provision -- status` reports who is behind — and distinguishes a
+tenant that is behind from one that is unreachable, which otherwise look identical.
+
+**Where the boundary is enforced.** Tenants sharing a database are separated by `site_id` on
+every query, which `src/lib/tenant-boundary.test.ts` checks against the source on every run and
+`scripts/check-tenant-boundary.sh` checks over real HTTP with two sites and two administrators.
+Tenants with their own database are separated physically: a session cookie from one does not
+authenticate against another.
