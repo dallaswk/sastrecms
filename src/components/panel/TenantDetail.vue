@@ -46,6 +46,8 @@
       </div>
     </div>
 
+    <TenantUsers :tenant-id="state.id" />
+
     <!-- Cobro -->
     <div class="panel">
       <div class="panel-body">
@@ -167,6 +169,7 @@
 import { computed, reactive, ref } from "vue";
 import { actions } from "astro:actions";
 import { notify } from "@/scripts/notify";
+import TenantUsers from "./TenantUsers.vue";
 
 type Status = "provisioning" | "active" | "suspended";
 type Billing = "trialing" | "paid" | "past_due" | "cancelled" | null;
