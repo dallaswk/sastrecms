@@ -161,7 +161,7 @@ export const POST: APIRoute = async ({ request, locals, cache }) => {
     return json({ error: "Falta la cabecera Authorization: Bearer <token>" }, 401);
   }
 
-  const tokenResult = await validateApiToken(locals.db, authHeader.slice(7));
+  const tokenResult = await validateApiToken(locals.db, authHeader.slice(7), locals.siteId);
   if (!tokenResult) {
     return json({ error: "Token inválido o revocado" }, 401);
   }

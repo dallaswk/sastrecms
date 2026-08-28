@@ -204,7 +204,10 @@ export const contentTools: ToolDefinition[] = [
         patch.path = computePath(parentPath, newSlug, node.locale, context.defaultLocale);
       }
 
-      await context.db.update(nodes).set(patch).where(eq(nodes.id, id));
+      await context.db
+        .update(nodes)
+        .set(patch)
+        .where(and(eq(nodes.id, id), eq(nodes.siteId, context.siteId)));
       await invalidateNode(context.cache, {
         siteId: context.siteId,
         nodeId: id,
@@ -257,7 +260,9 @@ export const contentTools: ToolDefinition[] = [
       if (!node) throw new ToolError("No existe esa página", "notFound");
       await requirePermission(context.db, context.userId, context.siteId, node.contentTypeId, "delete");
 
-      const children = await context.db.query.nodes.findMany({ where: eq(nodes.parentId, id) });
+      const children = await context.db.query.nodes.findMany({
+        where: and(eq(nodes.parentId, id), eq(nodes.siteId, context.siteId)),
+      });
       if (children.length > 0) {
         throw new ToolError(
           `Esa página tiene ${children.length} hija(s). Bórralas o muévelas primero.`,

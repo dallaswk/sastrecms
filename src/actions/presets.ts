@@ -94,14 +94,14 @@ export const presetActions = {
       const pageTypeId = typesByKey.get("page");
       if (pageTypeId) {
         const pageType = await db.query.contentTypes.findFirst({
-          where: eq(contentTypes.id, pageTypeId),
+          where: and(eq(contentTypes.id, pageTypeId), eq(contentTypes.siteId, siteId)),
         });
         const schema = pageType?.fieldSchema ?? [];
         if (!schema.some((f) => f.type === "sections")) {
           await db
             .update(contentTypes)
             .set({ fieldSchema: [...schema, { key: "bloques", label: "Secciones", type: "sections" }] })
-            .where(eq(contentTypes.id, pageTypeId));
+            .where(and(eq(contentTypes.id, pageTypeId), eq(contentTypes.siteId, siteId)));
         }
       }
 
@@ -115,7 +115,9 @@ export const presetActions = {
         const id = generateId("node");
         const parentId = page.parentSlug ? idsBySlug.get(page.parentSlug) ?? null : null;
         const parentPath = parentId
-          ? (await db.query.nodes.findFirst({ where: eq(nodes.id, parentId) }))?.path ?? null
+          ? (await db.query.nodes.findFirst({
+              where: and(eq(nodes.id, parentId), eq(nodes.siteId, siteId)),
+            }))?.path ?? null
           : null;
 
         const contentTypeId = typesByKey.get(page.contentTypeKey ?? "page");

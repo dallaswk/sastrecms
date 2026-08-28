@@ -103,7 +103,10 @@ export const contentTypeActions = {
       if (input.translatable !== undefined) updates.translatable = input.translatable;
       if (input.fieldSchema !== undefined) updates.fieldSchema = input.fieldSchema;
 
-      await db.update(contentTypes).set(updates).where(eq(contentTypes.id, input.id));
+      await db
+        .update(contentTypes)
+        .set(updates)
+        .where(and(eq(contentTypes.id, input.id), eq(contentTypes.siteId, siteId)));
       return { id: input.id };
     },
   }),
@@ -121,7 +124,9 @@ export const contentTypeActions = {
       if (!ct) throw new Error("Content type not found");
       if (ct.isSystem) throw new Error("System content types cannot be deleted");
 
-      await db.delete(contentTypes).where(eq(contentTypes.id, input.id));
+      await db
+        .delete(contentTypes)
+        .where(and(eq(contentTypes.id, input.id), eq(contentTypes.siteId, siteId)));
       return { id: input.id };
     },
   }),

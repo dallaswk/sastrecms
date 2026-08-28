@@ -360,7 +360,7 @@ async function fixImageDimensions(context: FixContext): Promise<FixResult> {
             ? { width: meta.height, height: meta.width }
             : { width: meta.width, height: meta.height }
         )
-        .where(eq(media.id, row.id));
+        .where(and(eq(media.id, row.id), eq(media.siteId, context.siteId)));
       done++;
     } catch {
       // An image whose URL no longer resolves is reported, not retried: the useful information

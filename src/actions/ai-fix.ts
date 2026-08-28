@@ -552,7 +552,10 @@ export const aiFixActions = {
           throw new ActionError({ code: "BAD_REQUEST", message: check.errors.join(" ") });
         }
 
-        await db.update(media).set({ altText: check.value }).where(eq(media.id, image.id));
+        await db
+          .update(media)
+          .set({ altText: check.value })
+          .where(and(eq(media.id, image.id), eq(media.siteId, siteId)));
         // The alt is read at render time from the media row, so every page using it changes.
         await invalidateNode(context.cache, { siteId, nodeId: image.id });
         return { ok: true, saved: check.value };

@@ -15,6 +15,7 @@ const C = {
 };
 
 import { DEFAULT_SITE_ID as SITE_ID } from "../src/lib/site";
+import { roleId } from "../src/lib/roles";
 
 async function main() {
   const [email, password] = process.argv.slice(2);
@@ -53,7 +54,7 @@ async function main() {
     .insert(schema.userRoles)
     .values({
       userId: result.user.id,
-      roleId: "role_admin",
+      roleId: roleId(SITE_ID, "admin"),
       siteId: SITE_ID,
       assignedAt: new Date(),
     })

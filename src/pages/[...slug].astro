@@ -93,6 +93,7 @@ if (node.translationGroupId) {
   const translations = await db.query.nodes.findMany({
     where: and(
       eq(nodes.translationGroupId, node.translationGroupId),
+      eq(nodes.siteId, siteId),
       eq(nodes.status, "published"),
       isNotNull(nodes.locale)
     ),

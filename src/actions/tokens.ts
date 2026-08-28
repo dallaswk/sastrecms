@@ -9,9 +9,12 @@ export const tokenActions = {
   list: defineAction({
     handler: async (_input, context) => {
       if (!context.locals.user) throw new Error("Unauthorized");
+      // Scoped to this site as well as this user: without it, the panel of one site listed —
+      // and could revoke — the tokens its owner had created for another.
       return context.locals.db.query.apiTokens.findMany({
         where: and(
           eq(apiTokens.userId, context.locals.user.id),
+          eq(apiTokens.siteId, context.locals.siteId),
           isNull(apiTokens.revokedAt)
         ),
         orderBy: (t, { desc }) => [desc(t.createdAt)],
@@ -31,6 +34,9 @@ export const tokenActions = {
 
       await db.insert(apiTokens).values({
         id,
+        // Bound to the site it was created from. The MCP endpoint resolves the site from the
+        // host and refuses a token that belongs to a different one.
+        siteId: context.locals.siteId,
         userId: context.locals.user.id,
         tokenHash,
         label: input.label,
@@ -50,7 +56,8 @@ export const tokenActions = {
       const token = await db.query.apiTokens.findFirst({
         where: and(
           eq(apiTokens.id, input.id),
-          eq(apiTokens.userId, context.locals.user.id)
+          eq(apiTokens.userId, context.locals.user.id),
+          eq(apiTokens.siteId, context.locals.siteId)
         ),
       });
       if (!token) throw new Error("Token not found");
@@ -58,7 +65,7 @@ export const tokenActions = {
       await db
         .update(apiTokens)
         .set({ revokedAt: new Date() })
-        .where(eq(apiTokens.id, input.id));
+        .where(and(eq(apiTokens.id, input.id), eq(apiTokens.siteId, context.locals.siteId)));
 
       return { id: input.id };
     },

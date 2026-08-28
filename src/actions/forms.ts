@@ -235,7 +235,7 @@ export const formActions = {
               ? { notifyError: failures.join(" · ").slice(0, 500) }
               : { notifiedAt: new Date(), notifyError: null }
           )
-          .where(eq(formSubmissions.id, id));
+          .where(and(eq(formSubmissions.id, id), eq(formSubmissions.siteId, siteId)));
       }
 
       return { ok: true as const };

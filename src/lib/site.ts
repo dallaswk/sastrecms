@@ -1,27 +1,59 @@
+import { eq } from "drizzle-orm";
+import { sites } from "@db/schema";
 import type { Database } from "@db/client";
 
 /**
- * The one site a mono-tenant deployment serves. Only bootstrap code should reference
- * this constant directly — the seed, the wizard and the middleware's ensureBootstrap.
- * Everything handling a request reads `locals.siteId` instead.
+ * The site a mono-tenant deployment falls back to.
+ *
+ * Referenced by bootstrap code — the seed, the wizard, the middleware — and by `resolveSiteId`
+ * when no site claims the request's host. Request handling reads `locals.siteId`.
  */
 export const DEFAULT_SITE_ID = "site_default";
 
 /**
- * Works out which site a request belongs to.
+ * Resolved hosts, for the life of the isolate.
  *
- * Today every deployment serves exactly one site, so the answer is always the same and
- * costs no query. The host is threaded through anyway because this is the single place
- * the SaaS phase has to change: look the host up against a `sites.host` column (or the
- * control plane) and return that id. Every call site already passes the request through
- * `locals.siteId`, so none of them will need touching.
+ * This runs on *every* public request, so an uncached lookup would put a Turso round trip in
+ * front of every page on every site. The map is per-isolate, which is the same scope the
+ * bootstrap flag uses: a warm isolate is fast, a fresh one pays once, and a changed mapping
+ * takes effect as isolates recycle.
  *
- * Async on purpose, for the same reason: the lookup will need I/O and the signature
- * should not have to change when it does.
+ * That last part is the trade, and it is worth stating: pointing a domain at a different site
+ * is not instant. Making it instant needs an explicit invalidation, which is a control-plane
+ * concern rather than something to guess at now.
  */
-export async function resolveSiteId(
-  _db: Database,
-  _host: string
-): Promise<string> {
-  return DEFAULT_SITE_ID;
+const hostCache = new Map<string, string>();
+
+/** The host, without the port. `cliente.com:443` and `cliente.com` are the same site. */
+export function normaliseHost(host: string): string {
+  return host.trim().toLowerCase().replace(/:\d+$/, "");
+}
+
+/**
+ * Which site a request belongs to.
+ *
+ * Looks the host up against `sites.host`. A host nobody claims falls back to the default site,
+ * which is what keeps a single-site deployment working on any domain without configuration —
+ * and what makes this change safe to ship before there is a second site.
+ */
+export async function resolveSiteId(db: Database, host: string): Promise<string> {
+  const key = normaliseHost(host);
+  if (!key) return DEFAULT_SITE_ID;
+
+  const cached = hostCache.get(key);
+  if (cached) return cached;
+
+  const row = await db.query.sites.findFirst({
+    where: eq(sites.host, key),
+    columns: { id: true },
+  });
+
+  const siteId = row?.id ?? DEFAULT_SITE_ID;
+  hostCache.set(key, siteId);
+  return siteId;
+}
+
+/** Drops a host from the cache, for when a mapping changes within a live isolate. */
+export function forgetHost(host: string): void {
+  hostCache.delete(normaliseHost(host));
 }

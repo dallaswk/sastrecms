@@ -14,6 +14,16 @@ import {
 export const sites = sqliteTable("sites", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  /**
+   * The host this site answers on, without protocol or port.
+   *
+   * Nullable, and the null row is the fallback: a mono-tenant deployment answers on whatever
+   * domain it is given, and requiring the host to be registered would mean a deploy to a new
+   * domain serves nothing until somebody updates a table.
+   *
+   * Unique, because two sites claiming one host is not a conflict a request can resolve.
+   */
+  host: text("host").unique(),
   defaultLocale: text("default_locale").notNull().default("es"),
   locales: text("locales", { mode: "json" })
     .notNull()
@@ -186,14 +196,20 @@ export const media = sqliteTable(
 // ---------------------------------------------------------------------------
 // roles & permissions
 // ---------------------------------------------------------------------------
-export const roles = sqliteTable("roles", {
-  id: text("id").primaryKey(),
-  siteId: text("site_id")
-    .notNull()
-    .references(() => sites.id, { onDelete: "cascade" }),
-  key: text("key", { enum: ["admin", "editor", "collaborator"] }).notNull(),
-  label: text("label").notNull(),
-});
+export const roles = sqliteTable(
+  "roles",
+  {
+    id: text("id").primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    key: text("key", { enum: ["admin", "editor", "collaborator"] }).notNull(),
+    label: text("label").notNull(),
+  },
+  // One of each role per site, and the pair is how the code looks them up. The ids used to be
+  // global constants, which is why a second site bootstrapped with no roles at all.
+  (t) => [uniqueIndex("roles_site_key_idx").on(t.siteId, t.key)]
+);
 
 export const roleContentPermissions = sqliteTable(
   "role_content_permissions",
@@ -307,6 +323,17 @@ export type SiteTheme = {
 // ---------------------------------------------------------------------------
 export const apiTokens = sqliteTable("api_tokens", {
   id: text("id").primaryKey(),
+  /**
+   * Which site this token may act on.
+   *
+   * A token carries its owner's permissions and the endpoint resolves the site from the host, so
+   * an unscoped token never leaked — `requireSiteRole` stopped it. But it also could not be
+   * *limited* to one site, and a customer paying for one site expects a credential that only
+   * reaches theirs.
+   */
+  siteId: text("site_id")
+    .notNull()
+    .references(() => sites.id, { onDelete: "cascade" }),
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),

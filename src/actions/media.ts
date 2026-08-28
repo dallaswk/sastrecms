@@ -294,7 +294,7 @@ export const mediaActions = {
         await r2.delete(file.storageKey);
       }
 
-      await db.delete(media).where(eq(media.id, input.id));
+      await db.delete(media).where(and(eq(media.id, input.id), eq(media.siteId, siteId)));
       return { id: input.id };
     },
   }),
@@ -340,7 +340,9 @@ export const mediaActions = {
       });
       if (hasSubfolders) throw new Error("Cannot delete a folder that contains subfolders");
 
-      await db.delete(mediaFolders).where(eq(mediaFolders.id, input.id));
+      await db
+        .delete(mediaFolders)
+        .where(and(eq(mediaFolders.id, input.id), eq(mediaFolders.siteId, siteId)));
       return { id: input.id };
     },
   }),

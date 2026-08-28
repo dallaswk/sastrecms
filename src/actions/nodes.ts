@@ -88,7 +88,7 @@ export const nodeActions = {
       await requirePermission(db, context.locals.user.id, siteId, input.contentTypeId, "create");
 
       const ct = await db.query.contentTypes.findFirst({
-        where: eq(contentTypes.id, input.contentTypeId),
+        where: and(eq(contentTypes.id, input.contentTypeId), eq(contentTypes.siteId, siteId)),
       });
       if (!ct) throw new Error("Content type not found");
 
@@ -101,7 +101,7 @@ export const nodeActions = {
 
       if (input.parentId) {
         const parent = await db.query.nodes.findFirst({
-          where: eq(nodes.id, input.parentId),
+          where: and(eq(nodes.id, input.parentId), eq(nodes.siteId, siteId)),
         });
         if (!parent) throw new Error("Parent node not found");
         parentPath = parent.path;
@@ -235,13 +235,15 @@ export const nodeActions = {
         });
 
         const existing = await db.query.nodeRevisions.findMany({
-          where: eq(nodeRevisions.nodeId, node.id),
+          where: and(eq(nodeRevisions.nodeId, node.id), eq(nodeRevisions.siteId, siteId)),
           columns: { id: true },
           orderBy: (r, { asc }) => [asc(r.createdAt)],
         });
         const stale = revisionsToPrune(existing.map((row) => row.id));
         if (stale.length) {
-          await db.delete(nodeRevisions).where(inArray(nodeRevisions.id, stale));
+          await db
+            .delete(nodeRevisions)
+            .where(and(inArray(nodeRevisions.id, stale), eq(nodeRevisions.siteId, siteId)));
         }
       }
 
@@ -276,7 +278,7 @@ export const nodeActions = {
         updates.path = newPath;
       }
 
-      await db.update(nodes).set(updates).where(eq(nodes.id, input.id));
+      await db.update(nodes).set(updates).where(and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)));
 
       await invalidateNode(context.cache, {
         siteId,
@@ -306,7 +308,7 @@ export const nodeActions = {
       await db
         .update(nodes)
         .set({ status: "published", publishedAt: now, updatedAt: now })
-        .where(eq(nodes.id, input.id));
+        .where(and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)));
 
       // The type tag matters most here: publishing a post has to drop the listing and every
       // page with a `collection` block pointing at that type, not only the post's own page.
@@ -337,7 +339,7 @@ export const nodeActions = {
       const db = context.locals.db;
 
       const children = await db.query.nodes.findMany({
-        where: and(eq(nodes.parentId, input.id), isNull(nodes.deletedAt)),
+        where: and(eq(nodes.parentId, input.id), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
       });
       if (children.length > 0) {
         throw new ActionError({
@@ -354,7 +356,9 @@ export const nodeActions = {
 
       if (input.permanent) {
         await requireAdmin(db, context.locals.user.id, siteId);
-        await db.delete(nodeRevisions).where(eq(nodeRevisions.nodeId, input.id));
+        await db
+          .delete(nodeRevisions)
+          .where(and(eq(nodeRevisions.nodeId, input.id), eq(nodeRevisions.siteId, siteId)));
         await db.delete(nodes).where(and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)));
       } else {
         const now = new Date();
@@ -642,8 +646,14 @@ export const nodeActions = {
       const groupId = nodeA.translationGroupId ?? nodeB.translationGroupId ?? generateId("tg");
 
       await Promise.all([
-        db.update(nodes).set({ translationGroupId: groupId }).where(eq(nodes.id, nodeA.id)),
-        db.update(nodes).set({ translationGroupId: groupId }).where(eq(nodes.id, nodeB.id)),
+        db
+          .update(nodes)
+          .set({ translationGroupId: groupId })
+          .where(and(eq(nodes.id, nodeA.id), eq(nodes.siteId, siteId))),
+        db
+          .update(nodes)
+          .set({ translationGroupId: groupId })
+          .where(and(eq(nodes.id, nodeB.id), eq(nodes.siteId, siteId))),
       ]);
 
       return { groupId };
@@ -667,17 +677,26 @@ export const nodeActions = {
       const siblings = await db.query.nodes.findMany({
         where: and(
           eq(nodes.translationGroupId, node.translationGroupId),
+          eq(nodes.siteId, siteId),
           isNotNull(nodes.locale)
         ),
       });
 
-      await db.update(nodes).set({ translationGroupId: null }).where(eq(nodes.id, node.id));
+      await db
+          .update(nodes)
+          .set({ translationGroupId: null })
+          .where(and(eq(nodes.id, node.id), eq(nodes.siteId, siteId)));
 
       if (siblings.filter((s) => s.id !== node.id).length === 1) {
         await db
           .update(nodes)
           .set({ translationGroupId: null })
-          .where(eq(nodes.translationGroupId, node.translationGroupId));
+          .where(
+            and(
+              eq(nodes.translationGroupId, node.translationGroupId),
+              eq(nodes.siteId, siteId)
+            )
+          );
       }
 
       return { ok: true };

@@ -1,14 +1,15 @@
 ---
 import AdminLayout from "@layouts/AdminLayout.astro";
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { apiTokens } from "@db/schema";
 export const prerender = false;
 
 const db = Astro.locals.db;
 const user = Astro.locals.user!;
+const siteId = Astro.locals.siteId;
 
 const activeTokens = await db.query.apiTokens.findMany({
-  where: eq(apiTokens.userId, user.id),
+  where: and(eq(apiTokens.userId, user.id), eq(apiTokens.siteId, siteId)),
   orderBy: (t, { desc }) => [desc(t.createdAt)],
 });
 ---

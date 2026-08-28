@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { createDb, type Database } from "@db/client";
 import { createAuth } from "@lib/auth";
 import { isAdmin } from "@lib/permissions";
-import { DEFAULT_SITE_ID, resolveSiteId } from "@lib/site";
+import { resolveSiteId } from "@lib/site";
+import { rolesForSite } from "@lib/roles";
 import { sites, settings, roles, users } from "@db/schema";
 
 /**
@@ -27,18 +28,17 @@ async function loadEnv(): Promise<RuntimeEnv> {
 }
 
 /**
- * The site row and the base roles only ever need creating once. Running this on every
- * request cost two extra Turso round trips per page, including anonymous public pages
- * that touch none of it. The flag lives for the life of the isolate, which is exactly
- * the scope we need: a fresh isolate re-checks, a warm one doesn't.
+ * Which sites this isolate has already bootstrapped.
+ *
+ * A boolean was right for one site and wrong the moment there are two: the first request to
+ * reach a warm isolate would set the flag and every other site would never be initialised. A set
+ * keeps the same property per site — a fresh isolate re-checks, a warm one does not.
  */
-let bootstrapped = false;
+const bootstrapped = new Set<string>();
 
-async function ensureBootstrap(db: Database) {
-  // Bootstrap creates the mono-tenant default site, so it is the one place that still
-  // names it directly. Request handling goes through locals.siteId.
-  const SITE_ID = DEFAULT_SITE_ID;
-  if (bootstrapped) return;
+async function ensureBootstrap(db: Database, siteId: string) {
+  const SITE_ID = siteId;
+  if (bootstrapped.has(SITE_ID)) return;
 
   const site = await db.query.sites.findFirst({ where: eq(sites.id, SITE_ID) });
   if (!site) {
@@ -55,14 +55,13 @@ async function ensureBootstrap(db: Database) {
 
   const existingRoles = await db.query.roles.findMany({ where: eq(roles.siteId, SITE_ID) });
   if (existingRoles.length === 0) {
-    await db.insert(roles).values([
-      { id: "role_admin", siteId: SITE_ID, key: "admin", label: "Admin" },
-      { id: "role_editor", siteId: SITE_ID, key: "editor", label: "Editor" },
-      { id: "role_collaborator", siteId: SITE_ID, key: "collaborator", label: "Colaborador" },
-    ]).onConflictDoNothing();
+    // Ids carry the site. They used to be global constants, so a second site's insert collided
+    // on the primary key, onConflictDoNothing swallowed it, and that site ran with no roles at
+    // all — nobody could administer it and nothing said why.
+    await db.insert(roles).values(rolesForSite(SITE_ID)).onConflictDoNothing();
   }
 
-  bootstrapped = true;
+  bootstrapped.add(SITE_ID);
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -138,7 +137,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     : false;
 
   if (isAdminRoute || isApiRoute) {
-    await ensureBootstrap(db);
+    await ensureBootstrap(db, siteId);
   }
 
   if (!isAdminRoute && !isApiRoute) {

@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 
 import { DEFAULT_SITE_ID as SITE_ID } from "../lib/site";
+import { rolesForSite, roleId } from "../lib/roles";
 
 async function seed() {
   const url = process.env.TURSO_DATABASE_URL;
@@ -94,9 +95,7 @@ async function seed() {
 
   // 3. Default roles
   const roles = [
-    { id: "role_admin", siteId: SITE_ID, key: "admin" as const, label: "Admin" },
-    { id: "role_editor", siteId: SITE_ID, key: "editor" as const, label: "Editor" },
-    { id: "role_collaborator", siteId: SITE_ID, key: "collaborator" as const, label: "Colaborador" },
+    ...rolesForSite(SITE_ID),
   ];
 
   for (const role of roles) {
@@ -109,7 +108,7 @@ async function seed() {
     .insert(schema.roleContentPermissions)
     .values({
       id: "perm_admin_wildcard",
-      roleId: "role_admin",
+      roleId: roleId(SITE_ID, "admin"),
       contentTypeId: null,
       canView: true,
       canCreate: true,
