@@ -5,6 +5,8 @@ import { createDb, type Database } from "@db/client";
 import { createAuth } from "@lib/auth";
 import { isAdmin } from "@lib/permissions";
 import { resolveSiteId } from "@lib/site";
+import { resolveTenant, isServable } from "@lib/tenant";
+import { createControlDb } from "@db/control-client";
 import { rolesForSite } from "@lib/roles";
 import { sites, settings, roles, users } from "@db/schema";
 
@@ -69,9 +71,52 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { TURSO_DATABASE_URL, TURSO_AUTH_TOKEN } = env;
   if (!TURSO_DATABASE_URL) throw new Error("TURSO_DATABASE_URL is not set");
 
-  const db = createDb(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN);
+  /*
+   * A qué inquilino pertenece esta petición, y por tanto a qué base conectarse.
+   *
+   * Con `CONTROL_DATABASE_URL` sin poner esto no hace nada: `resolveTenant` devuelve
+   * `STANDALONE` sin abrir ninguna conexión y todo lo de abajo es lo de siempre. Ésa es la
+   * condición para que el plano de control se pueda añadir a una instalación que ya está
+   * sirviendo sin que deje de servir.
+   */
+  const { CONTROL_DATABASE_URL, CONTROL_AUTH_TOKEN } = env;
+  const tenant = await resolveTenant(
+    CONTROL_DATABASE_URL
+      ? () => createControlDb(CONTROL_DATABASE_URL, CONTROL_AUTH_TOKEN)
+      : null,
+    context.url.host
+  );
 
-  const siteId = await resolveSiteId(db, context.url.host);
+  /*
+   * Un inquilino que existe pero no debe servir.
+   *
+   * `provisioning` es la ventana entre crear el inquilino y terminar de migrar su base: durante
+   * ella el sitio existe y el dominio ya resuelve, así que sin esto un visitante vería una base
+   * a medio construir. `suspended` lo corta sin borrar nada.
+   *
+   * 503 y no 404: el dominio es correcto y el sitio volverá. Un 404 le dice a Google que lo
+   * quite del índice, y recuperar eso después de un impago de dos días cuesta semanas.
+   */
+  if (tenant.tenantId && !isServable(tenant)) {
+    return new Response("Este sitio no está disponible ahora mismo.", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+    });
+  }
+
+  const db = tenant.database
+    ? createDb(tenant.database.url, tenant.database.authToken)
+    : createDb(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN);
+
+  /*
+   * El id del sitio.
+   *
+   * Si el plano de control ha reclamado el dominio, es él quien manda. Si no —porque no hay
+   * plano de control, o porque lo hay pero este dominio todavía no está dado de alta— se cae al
+   * camino de siempre, que lo busca en `sites.host`. Eso es lo que permite adoptar el plano de
+   * control inquilino a inquilino en vez de todo de golpe.
+   */
+  const siteId = tenant.tenantId ? tenant.siteId : await resolveSiteId(db, context.url.host);
 
   // One round trip for both rows. leftJoin and not innerJoin because a site can exist
   // before ensureBootstrap has written its settings, and losing the site row in that
@@ -97,6 +142,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   context.locals.db = db;
   context.locals.siteId = siteId;
+  context.locals.tenant = tenant;
   context.locals.auth = auth;
   context.locals.env = env;
   // The R2 bucket is a binding, so it can only come from here.

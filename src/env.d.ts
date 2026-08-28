@@ -38,6 +38,9 @@ interface RuntimeEnv {
   [key: string]: unknown;
   TURSO_DATABASE_URL?: string;
   TURSO_AUTH_TOKEN?: string;
+  /** El plano de control. Sin esto, la aplicación se comporta como mono-inquilino. */
+  CONTROL_DATABASE_URL?: string;
+  CONTROL_AUTH_TOKEN?: string;
   R2_PUBLIC_URL?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
@@ -71,6 +74,8 @@ declare namespace App {
     settings: typeof import("@db/schema").settings.$inferSelect | null;
     /** Which site this request is for. Never hardcode the id — read it from here. */
     siteId: string;
+    /** El inquilino resuelto por dominio. `tenantId` nulo = sin plano de control. */
+    tenant: import("@lib/tenant").ResolvedTenant;
     /** The site row. Only loaded on /admin and API routes, which are the ones that need it. */
     site: typeof import("@db/schema").sites.$inferSelect | null;
     session: { session: import("better-auth").Session; user: import("better-auth").User } | null;
