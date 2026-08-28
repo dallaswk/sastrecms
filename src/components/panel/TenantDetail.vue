@@ -39,6 +39,45 @@
       </div>
     </div>
 
+    <!-- Cobro -->
+    <div class="panel">
+      <div class="panel-body">
+        <div class="flex flex-wrap items-center gap-3">
+          <p class="admin-h2 flex-1">Cobro</p>
+          <span class="badge badge-ghost badge-sm">{{ summary }}</span>
+        </div>
+
+        <p class="admin-hint">
+          Lo que se debe y si el sitio sirve son dos cosas distintas. Cambiar esto no apaga ni
+          enciende nada por sí solo: lo aplica <code>npm run control -- enforce</code>, que es lo
+          que lanzaría un cron.
+        </p>
+
+        <div class="flex flex-wrap items-end gap-2">
+          <button
+            v-for="option in BILLING"
+            :key="option ?? 'none'"
+            class="btn btn-sm"
+            :class="option === state.billingStatus ? 'btn-primary' : 'btn-ghost border border-base-300'"
+            :disabled="busy"
+            @click="setBilling(option)"
+          >{{ billingLabel(option) }}</button>
+
+          <label v-if="needsDays" class="field w-28">
+            <span class="field-label">Días</span>
+            <input v-model.number="days" type="number" class="input input-sm" />
+          </label>
+        </div>
+
+        <p v-if="willChangeTo" class="text-sm text-warning">
+          Al aplicar la política pasará a «{{ statusLabel(willChangeTo) }}».
+        </p>
+        <p v-if="state.billingRef" class="text-xs text-base-content/50">
+          En la pasarela: <code>{{ state.billingRef }}</code>
+        </p>
+      </div>
+    </div>
+
     <!-- Base de datos -->
     <div class="panel">
       <div class="panel-body">
@@ -117,11 +156,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { actions } from "astro:actions";
 import { notify } from "@/scripts/notify";
 
 type Status = "provisioning" | "active" | "suspended";
+type Billing = "trialing" | "paid" | "past_due" | "cancelled" | null;
 type Tenant = {
   id: string;
   slug: string;
@@ -130,6 +170,9 @@ type Tenant = {
   ownDatabase: boolean;
   databaseUrl: string | null;
   suspendedReason: string | null;
+  billingStatus: Billing;
+  billingRef: string | null;
+  billingSummary: string;
   domains: { host: string; isPrimary: boolean }[];
 };
 
@@ -140,6 +183,43 @@ const state = reactive<Tenant>(JSON.parse(props.tenant));
 const newHost = ref("");
 const reason = ref("");
 const busy = ref(false);
+const days = ref(14);
+const willChangeTo = ref<Status | null>(null);
+
+const BILLING: Billing[] = ["trialing", "paid", "past_due", "cancelled", null];
+const summary = ref(state.billingSummary);
+
+// Sólo la prueba y el impago cuentan días; enseñar el campo con «al corriente» seleccionado
+// sugeriría que hace algo.
+const needsDays = computed(
+  () => state.billingStatus === "trialing" || state.billingStatus === "past_due"
+);
+
+function billingLabel(status: Billing): string {
+  return status === null
+    ? "No facturar"
+    : { trialing: "En prueba", paid: "Al corriente", past_due: "Impago", cancelled: "Cancelado" }[status];
+}
+
+async function setBilling(status: Billing) {
+  busy.value = true;
+  const { data, error } = await actions.panel.setBilling({
+    tenantId: state.id,
+    billingStatus: status,
+    ...(status === "trialing" || status === "past_due" ? { days: days.value } : {}),
+  });
+  busy.value = false;
+  if (error) return notify.fromError(error, "No se ha podido cambiar el cobro.");
+
+  state.billingStatus = status;
+  willChangeTo.value = (data!.willChangeTo as Status | null) ?? null;
+  summary.value = billingLabel(status);
+  notify.success(
+    data!.willChangeTo
+      ? `Guardado. Al aplicar la política pasará a «${statusLabel(data!.willChangeTo as Status)}».`
+      : "Guardado."
+  );
+}
 
 function statusLabel(status: Status): string {
   return { provisioning: "montándose", active: "activo", suspended: "suspendido" }[status];

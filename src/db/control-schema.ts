@@ -16,6 +16,20 @@ import { sqliteTable, text, integer, index, primaryKey } from "drizzle-orm/sqlit
 export const TENANT_STATUS = ["provisioning", "active", "suspended"] as const;
 export type TenantStatus = (typeof TENANT_STATUS)[number];
 
+/**
+ * El estado de pago, que no es lo mismo que si el sitio sirve.
+ *
+ * Son dos ejes distintos y confundirlos es lo que hace que el sitio de un cliente se apague
+ * porque le ha caducado la tarjeta. `status` dice si sirve; esto dice qué se debe. La política
+ * que traduce lo segundo en lo primero está en `lib/billing.ts`, escrita aparte para poder
+ * probarla sin fechas reales ni pasarela.
+ *
+ * Nulo significa «este inquilino no se factura»: los que ya existían, los internos, los
+ * regalados. La aplicación de la política no los toca nunca.
+ */
+export const BILLING_STATUS = ["trialing", "paid", "past_due", "cancelled"] as const;
+export type BillingStatus = (typeof BILLING_STATUS)[number];
+
 export const tenants = sqliteTable(
   "tenants",
   {
@@ -61,8 +75,34 @@ export const tenants = sqliteTable(
     databaseUrl: text("database_url"),
     databaseAuthToken: text("database_auth_token"),
 
-    /** Etiqueta del plan contratado. La facturación en sí es de otro paso. */
+    /** Etiqueta del plan contratado. Descriptiva: la política no la mira. */
     plan: text("plan"),
+
+    /**
+     * Qué se debe. Nulo = no se factura, y la política no lo toca.
+     */
+    billingStatus: text("billing_status", { enum: BILLING_STATUS }),
+
+    /**
+     * El identificador del cliente o la suscripción en la pasarela.
+     *
+     * Sin `enum` de proveedor a propósito: aquí sólo hace falta saber a quién preguntar cuando
+     * algo no cuadra, y atarlo a uno concreto ahora sería decidirlo desde la tabla equivocada.
+     */
+    billingRef: text("billing_ref"),
+
+    /** Hasta cuándo dura la prueba. Pasada, sin pagar, se suspende. */
+    trialEndsAt: integer("trial_ends_at", { mode: "timestamp" }),
+
+    /**
+     * Hasta cuándo se sigue sirviendo con el pago fallido.
+     *
+     * Existe porque un pago que falla casi nunca es alguien que no quiere pagar: es una tarjeta
+     * caducada. Apagar la web de un cliente el mismo día que su banco rechaza un cobro le hace
+     * a él un daño desproporcionado y a ti no te cobra antes.
+     */
+    graceUntil: integer("grace_until", { mode: "timestamp" }),
+
     notes: text("notes"),
 
     createdAt: integer("created_at", { mode: "timestamp" })

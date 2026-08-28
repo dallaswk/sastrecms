@@ -2,6 +2,7 @@
 import PanelLayout from "@layouts/PanelLayout.astro";
 import TenantDetail from "@components/panel/TenantDetail.vue";
 import { findOperator, tenantForOperator } from "@lib/panel";
+import { billingSummary } from "@lib/billing";
 
 export const prerender = false;
 
@@ -29,6 +30,9 @@ const view = {
   // y ver `libsql://algo.turso.io` no da acceso a nada.
   databaseUrl: tenant.databaseUrl,
   suspendedReason: tenant.suspendedReason,
+  billingStatus: tenant.billingStatus,
+  billingRef: tenant.billingRef,
+  billingSummary: billingSummary(tenant, new Date()),
   domains: tenant.domains
     .map((d) => ({ host: d.host, isPrimary: d.isPrimary }))
     .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)),

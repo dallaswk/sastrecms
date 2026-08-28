@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { eq } from "drizzle-orm";
 import { createControlDb } from "../src/db/control-client";
-import { tenants, domains, operators, operatorTenants } from "../src/db/control-schema";
+import { tenants, domains, operators, operatorTenants, BILLING_STATUS } from "../src/db/control-schema";
+import { decide, billingSummary, addDays, GRACE_DAYS, TRIAL_DAYS } from "../src/lib/billing";
 import { normaliseHost } from "../src/lib/site";
 
 /**
@@ -60,6 +61,7 @@ const [command, ...args] = process.argv.slice(2);
 
 switch (command) {
   case "tenants": {
+    const now = new Date();
     const rows = await db.query.tenants.findMany({ with: { domains: true } });
     if (!rows.length) {
       console.log(`${C.dim}No hay ningún inquilino todavía.${C.reset}`);
@@ -72,7 +74,8 @@ switch (command) {
         `${C.bold}${tenant.slug}${C.reset}  ${colour}${tenant.status}${C.reset}  ` +
           `${C.dim}site=${tenant.siteId}${tenant.databaseUrl ? " db=propia" : " db=compartida"}${C.reset}\n` +
           `  ${tenant.name}\n` +
-          `  ${hosts.length ? hosts.join(", ") : `${C.dim}sin dominios${C.reset}`}`
+          `  ${hosts.length ? hosts.join(", ") : `${C.dim}sin dominios${C.reset}`}\n` +
+          `  ${C.dim}${billingSummary(tenant, now)}${C.reset}`
       );
     }
     break;
@@ -163,6 +166,109 @@ switch (command) {
     break;
   }
 
+  case "billing": {
+    const [slug, status, ...rest] = args;
+    if (!slug || !status) {
+      fail(`Uso: billing <slug> <${BILLING_STATUS.join("|")}|none> [--days=N] [--ref=id]`);
+    }
+    const tenant = await bySlug(slug);
+
+    if (status === "none") {
+      // Sacarlo de la facturación, no ponerlo a cero: nulo es lo que hace que `enforce` no lo
+      // toque nunca.
+      await db
+        .update(tenants)
+        .set({ billingStatus: null, trialEndsAt: null, graceUntil: null })
+        .where(eq(tenants.id, tenant.id));
+      console.log(`${C.green}✓${C.reset} ${slug} deja de facturarse.`);
+      break;
+    }
+
+    if (!(BILLING_STATUS as readonly string[]).includes(status)) {
+      fail(`Estado de pago desconocido: «${status}».`);
+    }
+
+    const daysArg = rest.find((r) => r.startsWith("--days="));
+    const days = daysArg ? Number(daysArg.slice(7)) : null;
+    const refArg = rest.find((r) => r.startsWith("--ref="));
+    const now = new Date();
+
+    // Las fechas se derivan del estado al que entra: pasar a prueba fija el fin, pasar a impago
+    // abre el margen. Tenerlas que poner a mano es cómo un inquilino acaba en impago sin margen
+    // y suspendido esa misma noche.
+    const dates =
+      status === "trialing"
+        ? { trialEndsAt: addDays(now, days ?? TRIAL_DAYS), graceUntil: null }
+        : status === "past_due"
+          ? { graceUntil: addDays(now, days ?? GRACE_DAYS) }
+          : status === "paid"
+            ? { graceUntil: null }
+            : {};
+
+    await db
+      .update(tenants)
+      .set({
+        billingStatus: status as (typeof BILLING_STATUS)[number],
+        ...(refArg ? { billingRef: refArg.slice(6) } : {}),
+        ...dates,
+      })
+      .where(eq(tenants.id, tenant.id));
+
+    const updated = (await db.query.tenants.findFirst({ where: eq(tenants.id, tenant.id) }))!;
+    console.log(`${C.green}✓${C.reset} ${slug}: ${billingSummary(updated, now)}`);
+    const next = decide(updated, now);
+    if (next.changed) {
+      console.log(`${C.dim}  Con esto, \`enforce\` lo pondrá en «${next.status}».${C.reset}`);
+    }
+    break;
+  }
+
+  case "enforce": {
+    /*
+     * Aplicar la política. Esto es lo que lanzaría un cron.
+     *
+     * Es la única parte del sistema que puede apagar el sitio de un cliente sin que nadie se lo
+     * pida, así que trae `--dry-run` y lo dice todo: qué cambia, de qué a qué y por qué. Un
+     * proceso automático que suspende en silencio es un proceso en el que no se puede confiar.
+     */
+    const dry = args.includes("--dry-run");
+    const now = new Date();
+    const rows = await db.query.tenants.findMany();
+
+    const changes = rows
+      .map((tenant) => ({ tenant, decision: decide(tenant, now) }))
+      .filter((row) => row.decision.changed);
+
+    if (!changes.length) {
+      console.log(`${C.dim}Nada que cambiar: ${rows.length} inquilinos revisados.${C.reset}`);
+      break;
+    }
+
+    for (const { tenant, decision } of changes) {
+      const arrow = `${tenant.status} → ${decision.status}`;
+      const colour = decision.status === "active" ? C.green : C.yellow;
+      console.log(`  ${colour}${tenant.slug}${C.reset}  ${arrow}  ${C.dim}${decision.reason ?? ""}${C.reset}`);
+
+      if (!dry) {
+        await db
+          .update(tenants)
+          .set({
+            status: decision.status,
+            suspendedAt: decision.status === "suspended" ? now : null,
+            suspendedReason: decision.reason,
+          })
+          .where(eq(tenants.id, tenant.id));
+      }
+    }
+
+    console.log(
+      dry
+        ? `\n${C.yellow}${changes.length} cambiarían.${C.reset} Quita --dry-run para aplicarlo.`
+        : `\n${C.green}✓${C.reset} ${changes.length} actualizados.`
+    );
+    break;
+  }
+
   case "add-operator": {
     const [email, ...rest] = args;
     if (!email) fail("Uso: add-operator <email> [nombre] [--super]");
@@ -208,6 +314,8 @@ switch (command) {
         `  map <slug> <dominio> [--primary]           le asigna un dominio\n` +
         `  unmap <dominio>\n` +
         `  status <slug> <estado> [motivo]            provisioning | active | suspended\n` +
+        `  billing <slug> <estado> [--days=N] [--ref=]  trialing | paid | past_due | cancelled | none\n` +
+        `  enforce [--dry-run]                        aplica la política de cobro. Para el cron.\n` +
         `  add-operator <email> [nombre] [--super]    quien podrá usar el panel\n` +
         `  grant <email> <slug> [owner|manager]\n`
     );

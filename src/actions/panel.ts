@@ -1,7 +1,8 @@
 import { defineAction, ActionError } from "astro:actions";
 import { z } from "astro:schema";
 import { and, eq } from "drizzle-orm";
-import { tenants, domains, TENANT_STATUS } from "@db/control-schema";
+import { tenants, domains, TENANT_STATUS, BILLING_STATUS } from "@db/control-schema";
+import { decide, addDays, GRACE_DAYS, TRIAL_DAYS } from "@lib/billing";
 import type { ControlDatabase } from "@db/control-client";
 import {
   findOperator,
@@ -180,6 +181,66 @@ export const panelActions = {
         .where(and(eq(domains.host, host), eq(domains.tenantId, tenant.id)));
       forgetTenant(host);
       return { host };
+    },
+  }),
+
+  setBilling: defineAction({
+    accept: "json",
+    input: z.object({
+      tenantId: z.string(),
+      /** `null` saca al inquilino de la facturación: la política deja de tocarlo. */
+      billingStatus: z.enum(BILLING_STATUS).nullable(),
+      days: z.number().int().min(-3650).max(3650).optional(),
+      ref: z.string().trim().optional(),
+    }),
+    handler: async (input, context) => {
+      const panel = await requireOperator(context as never);
+      const tenant = await requireTenant(panel, input.tenantId);
+      const now = new Date();
+
+      if (input.billingStatus === null) {
+        await panel.control
+          .update(tenants)
+          .set({ billingStatus: null, trialEndsAt: null, graceUntil: null })
+          .where(eq(tenants.id, tenant.id));
+        return { billingStatus: null, willChangeTo: null };
+      }
+
+      /*
+       * Las fechas se derivan del estado al que entra.
+       *
+       * Pedirlas aparte es cómo un inquilino acaba en impago sin margen y suspendido esa misma
+       * noche — el dato que falta no puede ser el que decide.
+       */
+      const dates =
+        input.billingStatus === "trialing"
+          ? { trialEndsAt: addDays(now, input.days ?? TRIAL_DAYS), graceUntil: null }
+          : input.billingStatus === "past_due"
+            ? { graceUntil: addDays(now, input.days ?? GRACE_DAYS) }
+            : input.billingStatus === "paid"
+              ? { graceUntil: null }
+              : {};
+
+      await panel.control
+        .update(tenants)
+        .set({
+          billingStatus: input.billingStatus,
+          ...(input.ref ? { billingRef: input.ref } : {}),
+          ...dates,
+        })
+        .where(eq(tenants.id, tenant.id));
+
+      // Se dice qué va a pasar, pero no se hace aquí: cambiar el cobro y apagar un sitio son
+      // dos decisiones, y juntarlas es cómo se suspende a alguien sin querer.
+      const updated = (await panel.control.query.tenants.findFirst({
+        where: eq(tenants.id, tenant.id),
+      }))!;
+      const next = decide(updated, now);
+
+      return {
+        billingStatus: input.billingStatus,
+        willChangeTo: next.changed ? next.status : null,
+      };
     },
   }),
 
