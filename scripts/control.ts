@@ -273,6 +273,47 @@ switch (command) {
     break;
   }
 
+  case "hosts": {
+    /*
+     * Los dominios locales, y la línea de `/etc/hosts` por si hace falta.
+     *
+     * «Por si»: en macOS al día `*.localhost` resuelve solo —comprobado en 26.2, sin tocar
+     * `/etc/hosts`— y en Linux con systemd-resolved también. Donde no resuelve es en un
+     * `.test`, en máquinas más viejas, y en algún resolvedor corporativo que se queda con el
+     * dominio antes de que llegue al bucle local. De ahí que se imprima la línea en vez de
+     * darla por necesaria.
+     *
+     * Y se imprime en vez de escribirse: `/etc/hosts` pide sudo y no es un fichero que nadie
+     * quiera que le toque un script sin verlo antes.
+     */
+    const rows = await db.query.domains.findMany();
+    const local = rows
+      .map((row) => row.host)
+      .filter((host) => host.endsWith(".localhost") || host.endsWith(".test"))
+      .sort();
+
+    if (!local.length) {
+      console.log(
+        `${C.dim}Ningún dominio local mapeado. Sólo los .localhost y los .test se listan aquí;\n` +
+          `el resto resuelve por DNS de verdad.${C.reset}`
+      );
+      break;
+    }
+
+    console.log(`${C.bold}Dominios locales${C.reset}\n`);
+    for (const host of local) console.log(`  http://${host}:4321`);
+    console.log(
+      `\n${C.dim}Normalmente ya funcionan: macOS y systemd-resolved resuelven *.localhost\n` +
+        `solos. Si alguno no te resuelve, añade a /etc/hosts:${C.reset}\n`
+    );
+    console.log(`127.0.0.1 ${local.join(" ")}`);
+    console.log(`\n${C.dim}De una vez, y sin duplicar si ya está:${C.reset}`);
+    console.log(
+      `  grep -q '${local[0]}' /etc/hosts || echo '127.0.0.1 ${local.join(" ")}' | sudo tee -a /etc/hosts`
+    );
+    break;
+  }
+
   case "add-operator": {
     const [email, ...rest] = args;
     if (!email) fail("Uso: add-operator <email> [nombre] [--super]");
@@ -320,6 +361,7 @@ switch (command) {
         `  status <slug> <estado> [motivo]            provisioning | active | suspended\n` +
         `  billing <slug> <estado> [--days=N] [--ref=]  trialing | paid | past_due | cancelled | none\n` +
         `  enforce [--dry-run]                        aplica la política de cobro. Para el cron.\n` +
+        `  hosts                                      la línea de /etc/hosts para los dominios locales\n` +
         `  add-operator <email> [nombre] [--super]    quien podrá usar el panel\n` +
         `  grant <email> <slug> [owner|manager]\n`
     );

@@ -10,8 +10,16 @@
           existe.
         </p>
 
-        <div class="flex flex-wrap items-end gap-3">
-          <label class="field flex-1 min-w-56">
+        <!--
+          Rejilla y no una fila flexible.
+ 
+          Con `flex items-end`, un campo que lleva pista debajo y otro que no tienen alturas
+          distintas, así que sus etiquetas y sus cajas quedaban a distinto nivel y el botón
+          flotando entre medias. En rejilla, cada campo ocupa su celda y la pista crece hacia
+          abajo sin mover a nadie.
+        -->
+        <div class="field-grid">
+          <label class="field">
             <span class="field-label">Nombre</span>
             <input
               v-model="name"
@@ -20,15 +28,22 @@
               placeholder="Panadería Sol"
               @keyup.enter="create"
             />
+            <span class="field-hint">Como se llama el cliente. Se puede cambiar después.</span>
           </label>
-          <label class="field flex-1 min-w-56">
+          <label class="field">
             <span class="field-label">Slug</span>
             <input v-model="slug" type="text" class="input" :placeholder="suggestedSlug || 'panaderia-sol'" />
             <span class="field-hint">Va en la URL del panel y en el nombre de su base.</span>
           </label>
+        </div>
+
+        <div class="flex items-center gap-3">
           <button class="btn btn-primary" :disabled="!name.trim() || busy" @click="create">
-            {{ busy ? "Creando…" : "Crear" }}
+            {{ busy ? "Creando…" : "Crear inquilino" }}
           </button>
+          <span v-if="name.trim()" class="text-xs text-base-content/50">
+            Nacerá en «montándose»: no sirve nada hasta que tenga base y lo actives.
+          </span>
         </div>
       </div>
     </div>

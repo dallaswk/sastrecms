@@ -1,84 +1,230 @@
 ---
 import "@styles/global.css";
 import "@styles/admin.css";
+import NavIcon from "@components/admin/NavIcon.astro";
 import { ADMIN_THEME_DARK, ADMIN_THEME_LIGHT } from "@lib/theme";
+import { findOperator, listTenantsFor } from "@lib/panel";
 
 /**
  * El panel de inquilinos.
  *
- * Deliberadamente distinto del backoffice y no una sección suya: aquí se mira a todos los
- * clientes a la vez, y confundir «estoy editando el sitio de alguien» con «estoy administrando
- * a todo el mundo» es la clase de error que se comete una vez y se lamenta mucho. El acento en
- * ámbar, frente al del backoffice, es para que se note de un vistazo en qué está uno.
+ * Misma estructura que el backoffice —cajón lateral, cabecera de página, alternador de tema—
+ * porque es la misma persona quien usa los dos y aprenderse dos navegaciones distintas no
+ * aporta nada. Lo que sí cambia es el contenido de la barra: aquí la navegación **son** los
+ * inquilinos, porque moverse por este panel es moverse entre clientes.
+ *
+ * Sigue siendo un layout aparte y no una sección de `/admin`: confundir «estoy editando el
+ * sitio de alguien» con «estoy administrando a todo el mundo» es un error que se comete una vez
+ * y se lamenta mucho.
  */
 
 interface Props {
   title: string;
   description?: string;
-  back?: { label: string; href: string };
+  /** El slug del inquilino que se está mirando, para marcarlo en la barra. */
+  current?: string;
 }
 
-const { title, description, back } = Astro.props;
+const { title, description, current } = Astro.props;
 const user = Astro.locals.user;
+const control = Astro.locals.control;
+
+/*
+ * Los inquilinos de la barra.
+ *
+ * Se cargan aquí y no se pasan desde cada página para que la barra no dependa de que cada
+ * una se acuerde. Con el plano de control sin configurar la barra queda vacía, que es lo
+ * correcto: la página ya explica que falta.
+ */
+const operator = control && user ? await findOperator(control, user.email) : null;
+const tenants = control && operator ? await listTenantsFor(control, operator) : [];
+const sidebar = tenants
+  .map((tenant) => ({ slug: tenant.slug, name: tenant.name, status: tenant.status }))
+  .sort((a, b) => a.name.localeCompare(b.name, "es"));
+
+const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "";
+const initials = displayName
+  .split(/\s+/)
+  .slice(0, 2)
+  .map((part) => part[0]?.toUpperCase() ?? "")
+  .join("");
+
+/** Sólo `active` sirve páginas, así que sólo `active` va en verde. */
+const DOT = {
+  active: "bg-success",
+  provisioning: "bg-warning",
+  suspended: "bg-warning",
+} as const;
 ---
 
 <!doctype html>
-<html lang="es" data-theme={ADMIN_THEME_LIGHT} class="admin-root">
+<html lang="es" data-theme={ADMIN_THEME_DARK} data-mode="dark">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {/* Sin sufijo cuando el título ya es «Inquilinos»: «Inquilinos — Inquilinos» en la pestaña
+        se lee como un error, que es lo que era. */}
+    <title>{title === "Inquilinos" ? title : `${title} — Inquilinos`}</title>
     <!-- Nunca indexable: es la lista de clientes. -->
     <meta name="robots" content="noindex, nofollow" />
-    <title>{title} — Inquilinos</title>
-    <link rel="icon" href="/favicon.svg" />
+
     <script is:inline define:vars={{ dark: ADMIN_THEME_DARK, light: ADMIN_THEME_LIGHT }}>
-      // Antes de pintar, para que no haya un destello del tema equivocado.
-      const stored = localStorage.getItem("admin-theme");
-      const prefers = matchMedia("(prefers-color-scheme: dark)").matches;
-      document.documentElement.dataset.theme = (stored ?? (prefers ? "dark" : "light")) === "dark" ? dark : light;
+      // Antes del primer pintado, y con la misma clave que el backoffice: quien elige claro
+      // allí no debería ver un destello oscuro al entrar aquí.
+      (function () {
+        try {
+          var stored = localStorage.getItem("sastre-admin-mode");
+          var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+          var mode = stored === "light" || (!stored && prefersLight) ? "light" : "dark";
+          document.documentElement.dataset.mode = mode;
+          document.documentElement.dataset.theme = mode === "light" ? light : dark;
+        } catch (e) {
+          /* Modo privado, o datos de sitio bloqueados. Queda el del servidor. */
+        }
+      })();
     </script>
   </head>
 
-  <body class="min-h-screen bg-base-200">
-    <header class="border-b border-base-300 bg-base-100">
-      <div class="mx-auto flex items-center gap-4 px-6 py-3">
-        <a href="/panel" class="flex items-center gap-2 font-semibold">
-          <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-warning/20 text-warning">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4">
-              <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </span>
-          Inquilinos
-        </a>
-        <span class="admin-hint ml-auto !max-w-none text-xs">{user?.email}</span>
-        <a href="/admin" class="btn btn-xs btn-ghost border border-base-300">Ir al backoffice</a>
-      </div>
-    </header>
+  <body class="admin-root bg-base-200 min-h-screen text-base-content">
+    <div class="drawer lg:drawer-open">
+      <input id="panel-drawer" type="checkbox" class="drawer-toggle" />
 
-    <main class="mx-auto px-6 py-8">
-      <div class="flex flex-col gap-6">
-        <div class="flex flex-col gap-1">
-          {back && (
-            <a href={back.href} class="admin-eyebrow hover:underline w-fit">← {back.label}</a>
-          )}
-          <h1 class="admin-h1">{title}</h1>
-          {description && <p class="admin-hint">{description}</p>}
+      <div class="drawer-content flex min-h-screen flex-col">
+        {/* Barra móvil. En pantalla ancha el cajón está siempre abierto y esto no sale. */}
+        <header
+          class="lg:hidden sticky top-0 z-30 flex items-center gap-2 border-b border-base-300 bg-base-100/95 px-3 py-2 backdrop-blur"
+        >
+          <label for="panel-drawer" class="btn btn-ghost btn-sm btn-square" aria-label="Abrir el menú">
+            <NavIcon name="menu" class="h-5 w-5" />
+          </label>
+          <span class="font-bold tracking-tight">Inquilinos</span>
+        </header>
+
+        <main class="flex-1 px-5 py-5 lg:px-8 lg:py-7">
+          <div class="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+            <div class="flex min-w-0 flex-col gap-1">
+              {current && (
+                <nav aria-label="Ruta" class="flex items-center gap-1.5 text-xs text-base-content/45">
+                  <a href="/panel" class="transition-colors hover:text-base-content/80">Inquilinos</a>
+                  <span aria-hidden="true">/</span>
+                  <span>{current}</span>
+                </nav>
+              )}
+              <h1 class="admin-h1">{title}</h1>
+              {description && <p class="admin-hint">{description}</p>}
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <slot name="actions" />
+            </div>
+          </div>
+
+          <slot />
+        </main>
+      </div>
+
+      <aside class="drawer-side z-50">
+        <label for="panel-drawer" class="drawer-overlay" aria-label="Cerrar el menú"></label>
+
+        <div class="flex min-h-full w-64 flex-col gap-1 border-r border-base-300 bg-base-100 px-3 py-4">
+          <a
+            href="/panel"
+            class="mb-5 flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200"
+          >
+            <span class="text-xl font-black tracking-tight text-warning">Inquilinos</span>
+          </a>
+
+          <nav class="flex flex-col gap-0.5" aria-label="Inquilinos">
+            <a href="/panel" class="nav-link" aria-current={current ? undefined : "page"}>
+              <NavIcon name="dashboard" />
+              <span class="flex-1">Todos</span>
+              {sidebar.length > 0 && (
+                <span class="badge badge-ghost badge-sm tabular">{sidebar.length}</span>
+              )}
+            </a>
+
+            {sidebar.length > 0 && <p class="admin-eyebrow mb-1 mt-5 px-2.5">Sitios</p>}
+
+            {sidebar.map((tenant) => (
+              <a
+                href={`/panel/${tenant.slug}`}
+                class="nav-link"
+                aria-current={current === tenant.slug ? "page" : undefined}
+              >
+                {/*
+                  Un punto y no una etiqueta: en una barra de veinte clientes lo que hace falta
+                  es ver de un vistazo cuáles no están sirviendo, no leer veinte palabras.
+                */}
+                <span
+                  class:list={["h-2 w-2 shrink-0 rounded-full", DOT[tenant.status]]}
+                  aria-hidden="true"
+                ></span>
+                <span class="flex-1 truncate">{tenant.name}</span>
+              </a>
+            ))}
+          </nav>
+
+          <div class="mt-auto flex flex-col gap-2 pt-4">
+            <a href="/admin" class="nav-link text-base-content/55">
+              <NavIcon name="external" />
+              <span>Ir al backoffice</span>
+            </a>
+
+            <div class="flex items-center gap-2.5 border-t border-base-300 px-1 pt-3">
+              <div
+                class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-warning/15 text-xs font-semibold text-warning"
+                aria-hidden="true"
+              >{initials}</div>
+              <div class="flex min-w-0 flex-col leading-tight">
+                <span class="truncate text-sm font-medium">{displayName}</span>
+                <span class="truncate text-xs text-base-content/45">{user?.email}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1">
+              <button
+                id="panel-theme-toggle"
+                type="button"
+                class="nav-link flex-1 text-base-content/55"
+                aria-label="Cambiar entre tema claro y oscuro"
+              >
+                <NavIcon name="sun" class="theme-icon-light" />
+                <NavIcon name="moon" class="theme-icon-dark" />
+                <span>Tema</span>
+              </button>
+
+              <form method="POST" action="/api/auth/sign-out" class="flex-1">
+                <button type="submit" class="nav-link w-full text-error/80 hover:text-error">
+                  <NavIcon name="logout" />
+                  <span>Salir</span>
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
-        <slot />
-      </div>
-    </main>
+      </aside>
+    </div>
 
-    {/*
-      Toasts. El panel también los necesita, y no basta con que los llame: `notify` cae a un
-      no-op silencioso cuando no encuentra el contenedor, así que sin esto cada «creado» y cada
-      error no salen por ninguna parte y nada lo dice.
-    */}
     <div
       id="sastre-toasts"
       class="pointer-events-none fixed bottom-4 right-4 z-[70] flex flex-col-reverse gap-2"
     ></div>
     <script>
       import "@/scripts/toast";
+    </script>
+
+    <script is:inline define:vars={{ dark: ADMIN_THEME_DARK, light: ADMIN_THEME_LIGHT }}>
+      document.getElementById("panel-theme-toggle")?.addEventListener("click", function () {
+        var root = document.documentElement;
+        var next = root.dataset.mode === "light" ? "dark" : "light";
+        root.dataset.mode = next;
+        root.dataset.theme = next === "light" ? light : dark;
+        try {
+          localStorage.setItem("sastre-admin-mode", next);
+        } catch (e) {
+          /* Sin almacenamiento el tema no se recuerda, pero el botón sigue funcionando. */
+        }
+      });
     </script>
   </body>
 </html>

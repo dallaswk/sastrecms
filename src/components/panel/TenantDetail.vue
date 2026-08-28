@@ -16,7 +16,14 @@
           404 le dice a Google que lo quite del índice.
         </p>
 
-        <div class="flex flex-wrap items-end gap-2">
+        <!--
+          Botones y campo en filas distintas.
+ 
+          Compartiendo fila con `items-end`, los botones se alineaban con el borde inferior del
+          campo — que con la pista debajo cae más abajo que la caja de texto, así que quedaban a
+          la altura del texto de ayuda en vez de a la del input.
+        -->
+        <div class="flex flex-wrap gap-2">
           <button
             v-for="option in STATUSES"
             :key="option"
@@ -25,13 +32,13 @@
             :disabled="busy || option === state.status"
             @click="setStatus(option)"
           >{{ statusLabel(option) }}</button>
-
-          <label v-if="state.status !== 'suspended'" class="field flex-1 min-w-56">
-            <span class="field-label">Motivo, si lo suspendes</span>
-            <input v-model="reason" type="text" class="input input-sm" placeholder="Impago de julio" />
-            <span class="field-hint">Se guarda para ti. El visitante nunca lo ve.</span>
-          </label>
         </div>
+
+        <label v-if="state.status !== 'suspended'" class="field max-w-md">
+          <span class="field-label">Motivo, si lo suspendes</span>
+          <input v-model="reason" type="text" class="input input-sm" placeholder="Impago de julio" />
+          <span class="field-hint">Se guarda para ti. El visitante nunca lo ve.</span>
+        </label>
 
         <p v-if="state.suspendedReason" class="text-sm text-warning">
           Suspendido: {{ state.suspendedReason }}
@@ -53,7 +60,7 @@
           que lanzaría un cron.
         </p>
 
-        <div class="flex flex-wrap items-end gap-2">
+        <div class="flex flex-wrap gap-2">
           <button
             v-for="option in BILLING"
             :key="option ?? 'none'"
@@ -62,12 +69,12 @@
             :disabled="busy"
             @click="setBilling(option)"
           >{{ billingLabel(option) }}</button>
-
-          <label v-if="needsDays" class="field w-28">
-            <span class="field-label">Días</span>
-            <input v-model.number="days" type="number" class="input input-sm" />
-          </label>
         </div>
+
+        <label v-if="needsDays" class="field w-28">
+          <span class="field-label">Días</span>
+          <input v-model.number="days" type="number" class="input input-sm" />
+        </label>
 
         <p v-if="willChangeTo" class="text-sm text-warning">
           Al aplicar la política pasará a «{{ statusLabel(willChangeTo) }}».
@@ -133,8 +140,9 @@
           Ninguno todavía: este inquilino no responde en ninguna parte.
         </p>
 
+        <!-- Aquí el campo no lleva pista, así que el borde inferior de los dos es el mismo. -->
         <div class="flex flex-wrap items-end gap-2">
-          <label class="field flex-1 min-w-56">
+          <label class="field flex-1 min-w-56 max-w-md">
             <span class="field-label">Añadir dominio</span>
             <input
               v-model="newHost"

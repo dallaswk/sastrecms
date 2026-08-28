@@ -39,10 +39,6 @@ const view = {
 };
 ---
 
-<PanelLayout
-  title={tenant.name}
-  description={tenant.slug}
-  back={{ label: "Todos los inquilinos", href: "/panel" }}
->
+<PanelLayout title={tenant.name} description={tenant.slug} current={tenant.slug}>
   <TenantDetail client:load tenant={JSON.stringify(view)} />
 </PanelLayout>
