@@ -1,4 +1,5 @@
-import { defineAction } from "astro:actions";
+import { notFound, unauthorized } from "@lib/errors";
+import { defineAction } from "./_define";
 import { z } from "astro:schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { apiTokens } from "@db/schema";
@@ -8,7 +9,7 @@ import { generateRawToken, hashToken } from "@lib/api-token";
 export const tokenActions = {
   list: defineAction({
     handler: async (_input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       // Scoped to this site as well as this user: without it, the panel of one site listed —
       // and could revoke — the tokens its owner had created for another.
       return context.locals.db.query.apiTokens.findMany({
@@ -25,7 +26,7 @@ export const tokenActions = {
   create: defineAction({
     input: z.object({ label: z.string().min(1) }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const db = context.locals.db;
 
       const rawToken = generateRawToken();
@@ -50,7 +51,7 @@ export const tokenActions = {
   revoke: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const db = context.locals.db;
 
       const token = await db.query.apiTokens.findFirst({
@@ -60,7 +61,7 @@ export const tokenActions = {
           eq(apiTokens.siteId, context.locals.siteId)
         ),
       });
-      if (!token) throw new Error("Token not found");
+      if (!token) throw notFound("Ese token no existe.");
 
       await db
         .update(apiTokens)

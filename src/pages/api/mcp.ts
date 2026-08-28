@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { validateApiToken } from "@lib/api-token";
 import { getTool, listTools, initializeResult, SERVER_INFO } from "@lib/mcp/registry";
 import { ToolError, type ToolContext } from "@lib/mcp/types";
+import { AppError } from "@lib/errors";
 import {
   parseRpcBody,
   isNotification,
@@ -48,12 +49,24 @@ function errorFor(error: unknown) {
     };
   }
 
-  const message = error instanceof Error ? error.message : "Error interno";
-  // The permission helpers throw plain Errors prefixed this way. Recognised here so a
-  // permission failure does not read to the client as a server fault.
-  if (/^Forbidden/i.test(message)) {
-    return { rpc: RPC_ERRORS.forbidden, data: undefined, message };
+  /*
+   * Los ayudantes de permisos lanzan `AppError`, que dice de qué tipo de fallo se trata.
+   *
+   * Antes esto miraba si el mensaje empezaba por «Forbidden». Funcionaba y era una trampa: el
+   * día que alguien tradujese ese mensaje al castellano, un fallo de permiso habría pasado a
+   * contarse como avería del servidor sin que ningún test dijera nada.
+   */
+  if (error instanceof AppError) {
+    return {
+      rpc: error.kind === "forbidden" ? RPC_ERRORS.forbidden
+        : error.kind === "unauthorized" ? RPC_ERRORS.unauthorized
+        : RPC_ERRORS.invalidParams,
+      data: undefined,
+      message: error.message,
+    };
   }
+
+  const message = error instanceof Error ? error.message : "Error interno";
   return { rpc: RPC_ERRORS.internalError, data: undefined, message };
 }
 

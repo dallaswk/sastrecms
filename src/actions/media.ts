@@ -1,4 +1,5 @@
-import { defineAction } from "astro:actions";
+import { badRequest, conflict, notFound, unauthorized } from "@lib/errors";
+import { defineAction } from "./_define";
 import { z } from "astro:schema";
 import { eq, and, isNull, or, like } from "drizzle-orm";
 import { media, mediaFolders, nodes, settings } from "@db/schema";
@@ -89,7 +90,7 @@ export const mediaActions = {
       folderId: z.string().nullable().optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
@@ -131,7 +132,7 @@ export const mediaActions = {
       altText: z.string().optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
@@ -139,12 +140,12 @@ export const mediaActions = {
       const { file } = input;
 
       if (file.size > MAX_SIZE_BYTES) {
-        throw new Error(`File too large. Maximum size is ${MAX_SIZE_BYTES / 1024 / 1024} MB`);
+        throw badRequest(`El archivo es demasiado grande. El máximo son ${MAX_SIZE_BYTES / 1024 / 1024} MB.`);
       }
 
       const mediaType = ACCEPTED_TYPES[file.type];
       if (!mediaType) {
-        throw new Error(`File type "${file.type}" is not accepted`);
+        throw badRequest(`El tipo de archivo «${file.type}» no se acepta.`);
       }
 
       // Resolved by the middleware. Reading locals.runtime.env here used to throw on
@@ -229,7 +230,7 @@ export const mediaActions = {
   usage: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
@@ -237,7 +238,7 @@ export const mediaActions = {
       const file = await db.query.media.findFirst({
         where: and(eq(media.id, input.id), eq(media.siteId, siteId)),
       });
-      if (!file) throw new Error("Media not found");
+      if (!file) throw notFound("Ese archivo no existe.");
 
       const usage = await findMediaUsage(db, siteId, file.url);
       const published = usage.nodes.filter((n) => n.status === "published").length;
@@ -258,7 +259,7 @@ export const mediaActions = {
       force: z.boolean().optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
@@ -266,7 +267,7 @@ export const mediaActions = {
       const file = await db.query.media.findFirst({
         where: and(eq(media.id, input.id), eq(media.siteId, siteId)),
       });
-      if (!file) throw new Error("Media not found");
+      if (!file) throw notFound("Ese archivo no existe.");
 
       // Deleting is irreversible — the R2 object and the row both go, with no trash —
       // and the reference lives in the node's JSON, so nothing would break loudly: the
@@ -282,7 +283,7 @@ export const mediaActions = {
           ];
           const shown = where.slice(0, 5).join(", ");
           const rest = where.length > 5 ? ` y ${where.length - 5} más` : "";
-          throw new Error(
+          throw conflict(
             `Este archivo está enlazado en: ${shown}${rest}. ` +
               "Bórralo desde ahí primero, o confirma que quieres borrarlo igualmente."
           );
@@ -305,7 +306,7 @@ export const mediaActions = {
       parentId: z.string().nullable().optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
@@ -325,20 +326,30 @@ export const mediaActions = {
   deleteFolder: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
 
+      // Comprobar que existe, y que existe *aquí*.
+      //
+      // Sin esto, borrar una carpeta inexistente —o la de otro inquilino— respondía 200 con
+      // `{id}`: el borrado no afectaba a ninguna fila y la respuesta decía que había ido bien.
+      // Un éxito silencioso es peor que un error, porque nadie va a comprobarlo.
+      const folder = await db.query.mediaFolders.findFirst({
+        where: and(eq(mediaFolders.id, input.id), eq(mediaFolders.siteId, siteId)),
+      });
+      if (!folder) throw notFound("Esa carpeta no existe.");
+
       const hasFiles = await db.query.media.findFirst({
         where: and(eq(media.folderId, input.id), eq(media.siteId, siteId)),
       });
-      if (hasFiles) throw new Error("Cannot delete a folder that contains files");
+      if (hasFiles) throw conflict("No se puede borrar una carpeta que contiene archivos.");
 
       const hasSubfolders = await db.query.mediaFolders.findFirst({
         where: and(eq(mediaFolders.parentId, input.id), eq(mediaFolders.siteId, siteId)),
       });
-      if (hasSubfolders) throw new Error("Cannot delete a folder that contains subfolders");
+      if (hasSubfolders) throw conflict("No se puede borrar una carpeta que contiene otras carpetas.");
 
       await db
         .delete(mediaFolders)

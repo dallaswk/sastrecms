@@ -1,4 +1,5 @@
-import { defineAction } from "astro:actions";
+import { conflict, notFound, unauthorized } from "@lib/errors";
+import { defineAction } from "./_define";
 import { z } from "astro:schema";
 import { eq, and } from "drizzle-orm";
 import { nodes, contentTypes, settings, sites } from "@db/schema";
@@ -10,7 +11,7 @@ import { buildMenus, buildSections, orderedPages } from "@lib/presets/apply";
 export const presetActions = {
   list: defineAction({
     handler: async (_input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       await requireAdmin(context.locals.db, context.locals.user.id, context.locals.siteId);
 
       return listPresets().map((p) => ({
@@ -38,13 +39,13 @@ export const presetActions = {
       force: z.boolean().optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireAdmin(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
 
       const preset = getPreset(input.key);
-      if (!preset) throw new Error(`No existe el preset "${input.key}"`);
+      if (!preset) throw notFound(`No existe el preset «${input.key}».`);
 
       const existing = await db.query.nodes.findMany({
         where: eq(nodes.siteId, siteId),
@@ -55,7 +56,7 @@ export const presetActions = {
       const foreign = existing.filter((n) => !presetSlugs.has(n.slug));
       if (foreign.length > 0 && !input.force) {
         const names = foreign.slice(0, 4).map((n) => n.path).join(", ");
-        throw new Error(
+        throw conflict(
           `Este sitio ya tiene contenido propio (${names}${foreign.length > 4 ? "…" : ""}). ` +
             "Aplicar un preset encima lo dejaría enterrado bajo contenido de ejemplo. " +
             "Confirma si aun así quieres continuar."

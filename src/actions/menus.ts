@@ -1,4 +1,5 @@
-import { defineAction } from "astro:actions";
+import { unauthorized } from "@lib/errors";
+import { defineAction } from "./_define";
 import { z } from "astro:schema";
 import { eq, and } from "drizzle-orm";
 import { settings, nodes } from "@db/schema";
@@ -35,7 +36,7 @@ export const MenusSchema = z.object({
 export const menuActions = {
   get: defineAction({
     handler: async (_input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;
@@ -60,7 +61,7 @@ export const menuActions = {
   update: defineAction({
     input: z.object({ menus: MenusSchema }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireSiteRole(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;

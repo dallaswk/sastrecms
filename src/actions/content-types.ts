@@ -1,4 +1,5 @@
-import { defineAction } from "astro:actions";
+import { conflict, notFound, unauthorized } from "@lib/errors";
+import { defineAction } from "./_define";
 import { z } from "astro:schema";
 import { eq, and } from "drizzle-orm";
 import { contentTypes } from "@db/schema";
@@ -25,7 +26,7 @@ const FieldSchema: ZodType<FieldDefinition> = z.lazy(() =>
 export const contentTypeActions = {
   list: defineAction({
     handler: async (_input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       return context.locals.db.query.contentTypes.findMany({
         where: eq(contentTypes.siteId, siteId),
@@ -45,7 +46,7 @@ export const contentTypeActions = {
       fieldSchema: z.array(FieldSchema).default([]),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
@@ -55,7 +56,7 @@ export const contentTypeActions = {
           eq(contentTypes.key, input.key)
         ),
       });
-      if (existing) throw new Error(`Content type key "${input.key}" already exists`);
+      if (existing) throw conflict(`Ya existe un tipo de contenido con la clave «${input.key}».`);
 
       const id = generateId("ct");
       await db.insert(contentTypes).values({
@@ -86,14 +87,14 @@ export const contentTypeActions = {
       fieldSchema: z.array(FieldSchema).optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const ct = await db.query.contentTypes.findFirst({
         where: and(eq(contentTypes.id, input.id), eq(contentTypes.siteId, siteId)),
       });
-      if (!ct) throw new Error("Content type not found");
+      if (!ct) throw notFound("Ese tipo de contenido no existe.");
 
       const updates: Record<string, unknown> = {};
       if (input.label !== undefined) updates.label = input.label;
@@ -114,15 +115,15 @@ export const contentTypeActions = {
   delete: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const ct = await db.query.contentTypes.findFirst({
         where: and(eq(contentTypes.id, input.id), eq(contentTypes.siteId, siteId)),
       });
-      if (!ct) throw new Error("Content type not found");
-      if (ct.isSystem) throw new Error("System content types cannot be deleted");
+      if (!ct) throw notFound("Ese tipo de contenido no existe.");
+      if (ct.isSystem) throw conflict("Los tipos de contenido del sistema no se pueden borrar.");
 
       await db
         .delete(contentTypes)

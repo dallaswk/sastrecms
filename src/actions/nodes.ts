@@ -1,4 +1,5 @@
-import { defineAction, ActionError } from "astro:actions";
+import { badRequest, conflict, notFound, unauthorized } from "@lib/errors";
+import { defineAction, ActionError } from "./_define";
 import { z } from "astro:schema";
 import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { nodes, contentTypes } from "@db/schema";
@@ -26,7 +27,7 @@ export const nodeActions = {
       status: z.enum(["draft", "published", "scheduled"]).optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
@@ -56,7 +57,7 @@ export const nodeActions = {
   get: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
@@ -65,7 +66,7 @@ export const nodeActions = {
         with: { contentType: true },
       });
 
-      if (!node) throw new Error("Node not found");
+      if (!node) throw notFound("Esa página no existe.");
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "view");
       return node;
     },
@@ -82,7 +83,7 @@ export const nodeActions = {
       seo: NodeSeoSchema.optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
       await requirePermission(db, context.locals.user.id, siteId, input.contentTypeId, "create");
@@ -90,12 +91,12 @@ export const nodeActions = {
       const ct = await db.query.contentTypes.findFirst({
         where: and(eq(contentTypes.id, input.contentTypeId), eq(contentTypes.siteId, siteId)),
       });
-      if (!ct) throw new Error("Content type not found");
+      if (!ct) throw notFound("Ese tipo de contenido no existe.");
 
       const slug = input.slug ?? slugify(input.title);
 
       const reserved = reservedSlugError(slug, Boolean(input.parentId));
-      if (reserved) throw new Error(reserved);
+      if (reserved) throw badRequest(reserved);
 
       let parentPath: string | null = null;
 
@@ -103,7 +104,7 @@ export const nodeActions = {
         const parent = await db.query.nodes.findFirst({
           where: and(eq(nodes.id, input.parentId), eq(nodes.siteId, siteId)),
         });
-        if (!parent) throw new Error("Parent node not found");
+        if (!parent) throw notFound("La página padre no existe.");
         parentPath = parent.path;
       }
 
@@ -118,12 +119,12 @@ export const nodeActions = {
         // "index" at root level resolves to the locale root, so the clash is with the
         // home page and "Path / already exists" reads as a non sequitur.
         if (slug === "index" && !input.parentId) {
-          throw new Error(
-            `El slug "index" es la portada de este idioma (${path}), y ya existe. ` +
+          throw conflict(
+            `El slug «index» es la portada de este idioma (${path}), y ya existe. ` +
               "Usa otro slug, o edita la portada existente."
           );
         }
-        throw new Error(`Path "${path}" already exists`);
+        throw conflict(`La ruta «${path}» ya existe.`);
       }
 
       const id = generateId("node");
@@ -178,14 +179,14 @@ export const nodeActions = {
       expectedUpdatedAt: z.coerce.date().optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
         where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
       });
-      if (!node) throw new Error("Node not found");
+      if (!node) throw notFound("Esa página no existe.");
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "edit");
 
       // Writing `status` through update was a way around the publish permission that
@@ -194,9 +195,11 @@ export const nodeActions = {
         await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "publish");
       }
 
-      const conflict = checkConflict(node, input.expectedUpdatedAt);
-      if (!conflict.ok) {
-        throw new ActionError({ code: "CONFLICT", message: conflict.reason });
+      // `precondition` y no `conflict`: el nombre corto tapaba el ayudante de errores importado
+      // arriba, y el resultado era un `conflict(...)` más abajo que no compilaba.
+      const precondition = checkConflict(node, input.expectedUpdatedAt);
+      if (!precondition.ok) {
+        throw conflict(precondition.reason);
       }
 
       /*
@@ -258,7 +261,7 @@ export const nodeActions = {
         const newSlug = slugify(input.slug);
 
         const reserved = reservedSlugError(newSlug, Boolean(node.parentId));
-        if (reserved) throw new Error(reserved);
+        if (reserved) throw badRequest(reserved);
 
         // For a nested node this is the parent path, prefix included; for a root-level
         // one it is null and the locale prefix gets reapplied from scratch.
@@ -271,7 +274,7 @@ export const nodeActions = {
           where: and(eq(nodes.siteId, siteId), eq(nodes.path, newPath)),
         });
         if (existing && existing.id !== input.id) {
-          throw new Error(`Path "${newPath}" already exists`);
+          throw conflict(`La ruta «${newPath}» ya existe.`);
         }
 
         updates.slug = newSlug;
@@ -294,14 +297,14 @@ export const nodeActions = {
   publish: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
         where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
       });
-      if (!node) throw new Error("Node not found");
+      if (!node) throw notFound("Esa página no existe.");
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "publish");
 
       const now = new Date();
@@ -334,25 +337,32 @@ export const nodeActions = {
   delete: defineAction({
     input: z.object({ id: z.string(), permanent: z.boolean().optional() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
+
+      /*
+       * El orden: encontrarla, comprobar que puedes tocarla, y sólo entonces las precondiciones.
+       *
+       * Estaba al revés, y el resultado era que un colaborador sin permiso de borrado recibía
+       * «esa página tiene 2 hijas» —la estructura del sitio— antes de que nadie comprobase si
+       * podía borrar nada. Una precondición contestada antes que el permiso es una respuesta a
+       * quien no tenía derecho a preguntar.
+       */
+      const node = await db.query.nodes.findFirst({
+        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
+      });
+      if (!node) throw notFound("Esa página no existe.");
+      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "delete");
 
       const children = await db.query.nodes.findMany({
         where: and(eq(nodes.parentId, input.id), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
       });
       if (children.length > 0) {
-        throw new ActionError({
-          code: "BAD_REQUEST",
-          message: `Esa página tiene ${children.length} hija(s). Muévelas o bórralas primero.`,
-        });
+        // 409 y no 400: la petición está bien formada, es el estado actual el que lo impide.
+        // Mismo caso que borrar una carpeta con archivos dentro.
+        throw conflict(`Esa página tiene ${children.length} hija(s). Muévelas o bórralas primero.`);
       }
-
-      const node = await db.query.nodes.findFirst({
-        where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
-      });
-      if (!node) throw new Error("Node not found");
-      await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "delete");
 
       if (input.permanent) {
         await requireAdmin(db, context.locals.user.id, siteId);
@@ -390,14 +400,14 @@ export const nodeActions = {
   restore: defineAction({
     input: z.object({ id: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
         where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId)),
       });
-      if (!node) throw new Error("Node not found");
+      if (!node) throw notFound("Esa página no existe.");
       if (!node.deletedAt) return { id: node.id, path: node.path, alreadyActive: true };
 
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "edit");
@@ -440,14 +450,14 @@ export const nodeActions = {
   schedule: defineAction({
     input: z.object({ id: z.string(), publishAt: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
         where: and(eq(nodes.id, input.id), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
       });
-      if (!node) throw new Error("Node not found");
+      if (!node) throw notFound("Esa página no existe.");
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "publish");
 
       const check = checkSchedule(input.publishAt, new Date());
@@ -473,14 +483,14 @@ export const nodeActions = {
   revisions: defineAction({
     input: z.object({ nodeId: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
         where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId)),
       });
-      if (!node) throw new Error("Node not found");
+      if (!node) throw notFound("Esa página no existe.");
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "view");
 
       const rows = await db.query.nodeRevisions.findMany({
@@ -502,19 +512,19 @@ export const nodeActions = {
   restoreRevision: defineAction({
     input: z.object({ revisionId: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const revision = await db.query.nodeRevisions.findFirst({
         where: and(eq(nodeRevisions.id, input.revisionId), eq(nodeRevisions.siteId, siteId)),
       });
-      if (!revision) throw new Error("Revision not found");
+      if (!revision) throw notFound("Esa revisión no existe.");
 
       const node = await db.query.nodes.findFirst({
         where: and(eq(nodes.id, revision.nodeId), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
       });
-      if (!node) throw new Error("Node not found");
+      if (!node) throw notFound("Esa página no existe.");
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "edit");
 
       const snapshot = {
@@ -567,7 +577,7 @@ export const nodeActions = {
   /** What is in the trash. */
   trash: defineAction({
     handler: async (_input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
       await requireSiteRole(db, context.locals.user.id, siteId);
@@ -594,14 +604,14 @@ export const nodeActions = {
   previewLink: defineAction({
     input: z.object({ nodeId: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
         where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId), isNull(nodes.deletedAt)),
       });
-      if (!node) throw new Error("Node not found");
+      if (!node) throw notFound("Esa página no existe.");
       await requirePermission(db, context.locals.user.id, siteId, node.contentTypeId, "view");
 
       const secret = context.locals.env?.BETTER_AUTH_SECRET;
@@ -629,19 +639,19 @@ export const nodeActions = {
       targetId: z.string(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
-      if (input.nodeId === input.targetId) throw new Error("Un nodo no puede vincularse consigo mismo");
+      if (input.nodeId === input.targetId) throw badRequest("Un nodo no puede vincularse consigo mismo.");
 
       const [nodeA, nodeB] = await Promise.all([
         db.query.nodes.findFirst({ where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId)) }),
         db.query.nodes.findFirst({ where: and(eq(nodes.id, input.targetId), eq(nodes.siteId, siteId)) }),
       ]);
-      if (!nodeA || !nodeB) throw new Error("Nodo no encontrado");
+      if (!nodeA || !nodeB) throw notFound("Esa página no existe.");
 
-      if (nodeA.locale === nodeB.locale) throw new Error("Ambos nodos tienen el mismo idioma");
+      if (nodeA.locale === nodeB.locale) throw badRequest("Ambos nodos tienen el mismo idioma.");
 
       const groupId = nodeA.translationGroupId ?? nodeB.translationGroupId ?? generateId("tg");
 
@@ -663,14 +673,14 @@ export const nodeActions = {
   unlinkTranslation: defineAction({
     input: z.object({ nodeId: z.string() }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
       const node = await db.query.nodes.findFirst({
         where: and(eq(nodes.id, input.nodeId), eq(nodes.siteId, siteId)),
       });
-      if (!node) throw new Error("Nodo no encontrado");
+      if (!node) throw notFound("Esa página no existe.");
 
       if (!node.translationGroupId) return { ok: true };
 
@@ -712,7 +722,7 @@ export const nodeActions = {
       })),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 
@@ -754,11 +764,11 @@ export const nodeActions = {
       for (const item of input.items) {
         const target = item.parentId;
         if (target === undefined || target === null) continue;
-        if (target === item.id) throw new Error("Un nodo no puede ser su propio padre");
+        if (target === item.id) throw badRequest("Un nodo no puede ser su propio padre.");
         if (isDescendant(target, item.id)) {
           const node = nodeById[item.id];
-          throw new Error(
-            `No se puede mover "${node?.title ?? item.id}" dentro de su propio contenido`
+          throw badRequest(
+            `No se puede mover «${node?.title ?? item.id}» dentro de su propio contenido.`
           );
         }
       }
@@ -805,7 +815,7 @@ export const nodeActions = {
         const existing = allNodes.find(
           (n) => n.siteId === siteId && n.path === newPath && n.id !== id
         );
-        if (existing) throw new Error(`Path "${newPath}" already exists`);
+        if (existing) throw conflict(`La ruta «${newPath}» ya existe.`);
       }
 
       // Execute updates
@@ -847,7 +857,7 @@ export const nodeActions = {
       contentTypeKey: z.string().optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       const db = context.locals.db;
 

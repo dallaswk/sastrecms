@@ -1,4 +1,5 @@
-import { defineAction } from "astro:actions";
+import { badRequest, notFound, unauthorized } from "@lib/errors";
+import { defineAction } from "./_define";
 import { z } from "astro:schema";
 import { eq, and } from "drizzle-orm";
 import { users, roles, userRoles, sessions } from "@db/schema";
@@ -12,7 +13,7 @@ import type { Database } from "@db/client";
 async function requireAdmin(context: {
   locals: { user: { id: string } | null; db: Database; siteId: string };
 }) {
-  if (!context.locals.user) throw new Error("Unauthorized");
+  if (!context.locals.user) throw unauthorized();
   await assertAdmin(context.locals.db, context.locals.user.id, context.locals.siteId);
 }
 
@@ -53,7 +54,15 @@ export const userActions = {
       const role = await db.query.roles.findFirst({
         where: and(eq(roles.siteId, siteId), eq(roles.key, input.roleKey)),
       });
-      if (!role) throw new Error(`Role "${input.roleKey}" not found`);
+      if (!role) throw notFound(`El rol «${input.roleKey}» no existe.`);
+
+      // Que la persona exista se comprueba aquí y no se deja a la clave foránea: sin esto, un
+      // id inventado salía como 500 con la sentencia SQL dentro del mensaje.
+      const person = await db.query.users.findFirst({
+        where: eq(users.id, input.userId),
+        columns: { id: true },
+      });
+      if (!person) throw notFound("Esa persona no existe.");
 
       const existing = await db.query.userRoles.findFirst({
         where: and(
@@ -110,7 +119,7 @@ export const userActions = {
     handler: async (input, context) => {
       await requireAdmin(context);
       if (input.userId === context.locals.user!.id) {
-        throw new Error("No puedes desactivarte a ti mismo");
+        throw badRequest("No puedes desactivarte a ti mismo.");
       }
       const db = context.locals.db;
 

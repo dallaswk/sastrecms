@@ -1,4 +1,4 @@
-import { defineAction, ActionError } from "astro:actions";
+import { defineAction, ActionError } from "./_define";
 import { z } from "astro:schema";
 import { eq } from "drizzle-orm";
 import { settings } from "@db/schema";

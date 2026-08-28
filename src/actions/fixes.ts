@@ -1,4 +1,4 @@
-import { defineAction, ActionError } from "astro:actions";
+import { defineAction, ActionError } from "./_define";
 import { z } from "astro:schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { imageMetadata } from "astro/assets/utils";

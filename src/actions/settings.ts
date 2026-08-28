@@ -1,4 +1,5 @@
-import { defineAction } from "astro:actions";
+import { unauthorized } from "@lib/errors";
+import { defineAction } from "./_define";
 import { z } from "astro:schema";
 import { eq } from "drizzle-orm";
 import { settings } from "@db/schema";
@@ -64,7 +65,7 @@ const SocialLinksSchema = z.object({
 export const settingsActions = {
   get: defineAction({
     handler: async (_input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       // `integrations` carries the Resend API key in clear, and redirects/analytics
       // affect every public page — admin only, not merely authenticated.
@@ -107,7 +108,7 @@ export const settingsActions = {
       }).optional(),
     }),
     handler: async (input, context) => {
-      if (!context.locals.user) throw new Error("Unauthorized");
+      if (!context.locals.user) throw unauthorized();
       const siteId = context.locals.siteId;
       await requireAdmin(context.locals.db, context.locals.user.id, siteId);
       const db = context.locals.db;

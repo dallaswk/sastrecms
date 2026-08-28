@@ -1,4 +1,5 @@
-import { defineAction } from "astro:actions";
+import { unauthorized } from "@lib/errors";
+import { defineAction } from "./_define";
 import { z } from "astro:schema";
 import { eq, and } from "drizzle-orm";
 import { roles, roleContentPermissions, contentTypes, userRoles } from "@db/schema";
@@ -13,7 +14,7 @@ import type { Database } from "@db/client";
 async function requireAdmin(context: {
   locals: { user: { id: string } | null; db: Database; siteId: string };
 }) {
-  if (!context.locals.user) throw new Error("Unauthorized");
+  if (!context.locals.user) throw unauthorized();
   await assertAdmin(context.locals.db, context.locals.user.id, context.locals.siteId);
 }
 

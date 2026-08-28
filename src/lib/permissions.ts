@@ -1,3 +1,4 @@
+import { forbidden } from "@lib/errors";
 import { eq, and, or, isNull } from "drizzle-orm";
 import type { Database } from "@db/client";
 import { userRoles, roleContentPermissions, contentTypes } from "@db/schema";
@@ -59,6 +60,14 @@ export async function checkPermission(
 /**
  * Throws if the user doesn't have the required permission.
  * Use in action handlers after confirming the user is authenticated.
+ *
+ * `AppError` and not a plain `Error`: a plain one came out of every action as a 500, which told
+ * the caller "I broke" instead of "you cannot". `actions/_define.ts` turns this into a 403 and
+ * the MCP handler into its own refusal — neither of them by sniffing the message, which is what
+ * they used to do.
+ *
+ * This is for a user who may not do something *on this site*. When the thing belongs to another
+ * tenant the answer is «not found», never this one: «you cannot» already confirms it exists.
  */
 export async function requirePermission(
   db: Database,
@@ -68,7 +77,7 @@ export async function requirePermission(
   action: Action
 ): Promise<void> {
   const ok = await checkPermission(db, userId, siteId, contentTypeId, action);
-  if (!ok) throw new Error(`Forbidden: no "${action}" permission for this content type`);
+  if (!ok) throw forbidden(`No tienes permiso de «${action}» sobre este tipo de contenido.`);
 }
 
 /**
@@ -96,7 +105,7 @@ export async function requireAdmin(
   siteId: string
 ): Promise<void> {
   if (!(await isAdmin(db, userId, siteId))) {
-    throw new Error("Forbidden: se requiere rol de administrador");
+    throw forbidden("Se requiere rol de administrador.");
   }
 }
 
@@ -149,6 +158,6 @@ export async function requireSiteRole(
   siteId: string
 ): Promise<void> {
   if (!(await hasSiteRole(db, userId, siteId))) {
-    throw new Error("Forbidden: no tienes ningún rol asignado en este sitio");
+    throw forbidden("No tienes ningún rol asignado en este sitio.");
   }
 }
