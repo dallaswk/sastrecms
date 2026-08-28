@@ -1,0 +1,84 @@
+---
+import "@styles/global.css";
+import "@styles/admin.css";
+import { ADMIN_THEME_DARK, ADMIN_THEME_LIGHT } from "@lib/theme";
+
+/**
+ * El panel de inquilinos.
+ *
+ * Deliberadamente distinto del backoffice y no una sección suya: aquí se mira a todos los
+ * clientes a la vez, y confundir «estoy editando el sitio de alguien» con «estoy administrando
+ * a todo el mundo» es la clase de error que se comete una vez y se lamenta mucho. El acento en
+ * ámbar, frente al del backoffice, es para que se note de un vistazo en qué está uno.
+ */
+
+interface Props {
+  title: string;
+  description?: string;
+  back?: { label: string; href: string };
+}
+
+const { title, description, back } = Astro.props;
+const user = Astro.locals.user;
+---
+
+<!doctype html>
+<html lang="es" data-theme={ADMIN_THEME_LIGHT} class="admin-root">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Nunca indexable: es la lista de clientes. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} — Inquilinos</title>
+    <link rel="icon" href="/favicon.svg" />
+    <script is:inline define:vars={{ dark: ADMIN_THEME_DARK, light: ADMIN_THEME_LIGHT }}>
+      // Antes de pintar, para que no haya un destello del tema equivocado.
+      const stored = localStorage.getItem("admin-theme");
+      const prefers = matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.theme = (stored ?? (prefers ? "dark" : "light")) === "dark" ? dark : light;
+    </script>
+  </head>
+
+  <body class="min-h-screen bg-base-200">
+    <header class="border-b border-base-300 bg-base-100">
+      <div class="mx-auto flex items-center gap-4 px-6 py-3">
+        <a href="/panel" class="flex items-center gap-2 font-semibold">
+          <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-warning/20 text-warning">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4">
+              <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          Inquilinos
+        </a>
+        <span class="admin-hint ml-auto !max-w-none text-xs">{user?.email}</span>
+        <a href="/admin" class="btn btn-xs btn-ghost border border-base-300">Ir al backoffice</a>
+      </div>
+    </header>
+
+    <main class="mx-auto px-6 py-8">
+      <div class="flex flex-col gap-6">
+        <div class="flex flex-col gap-1">
+          {back && (
+            <a href={back.href} class="admin-eyebrow hover:underline w-fit">← {back.label}</a>
+          )}
+          <h1 class="admin-h1">{title}</h1>
+          {description && <p class="admin-hint">{description}</p>}
+        </div>
+        <slot />
+      </div>
+    </main>
+
+    {/*
+      Toasts. El panel también los necesita, y no basta con que los llame: `notify` cae a un
+      no-op silencioso cuando no encuentra el contenedor, así que sin esto cada «creado» y cada
+      error no salen por ninguna parte y nada lo dice.
+    */}
+    <div
+      id="sastre-toasts"
+      class="pointer-events-none fixed bottom-4 right-4 z-[70] flex flex-col-reverse gap-2"
+    ></div>
+    <script>
+      import "@/scripts/toast";
+    </script>
+  </body>
+</html>

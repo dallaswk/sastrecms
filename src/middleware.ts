@@ -155,13 +155,26 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const pathname = context.url.pathname;
   const isAdminRoute = pathname.startsWith("/admin");
+  /*
+   * El panel de inquilinos.
+   *
+   * Sólo aquí se abre el plano de control. Abrirlo en todas las peticiones costaría, en
+   * desarrollo, un fichero SQLite abierto por página servida — y las públicas, que son las
+   * que hay que servir rápido, no lo necesitan para nada.
+   */
+  const isPanelRoute = pathname.startsWith("/panel") || pathname.startsWith("/_actions/panel.");
   const isAuthRoute = pathname.startsWith("/admin/login");
   const isApiRoute = pathname.startsWith("/api/") || pathname.startsWith("/_actions/");
+
+  context.locals.control =
+    isPanelRoute && CONTROL_DATABASE_URL
+      ? createControlDb(CONTROL_DATABASE_URL, CONTROL_AUTH_TOKEN)
+      : null;
 
   // Resolving the session is a DB round trip. Public pages never read locals.user, so
   // only pay for it where something actually consumes it.
   let session: Awaited<ReturnType<typeof auth.api.getSession>> = null;
-  if (isAdminRoute || isApiRoute) {
+  if (isAdminRoute || isApiRoute || isPanelRoute) {
     session = await auth.api.getSession({ headers: context.request.headers });
 
     // A deactivated user may still hold a valid session cookie. Treat them as signed
@@ -186,7 +199,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     await ensureBootstrap(db, siteId);
   }
 
-  if (!isAdminRoute && !isApiRoute) {
+  if (!isAdminRoute && !isApiRoute && !isPanelRoute) {
     const redirects = (siteSettings?.redirects as { from: string; to: string; permanent: boolean }[] | null) ?? [];
     const match = redirects.find((r) => r.from === pathname);
     if (match) {
@@ -194,7 +207,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  if (isAdminRoute && !isAuthRoute && !session) {
+  if ((isAdminRoute || isPanelRoute) && !isAuthRoute && !session) {
     return context.redirect("/admin/login");
   }
 
@@ -237,7 +250,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
    * waiting to be served to another. Set here rather than through a route rule because the
    * rules only control the CDN header, not this one.
    */
-  if (isAdminRoute || isApiRoute) {
+  if (isAdminRoute || isApiRoute || isPanelRoute) {
     response.headers.set("Cache-Control", "private, no-store");
     response.headers.set("Cloudflare-CDN-Cache-Control", "no-store");
   }

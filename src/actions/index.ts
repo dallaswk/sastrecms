@@ -11,6 +11,7 @@ import { formActions } from "./forms";
 import { aiActions } from "./ai";
 import { fixActions } from "./fixes";
 import { aiFixActions } from "./ai-fix";
+import { panelActions } from "./panel";
 
 export const server = {
   nodes: nodeActions,
@@ -26,4 +27,5 @@ export const server = {
   ai: aiActions,
   fixes: fixActions,
   aiFix: aiFixActions,
+  panel: panelActions,
 };

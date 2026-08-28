@@ -76,6 +76,8 @@ declare namespace App {
     siteId: string;
     /** El inquilino resuelto por dominio. `tenantId` nulo = sin plano de control. */
     tenant: import("@lib/tenant").ResolvedTenant;
+    /** El plano de control. Sólo en las rutas del panel; nulo en el resto y sin configurar. */
+    control: import("@db/control-client").ControlDatabase | null;
     /** The site row. Only loaded on /admin and API routes, which are the ones that need it. */
     site: typeof import("@db/schema").sites.$inferSelect | null;
     session: { session: import("better-auth").Session; user: import("better-auth").User } | null;

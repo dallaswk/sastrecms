@@ -1,0 +1,44 @@
+---
+import PanelLayout from "@layouts/PanelLayout.astro";
+import TenantDetail from "@components/panel/TenantDetail.vue";
+import { findOperator, tenantForOperator } from "@lib/panel";
+
+export const prerender = false;
+
+const control = Astro.locals.control;
+const user = Astro.locals.user!;
+const { slug } = Astro.params;
+
+if (!control || Astro.locals.tenant.tenantId) return Astro.redirect("/panel");
+
+const operator = await findOperator(control, user.email);
+if (!operator) return Astro.redirect("/panel");
+
+// Devuelve null igual si no existe que si existe y no es tuyo: lo segundo confirmaría que hay
+// un inquilino con ese slug.
+const tenant = await tenantForOperator(control, operator, slug!);
+if (!tenant) return Astro.redirect("/panel");
+
+const view = {
+  id: tenant.id,
+  slug: tenant.slug,
+  name: tenant.name,
+  status: tenant.status,
+  ownDatabase: Boolean(tenant.databaseUrl),
+  // El token nunca sale de aquí. La URL sí: hace falta para saber contra qué se está mirando,
+  // y ver `libsql://algo.turso.io` no da acceso a nada.
+  databaseUrl: tenant.databaseUrl,
+  suspendedReason: tenant.suspendedReason,
+  domains: tenant.domains
+    .map((d) => ({ host: d.host, isPrimary: d.isPrimary }))
+    .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)),
+};
+---
+
+<PanelLayout
+  title={tenant.name}
+  description={tenant.slug}
+  back={{ label: "Todos los inquilinos", href: "/panel" }}
+>
+  <TenantDetail client:load tenant={JSON.stringify(view)} />
+</PanelLayout>

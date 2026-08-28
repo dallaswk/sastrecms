@@ -1,0 +1,68 @@
+---
+import PanelLayout from "@layouts/PanelLayout.astro";
+import TenantList from "@components/panel/TenantList.vue";
+import { findOperator, listTenantsFor, canCreateTenants, PANEL_HOST_MUST_BE_UNMAPPED } from "@lib/panel";
+
+export const prerender = false;
+
+const control = Astro.locals.control;
+const user = Astro.locals.user!;
+
+/*
+ * Tres formas de no poder entrar aquí, y las tres dicen exactamente cuál es.
+ *
+ * Un panel que responde 404 a las tres es un panel que nadie sabe configurar: «no hay plano de
+ * control», «este dominio es de un cliente» y «tu cuenta no es operadora» tienen arreglos
+ * completamente distintos.
+ */
+let blocked: string | null = null;
+if (!control) {
+  blocked =
+    "Este despliegue no tiene plano de control. Ponle CONTROL_DATABASE_URL y aplícale las " +
+    "migraciones con `npm run db:control:migrate`.";
+} else if (Astro.locals.tenant.tenantId) {
+  blocked = PANEL_HOST_MUST_BE_UNMAPPED;
+}
+
+const operator = control && !blocked ? await findOperator(control, user.email) : null;
+if (control && !blocked && !operator) {
+  blocked =
+    `La cuenta ${user.email} no está dada de alta como operadora. Desde una terminal:\n` +
+    `  npm run control -- add-operator ${user.email} --super`;
+}
+
+const rows = control && operator ? await listTenantsFor(control, operator) : [];
+
+const tenants = rows
+  .map((tenant) => ({
+    id: tenant.id,
+    slug: tenant.slug,
+    name: tenant.name,
+    status: tenant.status,
+    ownDatabase: Boolean(tenant.databaseUrl),
+    domains: tenant.domains
+      .map((d) => ({ host: d.host, isPrimary: d.isPrimary }))
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)),
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name, "es"));
+---
+
+<PanelLayout
+  title="Inquilinos"
+  description="Los sitios que administras, sus dominios y en qué estado están."
+>
+  {blocked ? (
+    <div class="panel">
+      <div class="panel-body">
+        <p class="admin-h2">No se puede entrar al panel</p>
+        <pre class="admin-hint !max-w-none whitespace-pre-wrap text-sm">{blocked}</pre>
+      </div>
+    </div>
+  ) : (
+    <TenantList
+      client:load
+      tenants={JSON.stringify(tenants)}
+      canCreate={canCreateTenants(operator!)}
+    />
+  )}
+</PanelLayout>
