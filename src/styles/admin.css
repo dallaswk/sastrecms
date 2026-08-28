@@ -394,6 +394,33 @@ html[data-mode="light"] .admin-root :is(.input, .select, .textarea, .file-input)
 }
 
 /*
+ * The rich text field is the box, not the line inside it.
+ *
+ * Two rules were fighting here. ProseMirror's element is exactly as tall as its content, and
+ * `.admin-root :focus-visible` above beats Tailwind's `outline-none` on specificity — so
+ * focusing the editor drew a rounded ring around the first paragraph and nothing else. A
+ * toolbar with a one-line ringed box under it is indistinguishable from a plain text input,
+ * which is precisely what it was being mistaken for.
+ *
+ * The ring belongs on the container instead: it is the thing that looks like a field, and it
+ * lights up wherever the caret is inside it.
+ */
+.admin-root .ProseMirror:focus,
+.admin-root .ProseMirror:focus-visible {
+  outline: none;
+}
+
+.admin-root .rich-editor:focus-within {
+  border-color: oklch(var(--p));
+  box-shadow: 0 0 0 1px oklch(var(--p));
+}
+
+/* The whole area is the document, so the pointer has to say so over all of it. */
+.admin-root .rich-editor .ProseMirror {
+  cursor: text;
+}
+
+/*
  * The skeleton for a `client:only` island.
  *
  * Hidden as soon as the island next to it has rendered anything. `:has()` rather than a script

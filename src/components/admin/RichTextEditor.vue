@@ -1,5 +1,5 @@
 <template>
-  <div class="border border-base-300 rounded-lg overflow-hidden flex flex-col">
+  <div class="rich-editor border border-base-300 rounded-lg overflow-hidden flex flex-col">
     <!-- Toolbar -->
     <div class="flex flex-wrap gap-1 p-2 bg-base-200 border-b border-base-300">
       <button type="button" class="btn btn-xs btn-ghost font-bold" :class="{ 'btn-active': editor?.isActive('bold') }" @click="editor?.chain().focus().toggleBold().run()" title="Negrita">B</button>
@@ -21,11 +21,15 @@
       <button type="button" class="btn btn-xs btn-ghost" @click="editor?.chain().focus().redo().run()" title="Rehacer">↪</button>
     </div>
 
-    <!-- Editor area -->
-    <editor-content
-      :editor="editor"
-      class="prose prose-sm max-w-none p-4 min-h-48 focus-within:outline-none"
-    />
+    <!--
+      Editor area.
+
+      The typographic classes and the height go on ProseMirror's own element via `editorProps`,
+      not on this wrapper. `editor-content` renders a plain div around a contenteditable that is
+      only as tall as its content: with the height out here, everything below the first line was
+      dead space that swallowed clicks instead of putting the caret in the document.
+    -->
+    <editor-content :editor="editor" class="flex-1" />
   </div>
 </template>
 
@@ -50,7 +54,7 @@ const editor = useEditor({
     Link.configure({ openOnClick: false }),
   ],
   editorProps: {
-    attributes: { class: "outline-none" },
+    attributes: { class: "prose prose-sm max-w-none p-4 min-h-48" },
   },
   onUpdate({ editor }) {
     emit("update:modelValue", editor.getHTML());
