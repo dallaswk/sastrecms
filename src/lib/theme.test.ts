@@ -16,6 +16,7 @@ import {
   buildThemeCss,
   themeFingerprint,
 } from "./theme";
+import { readFileSync } from "node:fs";
 import { themeColorValue } from "./color";
 import tailwindConfig from "../../tailwind.config";
 
@@ -131,6 +132,36 @@ describe("buildThemeCss", () => {
     expect(css).toContain("--font-body");
   });
 
+  it("el fondo base arrastra sus dos bandas, o base-200 se queda en el gris de daisyUI", () => {
+    const css = buildThemeCss({ baseColor: "#FBF8F4" }, themeColorValue);
+    const [, b1] = css.match(/--b1: ([\d.]+)%/)!;
+    const [, b2] = css.match(/--b2: ([\d.]+)%/)!;
+    const [, b3] = css.match(/--b3: ([\d.]+)%/)!;
+    // Sobre un fondo claro las bandas se oscurecen, como en los temas de daisyUI.
+    expect(Number(b2)).toBeLessThan(Number(b1));
+    expect(Number(b3)).toBeLessThan(Number(b2));
+  });
+
+  it("las bandas conservan croma y tono: es el mismo color a distinta luz", () => {
+    const css = buildThemeCss({ baseColor: "#FBF8F4" }, themeColorValue);
+    const croma = [...css.matchAll(/--b[123]: [\d.]+% ([\d.]+) ([\d.]+);/g)].map((m) => `${m[1]} ${m[2]}`);
+    expect(croma).toHaveLength(3);
+    expect(new Set(croma).size).toBe(1);
+  });
+
+  it("sobre un fondo oscuro las bandas se aclaran en vez de hundirse en negro", () => {
+    const css = buildThemeCss({ baseColor: "#12100E" }, themeColorValue);
+    const [, b1] = css.match(/--b1: ([\d.]+)%/)!;
+    const [, b3] = css.match(/--b3: ([\d.]+)%/)!;
+    expect(Number(b3)).toBeGreaterThan(Number(b1));
+  });
+
+  it("sin color base no se tocan las bandas: manda el tema elegido", () => {
+    const css = buildThemeCss({ primaryColor: "#3F5D52" }, themeColorValue);
+    expect(css).not.toContain("--b2:");
+    expect(css).not.toContain("--b3:");
+  });
+
   it("el radio pasa tal cual: no es un color", () => {
     expect(buildThemeCss({ borderRadius: "0.75rem" }, themeColorValue)).toContain(
       "--rounded-box: 0.75rem;"
@@ -176,5 +207,25 @@ describe("themeFingerprint", () => {
 
   it("no lanza con null ni undefined", () => {
     expect(themeFingerprint(null)).toBe(themeFingerprint(undefined));
+  });
+});
+
+describe("la hoja del sitio gana a la de daisyUI", () => {
+  /*
+   * Sobre el fuente, porque lo que falla aquí es la cascada y eso no se puede montar en
+   * una prueba de unidad: daisyUI declara la paleta en `[data-theme=<tema>]`, que empata
+   * en especificidad con `:root`. Empatadas gana la última declarada, y cuál va última
+   * depende de dónde inyecte la hoja el empaquetador —en desarrollo, al final del head, o
+   * sea después. Con `:root` los colores del cliente se ignoraban en silencio mientras las
+   * tipografías, que no compiten con nada, sí se aplicaban: el síntoma más difícil de leer.
+   */
+  const source = readFileSync(new URL("../pages/theme.css.ts", import.meta.url), "utf8");
+
+  it("envuelve la paleta en un selector más específico que [data-theme=x]", () => {
+    expect(source).toContain(":root[data-theme] {");
+  });
+
+  it("no vuelve a un `:root` pelado", () => {
+    expect(source).not.toMatch(/`:root \{/);
   });
 });

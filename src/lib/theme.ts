@@ -163,6 +163,46 @@ const CSS_VAR_MAP: Record<string, string> = {
 const COLOR_VARS = new Set(["--p", "--s", "--a", "--b1"]);
 
 /**
+ * Las dos bandas que daisyUI apoya sobre el fondo base, y cuánto se separan de él.
+ *
+ * Los valores salen de medir los propios temas de daisyUI: en `light` van de 100 % a
+ * 96,1 % y 92,4 %. Se replica esa distancia en vez de inventarla porque las secciones
+ * alternan `base-100`, `base-200` y `base-300` contando con ese contraste: más separación
+ * convierte una banda en un bloque de color, y menos la borra.
+ */
+const BASE_STEPS: [string, number][] = [
+  ["--b2", 3.9],
+  ["--b3", 7.6],
+];
+
+/**
+ * Las bandas, derivadas del color base.
+ *
+ * Sin esto, elegir un fondo base cálido dejaba `base-200` y `base-300` en el gris neutro
+ * del tema de daisyUI: el fondo de la página cambiaba y las bandas alternas no, que es
+ * justo donde se nota. Se mueve sólo la claridad y se conservan croma y tono, para que la
+ * escala entera sea el mismo color a distinta luz y no tres colores parecidos.
+ *
+ * Hacia dónde se mueve depende del fondo: en uno claro las bandas se oscurecen, como hace
+ * daisyUI, y en uno oscuro se aclaran. Restar siempre hundiría un fondo casi negro en un
+ * negro plano donde las tres bandas serían la misma.
+ */
+function baseSteps(converted: string): string[] {
+  const match = converted.match(/^([\d.]+)%?\s+([\d.]+)\s+([\d.]+)$/);
+  if (!match) return [];
+
+  const [, lightness, chroma, hue] = match;
+  const base = parseFloat(lightness);
+  if (!Number.isFinite(base)) return [];
+
+  const direction = base > 50 ? -1 : 1;
+  return BASE_STEPS.map(([cssVar, step]) => {
+    const value = Math.min(100, Math.max(0, base + direction * step));
+    return `${cssVar}: ${Number(value.toFixed(4))}% ${chroma} ${hue};`;
+  });
+}
+
+/**
  * The site's `:root` block.
  *
  * Returns the declarations only, so the caller decides whether they go in a `<style>` or in
@@ -200,6 +240,9 @@ export function buildThemeCss(
       const lightness = parseFloat(converted);
       parts.push(`${contrast}: ${lightness > 60 ? "0% 0 0" : "100% 0 0"};`);
     }
+
+    // El fondo base arrastra sus dos bandas: son la misma decisión, tomada una vez.
+    if (cssVar === "--b1") parts.push(...baseSteps(converted));
   }
 
   parts.push(`--font-heading: ${getFont(theme.fontHeading).stack};`);

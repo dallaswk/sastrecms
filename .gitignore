@@ -38,3 +38,7 @@ Thumbs.db
 
 # medios subidos en desarrollo (en producción van a R2)
 public/uploads/
+
+# Ajustes de Claude Code por máquina. Las skills del proyecto (.claude/skills/) sí van al
+# repo: son documentación compartida. Esto no — lleva `.local` en el nombre por eso.
+.claude/settings.local.json

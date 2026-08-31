@@ -21,7 +21,20 @@ export const prerender = false;
  */
 export const GET: APIRoute = async (context) => {
   const theme = (context.locals.settings?.theme ?? {}) as SiteTheme;
-  const css = `:root { ${buildThemeCss(theme, themeColorValue)} }\n`;
+  /*
+   * `:root[data-theme]` y no `:root`, que es lo que había.
+   *
+   * daisyUI declara su paleta en `[data-theme=light]`, que empata en especificidad con
+   * `:root`: cuando empatan gana la que se declare después, y quién va después depende de
+   * dónde acabe inyectada la hoja de daisyUI —en desarrollo la mete Vite al final del
+   * head, después de este enlace. El resultado era que los colores del cliente no se
+   * aplicaban y sí lo hacían las tipografías, porque ésas no compiten con nada.
+   *
+   * Un selector más específico gana siempre, con independencia del orden, que es la única
+   * forma de que esto no vuelva a depender de cómo empaquete el CSS la herramienta de turno.
+   * El layout público pone `data-theme` en el `<html>` sin excepción, así que siempre casa.
+   */
+  const css = `:root[data-theme] { ${buildThemeCss(theme, themeColorValue)} }\n`;
   const etag = `"${themeFingerprint(theme)}"`;
 
   // The fingerprint is in the URL, so a request that already has it needs no body.
